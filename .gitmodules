@@ -1,0 +1,3 @@
+[submodule "svelte-supersonic"]
+	path = svelte-supersonic
+	url = git@github.com:aeskildsen/svelte-supersonic.git
