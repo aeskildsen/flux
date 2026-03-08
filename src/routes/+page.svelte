@@ -1,29 +1,30 @@
 <script lang="ts">
-	import { boot, serverState, getInstance, spawnSynth, loadSynthDef } from '$lib/shared';
+	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
+
+	const sc = $derived(getServer());
+
+	let metricsEl: HTMLElement | undefined = $state();
 
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
 		await boot({ debug: true });
-		const instance = getInstance();
-		if (instance) {
-			serverState.status = "loading synthdef 'sonic-pi-prophet'…";
-			await loadSynthDef(instance, 'sonic-pi-prophet');
-			serverState.status = "engine ready – click 'play sound'";
+		if (sc) await sc.loadSynthDef('sonic-pi-prophet');
+
+		// Load and connect the metrics web component after boot
+		if (metricsEl) {
+			await import(/* @vite-ignore */ `${defaultConfig.baseURL}metrics_component.js`);
+			(metricsEl as HTMLElement & { connect(instance: unknown, opts?: { refreshRate?: number }): void }).connect(getInstance(), { refreshRate: 25 });
 		}
 	}
 
 	function handlePlay() {
-		const instance = getInstance();
-		if (!instance) return;
-		spawnSynth(instance, 'sonic-pi-prophet', 'source', { note: 52, release: 4, cutoff: 90 });
-		serverState.status = '♪ playing…';
-		serverState.statusKind = 'ok';
-		setTimeout(() => {
-			serverState.status = "engine ready – click 'play sound'";
-			serverState.statusKind = 'ok';
-		}, 1200);
+		sc?.synth('sonic-pi-prophet', 'source', { note: 52, release: 4, cutoff: 90 });
 	}
 </script>
+
+<svelte:head>
+	<link rel="stylesheet" href="{defaultConfig.baseURL}metrics-dark.css" />
+</svelte:head>
 
 <h1>flux</h1>
 <p>Open DevTools console to see debug output.</p>
@@ -42,6 +43,8 @@
 >
 	{serverState.status}
 </div>
+
+<supersonic-metrics bind:this={metricsEl}></supersonic-metrics>
 
 <style>
 	h1 {

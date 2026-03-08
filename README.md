@@ -8,7 +8,7 @@ Flux boots the scsynth audio engine inside a Web Audio AudioWorklet and lets you
 
 The current state is a minimal working example: a boot button that initialises the engine and loads a synth definition, and a play button that triggers a note.
 
-`src/lib/shared/` contains the shared SuperSonic infrastructure (boot lifecycle, server node tree, OSC wrappers, reactive state). This is intended to become a standalone `supersonic-svelte-lib` git submodule shared with a future sibling app.
+`src/lib/shared/` contains the shared SuperSonic infrastructure (boot lifecycle, server node tree, OSC wrappers, reactive state). This is intended to become a standalone `svelte-supersonic` git submodule shared with a future sibling app.
 
 ## Stack
 
