@@ -128,6 +128,12 @@ importers:
       publint:
         specifier: ^0.3.17
         version: 0.3.18
+      supersonic-scsynth:
+        specifier: ^0.61.0
+        version: 0.61.0
+      supersonic-scsynth-core:
+        specifier: ^0.61.0
+        version: 0.61.0
       svelte:
         specifier: ^5.51.0
         version: 5.53.6
@@ -584,6 +590,26 @@ packages:
     engines: {node: '>=16'}
     peerDependencies:
       svelte: ^3 || ^4 || ^5 || ^5.0.0-next.0
+
+  '@thi.ng/api@8.12.16':
+    resolution: {integrity: sha512-MTjx2PS/jl+35+jjdzN0hRs6DHEh5WqLbsyDWqXvtE2D94+j2+QVOHpSnR6Vodo5rPZKo3tEY69ed9puCuo5FA==}
+    engines: {node: '>=18'}
+
+  '@thi.ng/binary@3.6.5':
+    resolution: {integrity: sha512-tBo7IJbCxT3ZpVDtwnqnSm5i4AJ/aawWynEjscI6xB95Vu5XGPPcxOuP+zmSdqCmGQwot7houZ6W36HDQcXSzA==}
+    engines: {node: '>=18'}
+
+  '@thi.ng/checks@3.8.6':
+    resolution: {integrity: sha512-ooPeVH++6oLa/vx4WUpVczF8SZyEUQo1l/s9EvaXgUEBgwNEevYLViPdo6NekbUZQMV7CwtjhFKUi7plbjO7wg==}
+    engines: {node: '>=18'}
+
+  '@thi.ng/errors@2.6.5':
+    resolution: {integrity: sha512-XKfcJzxikMI1+MKSiABcLzI2WIsm4SxGEdLIIQjYqew3q3CoypGe+w5W/DMvMWF6eFWT6ONINbiJ6QMHFTfVzA==}
+    engines: {node: '>=18'}
+
+  '@thi.ng/malloc@6.1.138':
+    resolution: {integrity: sha512-S9Ilasfc32sGui9w6R9Z9D2ppaD6KtfKpOzRHGKqCzfE3S50LB9TxelM61xIxLmza4heMN0JvW9cqBbqpL0gkg==}
+    engines: {node: '>=18'}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -1263,6 +1289,13 @@ packages:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
 
+  supersonic-scsynth-core@0.61.0:
+    resolution: {integrity: sha512-sCsUjUvxlrj0Vme5XQAbqf9/eMtBaOIwj4Jr9sSKaKTnNSKDjFjAMlkO4qwmpDdIaAHL3rFUWBPwdphzqfe88g==}
+
+  supersonic-scsynth@0.61.0:
+    resolution: {integrity: sha512-Zp5/xL0DX5pkaUClRJtNKKfe8SOiUqZ9BFNrvIUcrB1FSeou9aiGphQd5WjOOQvNlCgiymMp8GNsT1Rw230tuw==}
+    engines: {node: '>=18.0.0'}
+
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
@@ -1794,6 +1827,23 @@ snapshots:
   '@testing-library/svelte-core@1.0.0(svelte@5.53.6)':
     dependencies:
       svelte: 5.53.6
+
+  '@thi.ng/api@8.12.16': {}
+
+  '@thi.ng/binary@3.6.5':
+    dependencies:
+      '@thi.ng/api': 8.12.16
+
+  '@thi.ng/checks@3.8.6': {}
+
+  '@thi.ng/errors@2.6.5': {}
+
+  '@thi.ng/malloc@6.1.138':
+    dependencies:
+      '@thi.ng/api': 8.12.16
+      '@thi.ng/binary': 3.6.5
+      '@thi.ng/checks': 3.8.6
+      '@thi.ng/errors': 2.6.5
 
   '@types/chai@5.2.3':
     dependencies:
@@ -2499,6 +2549,12 @@ snapshots:
   std-env@3.10.0: {}
 
   strip-json-comments@3.1.1: {}
+
+  supersonic-scsynth-core@0.61.0: {}
+
+  supersonic-scsynth@0.61.0:
+    dependencies:
+      '@thi.ng/malloc': 6.1.138
 
   supports-color@7.2.0:
     dependencies:
