@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
+	import { run, type SchedulerHandle } from '$lib/scheduler';
+	import { notes } from '$lib/generators';
 
 	const sc = $derived(getServer());
 
 	let metricsEl: HTMLElement | undefined = $state();
+	let handle = $state<SchedulerHandle | null>(null);
 
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
@@ -20,6 +23,19 @@
 	function handlePlay() {
 		sc?.synth('sonic-pi-prophet', 'source', { note: 52, release: 4, cutoff: 90 });
 	}
+
+	function startLoop() {
+		handle = run(
+			notes([52, 55, 59, 62], { release: 0.8, cutoff: 85 }),
+			(value) => sc?.synth('sonic-pi-prophet', 'source', value),
+			0.5
+		);
+	}
+
+	function stopLoop() {
+		handle?.stop();
+		handle = null;
+	}
 </script>
 
 <svelte:head>
@@ -34,6 +50,11 @@
 		boot engine
 	</button>
 	<button onclick={handlePlay} disabled={!serverState.booted}>play sound</button>
+	{#if handle}
+		<button onclick={stopLoop}>stop loop</button>
+	{:else}
+		<button onclick={startLoop} disabled={!serverState.booted}>start loop</button>
+	{/if}
 </div>
 
 <div
