@@ -43,15 +43,15 @@ export function next<T>(value: Thunk<T>): T | undefined {
  *   step  — per event (enables random walk behaviour)
  */
 export function* series(
-	start: Thunk<number>,
+	start: ScalarThunk<number>,
 	step: Thunk<number>,
-	len: Thunk<number>
+	len: ScalarThunk<number>
 ): Generator<number> {
 	const length = next(len);
 	let value = next(start);
 	for (let i = 0; i < length; i++) {
 		yield value;
-		value += next(step); // Note: step is resolved on every iteration, including the final one (no-op compute). Could skip on last iteration as an optimisation if step has cost.
+		value += next(step as ScalarThunk<number>); // Note: step is resolved on every iteration, including the final one (no-op compute). Could skip on last iteration as an optimisation if step has cost.
 	}
 }
 
