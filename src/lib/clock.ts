@@ -1,6 +1,6 @@
 /**
  * Clock module — BPM tracking and beats-to-AudioContext time conversion.
- * Phase 3: tracking only. Phase 4 will wire this into the lookahead scheduler.
+ * Consumed by the Phase 4 lookahead scheduler.
  *
  * Must not construct AudioContext before a user interaction (browser autoplay policy).
  * Call clock.start() from a click/keypress handler.
@@ -25,6 +25,10 @@ export const clock = {
 
 	get startTime(): number | null {
 		return _startTime;
+	},
+
+	get audioContext(): AudioContext | null {
+		return _ctx;
 	},
 
 	get currentBeat(): number {
