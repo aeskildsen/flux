@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Flux** is a SvelteKit 5 application built around [SuperSonic](https://github.com/samaaron/supersonic) — a Web Audio library that runs the SuperCollider synthesis engine (scsynth) in the browser via WebAssembly. The app provides a UI for booting and controlling the scsynth audio engine, loading synth definitions, and sending OSC messages.
 
 Key SuperSonic concepts:
+
 - `supersonic-scsynth` — Client API, workers, and metrics web component (MIT)
 - `supersonic-scsynth-core` — WASM engine + AudioWorklet (GPL-3.0)
 - `supersonic-scsynth-synthdefs` — 127 Sonic Pi synth definitions (MIT)
@@ -29,6 +30,7 @@ pnpm test         # Run all tests (unit + e2e, non-watch)
 ```
 
 To run a single unit test file:
+
 ```bash
 pnpm vitest run src/routes/page.svelte.spec.ts
 ```
@@ -36,6 +38,7 @@ pnpm vitest run src/routes/page.svelte.spec.ts
 ## Test Architecture
 
 Two vitest projects are configured in `vite.config.ts`:
+
 - **client** — browser tests using `vitest-browser-svelte` + Playwright/Chromium. Files matching `src/**/*.svelte.{test,spec}.{js,ts}` (excluding `src/lib/server/**`). Use `render()` from `vitest-browser-svelte` and `page` from `vitest/browser`.
 - **server** — node environment. Files matching `src/**/*.{test,spec}.{js,ts}` excluding `.svelte.` tests.
 

@@ -2,9 +2,9 @@ export interface SchedulerHandle {
 	stop(): void;
 }
 
-export function run(
-	gen: Generator<Record<string, number>>,
-	callback: (value: Record<string, number>, time: number) => void,
+export function run<T>(
+	gen: Generator<T>,
+	callback: (value: T, time: number) => void,
 	interval = 0.5
 ): SchedulerHandle {
 	let active = true;
@@ -18,5 +18,9 @@ export function run(
 	}
 
 	tick();
-	return { stop: () => { active = false; } };
+	return {
+		stop: () => {
+			active = false;
+		}
+	};
 }

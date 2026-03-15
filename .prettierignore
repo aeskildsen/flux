@@ -7,3 +7,12 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Dotfolders (generated, config, caches)
+.*
+
+# Dev/scratch folders
+dev-*/
+
+# Submodule (managed independently)
+svelte-supersonic/

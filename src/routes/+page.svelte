@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
 	import { run, type SchedulerHandle } from '$lib/scheduler';
-	import { notes } from '$lib/generators';
-
 	const sc = $derived(getServer());
 
 	let metricsEl: HTMLElement | undefined = $state();
@@ -16,7 +14,11 @@
 		// Load and connect the metrics web component after boot
 		if (metricsEl) {
 			await import(/* @vite-ignore */ `${defaultConfig.baseURL}metrics_component.js`);
-			(metricsEl as HTMLElement & { connect(instance: unknown, opts?: { refreshRate?: number }): void }).connect(getInstance(), { refreshRate: 25 });
+			(
+				metricsEl as HTMLElement & {
+					connect(instance: unknown, opts?: { refreshRate?: number }): void;
+				}
+			).connect(getInstance(), { refreshRate: 25 });
 		}
 	}
 
@@ -24,12 +26,17 @@
 		sc?.synth('sonic-pi-prophet', 'source', { note: 52, release: 4, cutoff: 90 });
 	}
 
+	function* cyclePitches() {
+		const pitches = [52, 55, 59, 62];
+		let i = 0;
+		while (true) {
+			yield { note: pitches[i % pitches.length], release: 0.8, cutoff: 85 };
+			i++;
+		}
+	}
+
 	function startLoop() {
-		handle = run(
-			notes([52, 55, 59, 62], { release: 0.8, cutoff: 85 }),
-			(value) => sc?.synth('sonic-pi-prophet', 'source', value),
-			0.5
-		);
+		handle = run(cyclePitches(), (value) => sc?.synth('sonic-pi-prophet', 'source', value), 0.5);
 	}
 
 	function stopLoop() {
@@ -43,7 +50,8 @@
 </svelte:head>
 
 <h1>flux</h1>
-<p>Open DevTools console to see debug output.</p>
+<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+<p>Open DevTools console to see debug output. <a href="/lab">lab →</a></p>
 
 <div class="buttons">
 	<button onclick={handleBoot} disabled={serverState.booting || serverState.booted}>
