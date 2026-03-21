@@ -14,7 +14,7 @@ export default async function () {
 
 	return run(
 		loop(),
-		(e) => sc.synth('sonic-pi-prophet', 'source', { note: e, release: 0.2 }),
-		clock.beatsToSeconds(0.25)
+		(e, t) => sc.synthAt(t, 'sonic-pi-prophet', 'source', { note: e, release: 0.2 }),
+		0.25
 	);
 }
