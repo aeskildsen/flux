@@ -11,7 +11,7 @@ export default async function () {
 
 	return run(
 		repeat(() => shunc([60, 62, 65, 67, 70], 8, 2), 2),
-		(e) => sc.synth('sonic-pi-prophet', 'source', { note: e, release: 0.3 }),
-		clock.beatsToSeconds(0.5)
+		(e, t) => sc.synthAt(t, 'sonic-pi-prophet', 'source', { note: e, release: 0.3 }),
+		0.5
 	);
 }
