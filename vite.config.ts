@@ -1,9 +1,13 @@
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
+import monacoEditorPluginModule from 'vite-plugin-monaco-editor';
+const monacoEditorPlugin =
+	(monacoEditorPluginModule as unknown as { default: typeof monacoEditorPluginModule }).default ??
+	monacoEditorPluginModule;
 
 export default defineConfig({
-	plugins: [sveltekit()],
+	plugins: [sveltekit(), monacoEditorPlugin({})],
 	server: {
 		watch: {
 			ignored: ['**/dev-*/**']
