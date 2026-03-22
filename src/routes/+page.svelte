@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
 	import { run, type SchedulerHandle } from '$lib/scheduler';
+	import FluxEditor from '$lib/FluxEditor.svelte';
 	const sc = $derived(getServer());
 
 	let metricsEl: HTMLElement | undefined = $state();
 	let handle = $state<SchedulerHandle | null>(null);
+	let feedback = $state<{ message: string; kind: 'error' | 'info' } | null>(null);
 
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
@@ -73,6 +75,15 @@
 	{serverState.status}
 </div>
 
+<div class="editor-section">
+	<FluxEditor onEvaluate={(content) => console.log('[flux evaluate]', content)} />
+	<p class="hint">Ctrl+Enter to evaluate</p>
+</div>
+
+{#if feedback}
+	<div class="feedback" class:error={feedback.kind === 'error'}>{feedback.message}</div>
+{/if}
+
 <supersonic-metrics bind:this={metricsEl}></supersonic-metrics>
 
 <style>
@@ -127,5 +138,31 @@
 
 	.status.error {
 		color: var(--flux-status-error-color, #f66);
+	}
+
+	.editor-section {
+		margin-top: 32px;
+	}
+
+	.editor-section .hint {
+		margin-top: 6px;
+		font-size: 0.75rem;
+		color: #555;
+	}
+
+	.feedback {
+		margin-top: 12px;
+		padding: 8px 12px;
+		font-family: monospace;
+		font-size: 0.85rem;
+		color: #aaa;
+		background: #111;
+		border-left: 3px solid #444;
+		white-space: pre-wrap;
+	}
+
+	.feedback.error {
+		color: #f66;
+		border-left-color: #f66;
 	}
 </style>
