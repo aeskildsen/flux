@@ -8,6 +8,9 @@ const monacoEditorPlugin =
 
 export default defineConfig({
 	plugins: [sveltekit(), monacoEditorPlugin({})],
+	optimizeDeps: {
+		include: ['chevrotain']
+	},
 	server: {
 		watch: {
 			ignored: ['**/dev-*/**']
