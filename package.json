@@ -17,7 +17,7 @@
 		"test:e2e": "playwright test"
 	},
 	"simple-git-hooks": {
-		"pre-commit": "pnpm lint-staged"
+		"pre-commit": "pnpm lint-staged && sh scripts/sync.sh"
 	},
 	"lint-staged": {
 		"*.{js,ts,svelte,svx,json,md,css,html}": "prettier --write"
