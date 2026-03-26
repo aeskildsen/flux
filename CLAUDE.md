@@ -51,6 +51,10 @@ E2e tests live in `e2e/` and use Playwright directly (builds the app before runn
 - `.svelte` and `.svx` (mdsvex markdown+Svelte) extensions are both supported
 - ESLint + Prettier enforced; `no-undef` is disabled for TS projects per typescript-eslint recommendation
 
+## DSL Documentation
+
+The Flux DSL is documented in `docs/DSL-spec.md` — this is the single source of truth for language design. Always consult it when working on the parser, evaluator, or anything DSL-related. Do not infer DSL behaviour from the codebase; if there is a conflict, the spec rules.
+
 ## Svelte MCP Tools
 
 You have access to the Svelte MCP server with comprehensive Svelte 5 and SvelteKit documentation:
