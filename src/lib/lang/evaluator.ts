@@ -10,9 +10,7 @@
 import type { CstNode, IToken } from 'chevrotain';
 import { FluxLexer } from './lexer.js';
 import { parser, preprocessTokens } from './parser.js';
-
-// C major scale semitone intervals for degrees 0–6
-const C_MAJOR = [0, 2, 4, 5, 7, 9, 11];
+import { degreeToMidi, DEFAULT_SCALE } from '../scales.js';
 
 // Default root: C5 = MIDI 60
 const DEFAULT_ROOT_MIDI = 60;
@@ -163,13 +161,6 @@ function litToNumber(lit: CstNode): number | null {
 	return null;
 }
 
-function degreeToMidi(degree: number, rootMidi = DEFAULT_ROOT_MIDI): number {
-	const d = Math.round(degree); // generators may return floats
-	const octaveOffset = Math.floor(d / 7) * 12;
-	const semitone = C_MAJOR[((d % 7) + 7) % 7]; // handles negative degrees safely
-	return rootMidi + semitone + octaveOffset;
-}
-
 // ---------------------------------------------------------------------------
 // Generator math helpers
 // ---------------------------------------------------------------------------
@@ -230,7 +221,10 @@ function* cyclicLoop(samplers: Sampler[]): Generator<EvalEvent, never, unknown> 
 	const duration = 4 / samplers.length;
 	let i = 0;
 	while (true) {
-		yield { note: degreeToMidi(samplers[i % samplers.length]()), duration };
+		yield {
+			note: degreeToMidi(samplers[i % samplers.length](), DEFAULT_ROOT_MIDI, DEFAULT_SCALE),
+			duration
+		};
 		i++;
 	}
 }
