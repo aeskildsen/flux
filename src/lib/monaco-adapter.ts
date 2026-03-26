@@ -37,19 +37,49 @@ void getHover;
 // ---------------------------------------------------------------------------
 
 const SCOPE_MAP: Record<string, string> = {
+	// Comments
 	LineComment: 'comment',
+	// Statement keywords
 	Loop: 'keyword',
+	Line: 'keyword',
+	Fx: 'keyword',
+	SendFx: 'keyword',
+	MasterFx: 'keyword',
+	Set: 'keyword',
+	// Generator keywords
+	Rand: 'keyword.operator',
+	Gau: 'keyword.operator',
+	Exp: 'keyword.operator',
+	Bro: 'keyword.operator',
+	BroStep: 'keyword.operator',
+	Step: 'keyword.operator',
+	Mul: 'keyword.operator',
+	Lin: 'keyword.operator',
+	Geo: 'keyword.operator',
+	LenSep: 'keyword.operator',
+	// Identifiers
+	Identifier: 'variable',
+	// Operators
 	Tick: 'operator',
-	Integer: 'number'
-	// Add more here as tokens are defined in lexer.ts, e.g.:
-	// Line:          'keyword',
-	// Fx:            'keyword',
-	// Identifier:    'variable',
-	// Float:         'number',
-	// StringLiteral: 'string',
-	// LBracket:      'delimiter.bracket',
-	// RBracket:      'delimiter.bracket',
-	// Pipe:          'operator',
+	LBracket: 'delimiter.bracket',
+	RBracket: 'delimiter.bracket',
+	LParen: 'delimiter.parenthesis',
+	RParen: 'delimiter.parenthesis',
+	LBrace: 'delimiter.bracket',
+	RBrace: 'delimiter.bracket',
+	Pipe: 'operator',
+	At: 'operator',
+	Tilde: 'operator',
+	Question: 'operator',
+	Equals: 'operator',
+	Plus: 'operator',
+	Minus: 'operator',
+	Slash: 'operator',
+	Colon: 'operator',
+	// Literals
+	Float: 'number',
+	Integer: 'number',
+	StringLiteral: 'string'
 };
 
 function tokenTypeToScope(name: string): string {

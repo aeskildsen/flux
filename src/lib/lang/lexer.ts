@@ -18,10 +18,14 @@
  *
  * - Keywords (Loop, Line, Fx, …) must appear BEFORE Identifier in allTokens,
  *   and must declare `longer_alt: Identifier` so the lexer knows to prefer
- *   the keyword when both could match.
+ *   the identifier when both could match (e.g. `loopCount` → Identifier, not
+ *   Loop + Count).
  *
  * - More specific patterns (LineComment starts with //) must appear BEFORE
  *   more general ones (Slash operator) that share a prefix.
+ *
+ * - Float must appear BEFORE Integer so `0.5` matches Float, not Integer(`0`)
+ *   + unexpected(`.5`).
  *
  * ## Monaco semantic token type names
  *
@@ -31,6 +35,22 @@
  */
 
 import { createToken, Lexer } from 'chevrotain';
+
+// ---------------------------------------------------------------------------
+// Identifier — declared first so keywords can reference it in longer_alt.
+// It must still appear AFTER all keywords in allTokens (that array controls
+// lexer precedence, not JS declaration order).
+// ---------------------------------------------------------------------------
+
+/**
+ * Identifier — modifier names, synthdef names, scale names, parameter keys.
+ * e.g. `lock`, `stut`, `moog`, `major`.
+ */
+export const Identifier = createToken({
+	name: 'Identifier',
+	pattern: /[a-zA-Z_][a-zA-Z0-9_]*/
+	// Monaco scope: 'variable'
+});
 
 // ---------------------------------------------------------------------------
 // Comments
@@ -44,42 +64,284 @@ export const LineComment = createToken({
 });
 
 // ---------------------------------------------------------------------------
-// Keywords
+// Statement keywords
 // ---------------------------------------------------------------------------
 //
-// Each keyword should declare `longer_alt: Identifier` once Identifier is
-// added. This tells Chevrotain: if the text could be an Identifier, prefer
-// the keyword. Without it, `loop` in `loopCount` would tokenize as Loop.
-//
-// Example (add longer_alt once Identifier is defined):
-//   export const Loop = createToken({ name: 'Loop', pattern: /loop/, longer_alt: Identifier });
+// Each keyword declares `longer_alt: Identifier` so that e.g. `loopCount`
+// tokenises as a single Identifier rather than Loop + Identifier("Count").
 
 /** `loop` — cyclic pattern mode. */
 export const Loop = createToken({
 	name: 'Loop',
-	pattern: /loop/
+	pattern: /loop/,
+	longer_alt: Identifier
 	// Monaco scope: 'keyword'
-	// TODO: add longer_alt: Identifier once Identifier token is defined
+});
+
+/** `line` — one-shot linear mode. */
+export const Line = createToken({
+	name: 'Line',
+	pattern: /line/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `fx` — anonymous insert effect. */
+export const Fx = createToken({
+	name: 'Fx',
+	pattern: /fx/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `send_fx` — named send effect. */
+export const SendFx = createToken({
+	name: 'SendFx',
+	pattern: /send_fx/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `master_fx` — master bus effect. */
+export const MasterFx = createToken({
+	name: 'MasterFx',
+	pattern: /master_fx/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `set` — global session state setter. */
+export const Set = createToken({
+	name: 'Set',
+	pattern: /set/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
 });
 
 // ---------------------------------------------------------------------------
-// TODO: Add remaining keywords here, before Identifier in allTokens.
+// Generator keywords
 //
-// Candidates from the spec:
-//   line, fx, set, send_fx, master_fx
+// These appear between numbers without whitespace: `0rand4`, `1exp7`, etc.
+// They cannot use simple regex patterns because Chevrotain's longest-match
+// rule would cause `Identifier` (matching e.g. `rand4`) to win over `Rand`
+// (matching `rand`). Instead, we use custom pattern functions that match
+// only the keyword characters and enforce a positive lookahead for a digit
+// (or the specific separators that follow them in context). Custom patterns
+// must set the `line_breaks` property and return a regex match array or null.
 //
-// Each follows the same pattern as Loop above.
+// This also means `random` correctly tokenises as Identifier (the function
+// fails to match when the keyword is followed by a letter).
 // ---------------------------------------------------------------------------
 
+/** Helper: creates a custom Chevrotain pattern function for a generator keyword. */
+function genKeywordPattern(
+	keyword: string,
+	followedBy: RegExp
+): (text: string, offset: number) => RegExpExecArray | null {
+	const klen = keyword.length;
+	return (text: string, offset: number) => {
+		// Check keyword characters match
+		if (text.slice(offset, offset + klen) !== keyword) return null;
+		// Check what follows
+		const next = text[offset + klen];
+		if (next === undefined) {
+			// end of input — only match if followedBy allows end-of-string
+			if (followedBy.test('')) {
+				const match = [keyword] as unknown as RegExpExecArray;
+				match.index = offset;
+				match.input = text;
+				return match;
+			}
+			return null;
+		}
+		if (!followedBy.test(next)) return null;
+		const match = [keyword] as unknown as RegExpExecArray;
+		match.index = offset;
+		match.input = text;
+		return match;
+	};
+}
+
+/** `rand` — uniform random (Pwhite). e.g. `0rand4`. Matches only when followed by a digit or `~`. */
+export const Rand = createToken({
+	name: 'Rand',
+	pattern: { exec: genKeywordPattern('rand', /[\d(]/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/** `gau` — gaussian random (Pgauss). e.g. `0gau4`. */
+export const Gau = createToken({
+	name: 'Gau',
+	pattern: { exec: genKeywordPattern('gau', /[\d(]/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/** `exp` — exponential random (Pexprand). e.g. `1exp7`. */
+export const Exp = createToken({
+	name: 'Exp',
+	pattern: { exec: genKeywordPattern('exp', /[\d(]/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/**
+ * `bro` — brownian motion (Pbrown). e.g. `0bro10m2`.
+ * The `m` separator for max_step is a separate token (BroStep).
+ */
+export const Bro = createToken({
+	name: 'Bro',
+	pattern: { exec: genKeywordPattern('bro', /[\d(]/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/**
+ * `m` — max_step separator in brownian generators: `0bro10m2`.
+ * Matches only when followed by a digit (the max_step value).
+ */
+export const BroStep = createToken({
+	name: 'BroStep',
+	pattern: { exec: genKeywordPattern('m', /\d/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/** `step` — linear series (Pseries). e.g. `0step2x4`. Matches when followed by a digit. */
+export const Step = createToken({
+	name: 'Step',
+	pattern: { exec: genKeywordPattern('step', /\d/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/** `mul` — geometric series (Pgeom). e.g. `5mul2x4`. */
+export const Mul = createToken({
+	name: 'Mul',
+	pattern: { exec: genKeywordPattern('mul', /\d/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/** `lin` — linear interpolation. e.g. `2lin7x8`. */
+export const Lin = createToken({
+	name: 'Lin',
+	pattern: { exec: genKeywordPattern('lin', /\d/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/** `geo` — geometric interpolation. e.g. `2geo7x8`. */
+export const Geo = createToken({
+	name: 'Geo',
+	pattern: { exec: genKeywordPattern('geo', /\d/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/**
+ * `x` — length separator in deterministic generators: `0step2x4`.
+ * Matches only when followed by a digit (the length value).
+ */
+export const LenSep = createToken({
+	name: 'LenSep',
+	pattern: { exec: genKeywordPattern('x', /\d/) },
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
 // ---------------------------------------------------------------------------
-// Operators
+// Accidental tokens
+//
+// Accidentals appear directly after an integer degree: `2b`, `4#`, `3bb`.
+// They must be placed BEFORE Identifier in allTokens so a standalone `b`
+// or `#` doesn't get swallowed by Identifier.
+//
+// `Flat` matches `b` only when NOT followed by an identifier character or
+// digit, preventing `bro` from matching as Flat + "ro". (The Bro token uses
+// its own custom pattern and is ordered before Flat anyway, but this guard
+// makes the rule robust.)
+//
+// `Sharp` matches `#` unconditionally — `#` never appears as part of
+// Identifier or any other existing token.
+// ---------------------------------------------------------------------------
+
+/**
+ * `b` / `bb` / `bbb` — flat accidental(s). Matches one or more consecutive `b`
+ * characters ONLY when:
+ *   - the sequence is NOT followed by an alphanumeric character or underscore
+ *     (prevents `bar` → Flat + `ar`)
+ *   - offset > 0 AND the preceding character is a digit or `#` (prevents bare
+ *     `b` or `bb` at the start of input or after a non-degree character)
+ *
+ * Matching `b+` as a single token means `3bb` → Integer("3") + Flat("bb"),
+ * beating a one-char Identifier match on the first `b`. The parser uses
+ * `.image.length` to count the number of flats (each `b` = one flat).
+ *
+ * Double-flat example: `3bb` → Integer + Flat("bb") → degree 3, accidental -2.
+ */
+export const Flat = createToken({
+	name: 'Flat',
+	pattern: {
+		exec: (text: string, offset: number) => {
+			if (text[offset] !== 'b') return null;
+			// Check preceding character — must be a digit or '#'
+			if (offset === 0) return null;
+			const prev = text[offset - 1];
+			if (!/[0-9#]/.test(prev)) return null;
+			// Greedily consume all consecutive 'b' characters
+			let len = 0;
+			while (offset + len < text.length && text[offset + len] === 'b') len++;
+			// Ensure the sequence is not followed by alphanumeric or underscore
+			const after = text[offset + len];
+			if (after !== undefined && /[a-zA-Z0-9_]/.test(after)) return null;
+			const image = text.slice(offset, offset + len);
+			const match = [image] as unknown as RegExpExecArray;
+			match.index = offset;
+			match.input = text;
+			return match;
+		}
+	},
+	line_breaks: false
+	// Monaco scope: 'operator'
+});
+
+/** `#` — sharp accidental. */
+export const Sharp = createToken({
+	name: 'Sharp',
+	pattern: /#/
+	// Monaco scope: 'operator'
+});
+
+// ---------------------------------------------------------------------------
+// Synthetic INDENT / DEDENT tokens
+//
+// Chevrotain is context-free — it has no native support for indentation.
+// These tokens are never produced by the lexer directly (pattern: Lexer.NA).
+// Instead, a pre-processing step (preprocessTokens in parser.ts) scans the
+// raw token stream and injects synthetic INDENT/DEDENT tokens before the
+// token stream is handed to the parser.
+// ---------------------------------------------------------------------------
+
+/** Synthetic INDENT — injected by preprocessTokens when indentation increases. */
+export const INDENT = createToken({
+	name: 'INDENT',
+	pattern: Lexer.NA
+});
+
+/** Synthetic DEDENT — injected by preprocessTokens when indentation decreases. */
+export const DEDENT = createToken({
+	name: 'DEDENT',
+	pattern: Lexer.NA
+});
+
+// ---------------------------------------------------------------------------
+// Operators and punctuation
 // ---------------------------------------------------------------------------
 
 /**
  * `'` — the modifier sigil. Introduces a modifier name, e.g. `'lock`, `'stut(2)`.
- *
- * This is a single-character token. The modifier name that follows is a
- * separate Identifier token (once defined).
  */
 export const Tick = createToken({
 	name: 'Tick',
@@ -87,22 +349,132 @@ export const Tick = createToken({
 	// Monaco scope: 'operator'
 });
 
-// ---------------------------------------------------------------------------
-// TODO: Add more operators here. Candidates from the spec:
-//   LBracket `[`, RBracket `]`, LBrace `{`, RBrace `}`
-//   LParen `(`, RParen `)`, Pipe `|`, At `@`, Colon `:`, Question `?`, Tilde `~`
-// ---------------------------------------------------------------------------
+/** `[` — open sequence generator. */
+export const LBracket = createToken({
+	name: 'LBracket',
+	pattern: /\[/
+	// Monaco scope: 'delimiter.bracket'
+});
+
+/** `]` — close sequence generator. */
+export const RBracket = createToken({
+	name: 'RBracket',
+	pattern: /\]/
+	// Monaco scope: 'delimiter.bracket'
+});
+
+/** `(` — open argument list or nested generator. */
+export const LParen = createToken({
+	name: 'LParen',
+	pattern: /\(/
+	// Monaco scope: 'delimiter.parenthesis'
+});
+
+/** `)` — close argument list or nested generator. */
+export const RParen = createToken({
+	name: 'RParen',
+	pattern: /\)/
+	// Monaco scope: 'delimiter.parenthesis'
+});
+
+/** `{` — open absolute-timed event list. */
+export const LBrace = createToken({
+	name: 'LBrace',
+	pattern: /\{/
+	// Monaco scope: 'delimiter.bracket'
+});
+
+/** `}` — close absolute-timed event list. */
+export const RBrace = createToken({
+	name: 'RBrace',
+	pattern: /\}/
+	// Monaco scope: 'delimiter.bracket'
+});
+
+/** `|` — pipe operator (insert FX). */
+export const Pipe = createToken({
+	name: 'Pipe',
+	pattern: /\|/
+	// Monaco scope: 'operator'
+});
+
+/** `@` — decorator sigil. */
+export const At = createToken({
+	name: 'At',
+	pattern: /@/
+	// Monaco scope: 'operator'
+});
+
+/** `~` — shorthand for `rand`: `0~4` means `0rand4`. */
+export const Tilde = createToken({
+	name: 'Tilde',
+	pattern: /~/
+	// Monaco scope: 'operator'
+});
+
+/** `?` — weight operator in `'wran` lists: `[1 2 3?2]`. */
+export const Question = createToken({
+	name: 'Question',
+	pattern: /\?/
+	// Monaco scope: 'operator'
+});
+
+/** `=` — assignment operator: `reverb = send_fx(...)`. */
+export const Equals = createToken({
+	name: 'Equals',
+	pattern: /=/
+	// Monaco scope: 'operator'
+});
+
+/** `+` — modal transposition up. */
+export const Plus = createToken({
+	name: 'Plus',
+	pattern: /\+/
+	// Monaco scope: 'operator'
+});
+
+/** `-` — modal transposition down or negative number. */
+export const Minus = createToken({
+	name: 'Minus',
+	pattern: /-/
+	// Monaco scope: 'operator'
+});
+
+/** `/` — division, used in time expressions like `1/4`. */
+export const Slash = createToken({
+	name: 'Slash',
+	pattern: /\//
+	// Monaco scope: 'operator'
+});
+
+/** `:` — absolute time separator in `{4:1/2}` event lists. */
+export const Colon = createToken({
+	name: 'Colon',
+	pattern: /:/
+	// Monaco scope: 'operator'
+});
 
 // ---------------------------------------------------------------------------
 // Literals
 // ---------------------------------------------------------------------------
 
 /**
- * Integer literal, e.g. `0`, `4`, `127`.
+ * Float literal, e.g. `0.5`, `1.2`.
+ * Must appear BEFORE Integer in allTokens — `0.5` would otherwise lex as
+ * Integer(`0`) then an error on `.5`.
  *
- * Note: the generator shorthand syntax (`0whi4`, `1exp7`) is not handled here.
- * Those compact forms will likely be their own tokens or parsed as a sequence
- * of Integer + generator-keyword tokens. Decide when adding those tokens.
+ * The pattern requires digits on both sides of the dot.
+ * `0.rand4` (float-rand form) is handled by Float + Rand + Integer.
+ */
+export const Float = createToken({
+	name: 'Float',
+	pattern: /\d+\.\d*/
+	// Monaco scope: 'number'
+});
+
+/**
+ * Integer literal, e.g. `0`, `4`, `127`.
+ * Must come AFTER Float in allTokens.
  */
 export const Integer = createToken({
 	name: 'Integer',
@@ -110,11 +482,15 @@ export const Integer = createToken({
 	// Monaco scope: 'number'
 });
 
-// ---------------------------------------------------------------------------
-// TODO: Add more literal tokens. Candidates from the spec:
-//   Float (e.g. `0.5`, `1.2`) — must appear BEFORE Integer (longer match wins)
-//   StringLiteral (e.g. `"moog"`, `"reverb"`)
-// ---------------------------------------------------------------------------
+/**
+ * String literal, e.g. `"moog"`, `"reverb"`.
+ * Used for synthdef names and scale names.
+ */
+export const StringLiteral = createToken({
+	name: 'StringLiteral',
+	pattern: /"[^"]*"/
+	// Monaco scope: 'string'
+});
 
 // ---------------------------------------------------------------------------
 // Whitespace (skipped)
@@ -134,31 +510,70 @@ export const WhiteSpace = createToken({
 });
 
 // ---------------------------------------------------------------------------
-// TODO: Identifier — add after all keywords, before WhiteSpace.
-//
-// export const Identifier = createToken({
-//   name: 'Identifier',
-//   pattern: /[a-zA-Z_][a-zA-Z0-9_]*/,
-//   // Monaco scope: 'variable'
-// });
-//
-// Then update each keyword above to add: longer_alt: Identifier
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Token registry
 //
-// ORDER MATTERS. Chevrotain resolves ties by position — put more specific
-// tokens first. Current order:
-//   1. LineComment  — starts with //; must beat any future Slash operator
-//   2. Loop         — keyword; will need to beat Identifier (add longer_alt)
-//   3. Tick         — single char '
-//   4. Integer      — digits; Float (once added) must go BEFORE this
-//   5. WhiteSpace   — catch-all whitespace; always last
-//
-// When adding Identifier, insert it AFTER all keywords, BEFORE WhiteSpace.
+// ORDER MATTERS. Rules:
+//   1. LineComment first — must beat any future Slash token
+//   2. Multi-char keywords before shorter ones that share a prefix:
+//      SendFx before Fx, MasterFx before... (none), Step before Set
+//   3. All keywords before Identifier (with longer_alt set on each)
+//   4. Float before Integer
+//   5. Identifier before WhiteSpace
+//   6. WhiteSpace last
 // ---------------------------------------------------------------------------
 
-export const allTokens = [LineComment, Loop, Tick, Integer, WhiteSpace];
+export const allTokens = [
+	// Comments
+	LineComment,
+	// Statement keywords (longer ones first where prefixes overlap)
+	SendFx, // 'send_fx' before 'set' and 'fx'
+	MasterFx, // 'master_fx' before 'fx'
+	Loop,
+	Line,
+	Fx,
+	Set,
+	// Generator keywords (longer ones first where prefixes overlap)
+	Step, // 'step' before 'set' — no overlap, but keep deterministic order
+	Rand,
+	Gau,
+	Exp,
+	Bro,
+	Mul,
+	Lin,
+	Geo,
+	BroStep, // 'm' — single char, after multi-char keywords; before Flat ('b')
+	LenSep, // 'x' — single char, after all multi-char keywords
+	// Accidentals — before Identifier so standalone 'b' and '#' tokenise correctly
+	Flat, // 'b' — must come after Bro/BroStep so 'bro...' is not split
+	Sharp, // '#'
+	// Identifier — after all keywords and accidentals
+	Identifier,
+	// Synthetic indent/dedent tokens (pattern: NA — injected by preprocessTokens)
+	INDENT,
+	DEDENT,
+	// Operators and punctuation
+	Tick,
+	LBracket,
+	RBracket,
+	LParen,
+	RParen,
+	LBrace,
+	RBrace,
+	Pipe,
+	At,
+	Tilde,
+	Question,
+	Equals,
+	Plus,
+	Minus,
+	Slash,
+	Colon,
+	// Literals — Float before Integer
+	Float,
+	Integer,
+	StringLiteral,
+	// Whitespace — always last
+	WhiteSpace
+];
 
 export const FluxLexer = new Lexer(allTokens);

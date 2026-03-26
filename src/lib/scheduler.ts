@@ -37,10 +37,11 @@ function durationOf<T>(value: T, fallback: number): number {
 export function run<T>(
 	gen: Generator<T>,
 	callback: (value: T, ntpTime: number) => void,
-	interval = 0.5
+	interval = 0.5,
+	startBeat = clock.currentBeat
 ): SchedulerHandle {
 	let active = true;
-	let nextBeat = clock.currentBeat;
+	let nextBeat = startBeat;
 	let timerId: ReturnType<typeof setTimeout>;
 
 	function tick() {

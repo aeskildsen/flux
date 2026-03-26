@@ -1,0 +1,321 @@
+(* =========================================================================
+   Flux DSL — Formal Grammar (EBNF)
+   =========================================================================
+
+   Notation
+   --------
+   rule      = definition ;
+   A B       — concatenation (A then B)
+   A | B     — alternation
+   [ A ]     — optional
+   { A }     — zero or more
+   ( A )     — grouping
+   "text"    — terminal string
+   /regex/   — terminal regex pattern
+   (* ... *) — comment
+
+   Whitespace
+   ----------
+   Whitespace (spaces/newlines) is REQUIRED between top-level tokens, e.g.
+   between `loop` and `[`. It is FORBIDDEN inside numeric generator
+   expressions: `0rand4` is valid; `0 rand 4` is a syntax error. This is
+   the fundamental tokenisation decision (see lexer.ts custom patterns).
+
+   Inside `[...]` sequence generators, elements are separated by one or more
+   spaces. Commas are not valid separators.
+
+   ========================================================================= *)
+
+
+(* =========================================================================
+   Top-level
+   ========================================================================= *)
+
+program         = { statement } ;
+
+statement       = loopStatement
+                | lineStatement
+                | setStatement
+                | fxAssignment
+                | masterFxStatement
+                | decoratorBlock
+                | lineComment ;
+
+(* A decorator block: one or more decorators on their own line(s), followed
+   by an indented body of loop/line statements. *)
+decoratorBlock  = decorator { decorator } NEWLINE
+                  INDENT ( loopStatement | lineStatement
+                          | decoratorBlock ) ;
+
+loopStatement   = "loop" [ synthdefArg ] sequenceExpr
+                  { modifierSuffix }
+                  [ transposition ]
+                  { continuationModifier }
+                  [ pipeExpr ] ;
+
+lineStatement   = "line" [ synthdefArg ]
+                  ( sequenceExpr | relTimedList | absTimedList )
+                  { modifierSuffix }
+                  [ transposition ]
+                  { continuationModifier }
+                  [ pipeExpr ] ;
+
+(* 'mono is a regular modifier — no special syntax needed.
+   loop [0 1 2 3]'mono  or  line [0 1]'mono  *)
+
+setStatement    = "set" identifier "(" setArg ")" ;
+
+fxAssignment    = identifier "=" "send_fx" "(" stringLiteral ")"
+                  { modifierSuffix } ;
+
+masterFxStatement = "master_fx" "(" stringLiteral ")" { modifierSuffix } ;
+
+synthdefArg     = "(" stringLiteral ")" ;
+
+(* Modal transposition — RHS must be a non-negative scalar generator.
+   A double-negative (e.g. loop [0] - -4) is a syntax error. *)
+transposition   = ( "+" | "-" ) positiveScalar ;
+
+(* positiveScalar excludes a leading "-" on the RHS of transposition. *)
+positiveScalar  = ( parenGenerator | positiveNumericGenerator ) { modifierSuffix } ;
+
+(* Continuation-line modifiers: indented lines starting with "'".
+   Attach to the whole preceding loop/line expression (including its
+   transposition operand, if present). Multiple continuation modifiers
+   are allowed, one per indented line. *)
+continuationModifier = INDENT "'" identifier [ "(" generatorExpr ")" ] ;
+
+pipeExpr        = "|" fxExpr ;
+
+fxExpr          = "fx" "(" stringLiteral ")" { modifierSuffix } ;
+
+lineComment     = "//" /[^\n]*/ ;
+
+
+(* =========================================================================
+   Decorator blocks
+   ========================================================================= *)
+
+(* Decorators take a parenthesised argument list. Single arguments, compound
+   arguments (@key(g# lydian 4)), and stochastic arguments (@root(3rand7))
+   all use the same syntax — no special-casing for @key. *)
+
+decorator       = "@" identifier "(" decoratorArgList ")" ;
+
+(* An argument list is one or more space-separated decorator arguments.
+   This handles: @root(7), @key(g# lydian), @key(g# lydian 4), @root(3rand7). *)
+decoratorArgList = decoratorArg { decoratorArg } ;
+
+decoratorArg    = pitchClass      (* for @key: root note, e.g. g# *)
+                | scaleName       (* for @key: scale name, e.g. lydian *)
+                | generatorExpr ; (* numeric/generator argument *)
+
+pitchClass      = /[a-gA-G]/ [ "#" | "b" ] ;   (* e.g. g#, Ab, c *)
+scaleName       = identifier ;                   (* e.g. major, minor, lydian *)
+
+
+(* =========================================================================
+   Session state arguments
+   ========================================================================= *)
+
+(* set uses the same argument list syntax as decorators. *)
+setArg          = decoratorArgList ;
+
+
+(* =========================================================================
+   Generator expressions
+   ========================================================================= *)
+
+(* Top-level generator — an atomic generator with zero or more modifier
+   suffixes. Used everywhere a value is expected. *)
+generatorExpr   = atomicGenerator { modifierSuffix } ;
+
+(* scalarGenerator: a generatorExpr that cannot be a bare sequenceGenerator.
+   Used as the RHS of transposition to disallow list+list arithmetic. *)
+scalarGenerator = ( parenGenerator | numericGenerator ) { modifierSuffix } ;
+
+(* positiveNumericGenerator: numericGenerator without a leading "-".
+   Used as the RHS of transposition to disallow double-negatives. *)
+positiveNumericGenerator = positiveNumericLiteral
+                           [ randGen | tildeGen | gauGen | expGen
+                           | broGen | stepGen | mulGen | linGen | geoGen ] ;
+
+atomicGenerator = parenGenerator
+                | sequenceGenerator
+                | numericGenerator ;
+
+parenGenerator  = "(" generatorExpr ")" ;
+
+
+(* -------------------------------------------------------------------------
+   Sequence generator  [ elem elem ... ]
+   ------------------------------------------------------------------------- *)
+
+(* sequenceExpr is the form used after loop/line — a plain `[...]` list,
+   possibly followed by modifiers. Not the same as sequenceGenerator, which
+   can appear anywhere inside a generatorExpr. *)
+sequenceExpr    = "[" { sequenceElement } "]" { modifierSuffix } ;
+
+sequenceGenerator = "[" { sequenceElement } "]" { modifierSuffix } ;
+
+sequenceElement = generatorExpr [ "?" weight ] ;
+
+weight          = numericLiteral                (* literal weight *)
+                | "(" generatorExpr ")" ;       (* dynamic weight, e.g. (1rand3)'lock *)
+
+(* Relative-timed list: [4@1/2 7@1/4] — delta from previous event.
+   Only valid after `line`, not `loop`. *)
+relTimedList    = "[" { timedElement } "]" { modifierSuffix } ;
+
+timedElement    = degreeLiteral "@" timeExpr ;
+
+(* Absolute-timed list: {4:1/2 7:3/2} — offset from cycle start.
+   Valid after `loop` or `line`. *)
+absTimedList    = "{" { absTimedElement } "}" { modifierSuffix } ;
+
+absTimedElement = degreeLiteral ":" timeExpr ;
+
+timeExpr        = integer [ "/" integer ] ;   (* e.g. 1/4, 3/2, 0  — no floats *)
+
+
+(* -------------------------------------------------------------------------
+   Numeric generators — all tokens are ADJACENT (no whitespace allowed)
+   ------------------------------------------------------------------------- *)
+
+(* A numeric literal optionally followed by a generator keyword + args.
+   With no keyword, this is a plain scalar literal (or degree literal). *)
+numericGenerator = numericLiteral
+                   [ randGen | tildeGen | gauGen | expGen
+                   | broGen | stepGen | mulGen | linGen | geoGen ] ;
+
+numericLiteral         = [ "-" ] ( float | integer ) ;
+positiveNumericLiteral = float | integer ;
+
+(* Random generators (two-argument: min, max) *)
+randGen         = "rand" numericLiteral ;       (* 0rand4   → Pwhite(0, 4)    *)
+tildeGen        = "~"    numericLiteral ;       (* 0~4      → shorthand rand  *)
+gauGen          = "gau"  numericLiteral ;       (* 0gau4    → Pgauss(0, 4)    *)
+expGen          = "exp"  numericLiteral ;       (* 1exp7    → Pexprand(1, 7)  *)
+
+(* Brownian motion (three-argument: min, max, max_step) *)
+broGen          = "bro" numericLiteral "m" numericLiteral ;
+                                                (* 0bro10m2 → Pbrown(0,10,2) *)
+
+(* Deterministic series (three-argument: start, step/end, length) *)
+stepGen         = "step" numericLiteral "x" numericLiteral ;
+                                                (* 0step2x4 → Pseries(0,2,4) *)
+mulGen          = "mul"  numericLiteral "x" numericLiteral ;
+                                                (* 5mul2x4  → Pgeom(5,2,4)   *)
+linGen          = "lin"  numericLiteral "x" numericLiteral ;
+                                                (* 2lin7x8  → lerp(2..7, 8)  *)
+geoGen          = "geo"  numericLiteral "x" numericLiteral ;
+                                                (* 2geo7x8  → glerp(2..7, 8) *)
+
+(* Float: digit(s), dot, optional digits. `0.` is valid (enables 0.rand4).
+   Float has lexer priority over Integer. *)
+float           = /\d+\.\d*/ ;     (* 0., 0.5, 1.2  — NOT .5 *)
+integer         = /\d+/ ;
+
+
+(* -------------------------------------------------------------------------
+   Degree literals and accidentals
+   ------------------------------------------------------------------------- *)
+
+(* A degree literal is an integer optionally followed by one or more
+   accidental characters, written ADJACENT with no whitespace.
+   e.g.  0  2b  4#  3bb  4##
+   Accidentals are resolved at parse time as a degree + semitone offset. *)
+degreeLiteral   = integer { accidental } ;
+
+accidental      = "#" | "b" ;   (* sharp or flat; may repeat: ##, bb *)
+
+(* Degree literals are the element type inside [..] sequence lists and
+   timed lists. Inside a generatorExpr context, a plain numericGenerator
+   serves as the degree — accidentals are only valid on bare integer
+   literals, not on generator expressions. *)
+
+
+(* =========================================================================
+   Modifier suffixes
+   ========================================================================= *)
+
+(* A modifier suffix attaches to the immediately preceding syntactic token.
+   It may appear after any generator, list, or loop/line expression. *)
+
+modifierSuffix  = "'" identifier [ "(" generatorExpr ")" ] ;
+
+(* Bare modifier forms (no argument) are valid for modifiers with defaults:
+     'stut      → 'stut(2)
+     'maybe     → 'maybe(0.5)
+     'eager     → 'eager(1)
+     'repeat    → repeat indefinitely
+     'mono      → monophonic mode
+   Unknown modifier names are a semantic error, not a parse error. *)
+
+(* Well-known modifiers by category:
+
+   Stream traversal:  shuf  pick  wran
+   Timing:            lock  eager(n)
+   Loop/line:         at(timeExpr)  repeat  repeat(n)
+                      legato(generatorExpr)  offset(generatorExpr)  mono
+   Filter:            stut  stut(generatorExpr)  maybe  maybe(generatorExpr)
+   FX:                cutoff(generatorExpr)  room(generatorExpr)
+                      tail(generatorExpr)  [any fx parameter key]
+   Pitch (reserved):  st(n)   [not implemented in initial version]
+*)
+
+(* Note on 'at argument type:
+   'at takes a timeExpr (integer or integer/integer fraction), not a full
+   generatorExpr. The `/` in `'at(3/4)` is a time fraction, not a general
+   division operator. This is a semantic constraint enforced at evaluation,
+   not a parse-level distinction. *)
+
+
+(* =========================================================================
+   Indentation rules (not representable in context-free EBNF)
+   ========================================================================= *)
+
+(*
+   These are enforced by the parser, not this grammar:
+
+   1. INDENT = leading whitespace that is a positive multiple of 2 spaces.
+      Tabs and mixed tab/space are errors.
+   2. A decorator line followed by an INDENT opens a new decorator scope.
+   3. An indented line beginning with "'" is a continuation modifier for
+      the loop/line on the previous line (not a new decorator scope).
+   4. Any other indentation without a leading decorator or "'" is a parse
+      error.
+   5. DEDENT to a level that was never opened is a parse error.
+   6. A decorator with no following indented body and no inline expression
+      is a semantic error (dangling decorator).
+*)
+
+
+(* =========================================================================
+   Tokens (terminals) — summary
+   ========================================================================= *)
+
+(*
+   Keywords (statement):    loop  line  set  fx  send_fx  master_fx
+   Generator keywords:      rand  gau  exp  bro  step  mul  lin  geo
+   Single-char separators:  ~  m  x   (adjacent-only, digit-lookahead-guarded)
+   Operators:               '  @  |  +  -  /  =  ?  :  ~
+   Brackets:                [  ]  (  )  {  }
+   Literals:                INTEGER=/\d+/  FLOAT=/\d+\.\d*/  STRING=/"[^"]*"/
+   Accidentals:             #  b  (only valid immediately after an integer)
+   Identifier:              /[a-zA-Z_][a-zA-Z0-9_]*/
+   Comment:                 // to end of line (skipped by lexer)
+   Whitespace:              spaces/newlines (skipped, except for indentation)
+
+   Tokenisation notes:
+   - Generator keywords use lookahead-guarded custom patterns: they match
+     only when immediately followed by a digit or "(". This prevents
+     "random" from tokenising as Rand + "om".
+   - FLOAT /\d+\.\d*/ has lexer priority over INTEGER /\d+/ — "0." is a
+     valid float, enabling the `0.rand4` float-rand form.
+   - Statement keywords have longer_alt: Identifier — "loopCount" tokenises
+     as a single Identifier, not Loop + Identifier("Count").
+   - Accidentals (#, b) are valid only immediately after an integer and only
+     inside a degree-literal context (sequence list or timed list element).
+     In other positions they tokenise as Identifier or operator respectively.
+*)

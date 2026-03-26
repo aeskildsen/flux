@@ -1,12 +1,25 @@
 <script lang="ts">
 	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
 	import { run, type SchedulerHandle } from '$lib/scheduler';
+	import { sc as scProxy, clock } from '$lib/lab-context';
+	import { evaluate } from '$lib/lang/evaluator';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	const sc = $derived(getServer());
 
 	let metricsEl: HTMLElement | undefined = $state();
 	let handle = $state<SchedulerHandle | null>(null);
 	let feedback = $state<{ message: string; kind: 'error' | 'info' } | null>(null);
+
+	// Outgoing handle: the previous loop, kept alive until the next cycle boundary.
+	let outgoingHandle: SchedulerHandle | null = null;
+	let outgoingTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function clearOutgoing() {
+		if (outgoingTimer !== null) clearTimeout(outgoingTimer);
+		outgoingHandle?.stop();
+		outgoingHandle = null;
+		outgoingTimer = null;
+	}
 
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
@@ -42,10 +55,71 @@
 	}
 
 	function stopLoop() {
+		clearOutgoing();
 		handle?.stop();
 		handle = null;
 	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.ctrlKey && e.key === '.') {
+			e.preventDefault();
+			stopLoop();
+		}
+	}
+
+	function handleEvaluate(content: string) {
+		feedback = null;
+
+		if (!serverState.booted) {
+			feedback = { message: 'Engine not booted — click "boot engine" first', kind: 'error' };
+			return;
+		}
+
+		const result = evaluate(content);
+		if (!result.ok) {
+			feedback = { message: result.error, kind: 'error' };
+			return;
+		}
+
+		if (clock.startTime === null) clock.start();
+
+		const CYCLE_BEATS = 4;
+		const nextCycleBeat = Math.ceil(clock.currentBeat / CYCLE_BEATS) * CYCLE_BEATS;
+
+		// Let the current loop finish its cycle, then stop it.
+		clearOutgoing();
+		if (handle) {
+			const dying = handle;
+			const msUntilSwitch =
+				(clock.beatToAudioTime(nextCycleBeat) - clock.audioContext!.currentTime) * 1000;
+			outgoingHandle = dying;
+			outgoingTimer = setTimeout(
+				() => {
+					dying.stop();
+					outgoingHandle = null;
+					outgoingTimer = null;
+				},
+				Math.max(0, msUntilSwitch)
+			);
+		}
+
+		handle = run(
+			result.generator,
+			(event, ntpTime) =>
+				scProxy.synthAt(ntpTime, 'sonic-pi-prophet', 'source', {
+					note: event.note,
+					release: 0.8,
+					cutoff: 90
+				}),
+			4 / 3,
+			nextCycleBeat
+		);
+
+		feedback = { message: 'playing loop', kind: 'info' };
+	}
 </script>
+
+<svelte:window onkeydown={handleKeyDown} />
 
 <svelte:head>
 	<link rel="stylesheet" href="{defaultConfig.baseURL}metrics-dark.css" />
@@ -76,8 +150,8 @@
 </div>
 
 <div class="editor-section">
-	<FluxEditor onEvaluate={(content) => console.log('[flux evaluate]', content)} />
-	<p class="hint">Ctrl+Enter to evaluate</p>
+	<FluxEditor onEvaluate={handleEvaluate} />
+	<p class="hint">Ctrl+Enter to evaluate &nbsp;·&nbsp; Ctrl+. to stop</p>
 </div>
 
 {#if feedback}
