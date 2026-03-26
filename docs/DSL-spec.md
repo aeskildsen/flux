@@ -1,12 +1,16 @@
 # Flux DSL
 
-This is an early draft of the DSL spec for Flux.
-
 ## Generators
 
 Generators are objects that yield a stream of values for use in synth instantiation or set messages. Literal numbers are generators that always yield the same value. Everything in `[...]` brackets is also a generator — not a data structure, but a stateful object that yields its elements on each call.
 
 Unlike SuperCollider patterns/streams, all generators yield indefinitely. They are never exhausted — it's the caller's responsibility to stop polling when a phrase needs to end.
+
+### Whitespace rules
+
+Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `loop` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gau`, `exp`, `bro`, `step`, `mul`, `lin`, `geo`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
+
+Inside `[...]` sequence generators, elements are separated by spaces. Commas are not valid separators.
 
 ### Sequence generators
 
@@ -19,7 +23,7 @@ Unlike SuperCollider patterns/streams, all generators yield indefinitely. They a
 [1 2 3?2]'wran  // pick stochastically, like Pwrand
 ```
 
-Specifically for `'wran`: weight for each element is 1 by default. The weight can be overridden with the `?` operator.
+Specifically for `'wran`: weight for each element is 1 by default. The weight can be overridden with the `?` operator. The `?` weight syntax is only meaningful when `'wran` is present — using `?` without `'wran` is a semantic error.
 
 ### Random number generators
 
@@ -76,7 +80,7 @@ A number of generators work by filtering events that come from upstream generato
 
 #### Stuttering (`'stut`)
 
-The `'stut(n)` modifier repeats every element n times. Default: n = 2.
+The `'stut(n)` modifier repeats every element n times. Default: n = 2. The bare form `'stut` is valid and equivalent to `'stut(2)`.
 
 ```flux
 loop [0'stut]                              // 0 yielded 2 times
@@ -101,15 +105,17 @@ How `'eager` and `'lock` apply to `'stut`:
 - `'stut(2rand4'eager(4))`: count is redrawn every 4 cycles.
 - `'stut(2rand4'lock)`: stutter count is chosen once and frozen forever.
 
+The stutter count must be a positive integer ≥ 1. A count of 0 or a negative value is a semantic error. The count argument must be a scalar generator — a list generator is a semantic error.
+
 #### Probability (`'maybe`)
 
-The `'maybe(p)` modifier passes each element through with probability `p` (0.0–1.0) and skips it otherwise. Default: p = 0.5.
+The `'maybe(p)` modifier passes each element through with probability `p` (0.0–1.0) and skips it otherwise. Default: p = 0.5. The bare form `'maybe` is valid and equivalent to `'maybe(0.5)`.
 
 ---
 
 ## Cyclic mode: `loop`
 
-A `loop` consists of a number of elements defined within a set of brackets and delineated by spaces.
+A `loop` consists of a number of elements defined within a set of brackets and delineated by spaces. A space is required between `loop` and `[`.
 
 ```flux
 loop [0 1 2 3]
@@ -133,7 +139,12 @@ loop [0 1 2 3 4 5]
 loop [0 1 [2 3] 4]
 ```
 
-The `'offset` modifier on a list schedules events a number of milliseconds early or late relative to their normal trigger time. Equivalent to the `\lag` key in SC.
+The `'offset` modifier on a loop or line schedules all events a number of milliseconds early (negative value) or late (positive value) relative to their normal trigger time. Equivalent to the `\lag` key in SC.
+
+```flux
+loop [0 1 2]'offset(20)    // all events 20 ms late
+loop [0 1 2]'offset(-10)   // all events 10 ms early
+```
 
 ### Durations
 
@@ -159,7 +170,7 @@ Structural length is frozen at the cycle boundary. All generators inside a `loop
 
 ## Linear mode: `line`
 
-Linear mode is activated by the keyword `line`.
+Linear mode is activated by the keyword `line`. A space is required between `line` and `[`.
 
 By default, `line`:
 
@@ -186,7 +197,7 @@ If a line would be scheduled to start in the past, its start is postponed to the
 
 ### Repetitions
 
-Repetitions are specified with the `'repeat` modifier.
+Repetitions are specified with the `'repeat` modifier. The bare form `'repeat` is valid and means repeat indefinitely.
 
 ```flux
 // repeat indefinitely
@@ -195,6 +206,8 @@ line [0 1 2 3]'repeat
 // play 4 times
 line [0 1 2 3]'repeat(4)
 ```
+
+The repetition count must be a positive integer ≥ 1. Zero, negative, or non-integer counts are semantic errors.
 
 ### Determination of length
 
@@ -216,11 +229,11 @@ line {0:0 4:1/4 7:5/8} // relative to cycle start
 
 ## Monophonic mode: `'mono`
 
-Not an independent mode like `line` or `loop`, but a submode selected via the `'mono` modifier. Instantiates a single synth node and sends `set` messages to the server instead of instantiating new synths. Rough equivalent of SC's Pmono.
+`'mono` is a modifier applied to `loop` or `line`. It instantiates a single synth node and sends `set` messages to the server instead of instantiating new synths on each event. Rough equivalent of SC's Pmono.
 
 ```flux
-loop'mono [0 1 2 3]
-line'mono [4@1/2 7@1/4]
+loop [0 1 2 3]'mono
+line [4@1/2 7@1/4]'mono
 ```
 
 ---
@@ -271,11 +284,11 @@ loop [0 2 4] - 1        // shift down 1 scale step
 loop [0 2 4] + 0rand3   // stochastic transposition, eager(1) by default
 ```
 
-The right-hand side must be a scalar value or scalar generator. List generators (`[...]`) are not permitted as operands — two list generators combined arithmetically creates unresolvable stream-combination ambiguity.
+The right-hand side must be a non-negative scalar value or scalar generator. List generators (`[...]`) are not permitted as operands — two list generators combined arithmetically creates unresolvable stream-combination ambiguity. A double-negative such as `loop [0] - -4` is a syntax error; use `loop [0] + 4` instead.
 
 ### Accidentals
 
-Accidentals (notes outside the current scale) are notated like in SuperCollider, with `b` for flat and `#` for sharp.
+Accidentals modify a scale degree by one semitone. They are written as a suffix directly on the degree integer, with no space:
 
 ```flux
 2b  // third, flat
@@ -283,6 +296,8 @@ Accidentals (notes outside the current scale) are notated like in SuperCollider,
 3bb // third, double flat
 4## // fifth, double sharp
 ```
+
+Accidentals are interpreted as literals at parse time — `2b` is a single token with value degree=2, accidental=flat. They are valid wherever a degree literal appears (inside `[...]` lists or as transposition operands).
 
 ---
 
@@ -303,7 +318,7 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `mtranspose`, `key`.
 
 ### Scoped context: `@` decorators
 
-`@` decorators apply session parameters to a scoped block of expressions, overriding global `set` values within that scope. They use the same parenthesised argument syntax as modifiers — consistent with the rest of the language, and necessary to support complex expressions (generators, stochastic values) as arguments.
+`@` decorators apply session parameters to a scoped block of expressions, overriding global `set` values within that scope. They use a parenthesised argument list — the same syntax supports single arguments (`@root(7)`), compound arguments (`@key(g# lydian 4)`), and stochastic arguments (`@root(3rand7)`).
 
 ```flux
 @scale("minor") @root(7)
@@ -332,7 +347,7 @@ For single-expression use, decorators may appear inline on the same line:
 
 ## SynthDef selection
 
-`loop` and `line` take exactly one argument to choose a SynthDef.
+`loop` and `line` take exactly one optional argument to choose a SynthDef.
 
 ```flux
 line("moog") [0 1 2 3]'lfoRate(1/4)
@@ -350,11 +365,16 @@ Two categories of FX node, distinguished syntactically by whether they are named
 
 ### Named FX (persistent)
 
-Master bus effects and send effects. Defined at the top level, long-lived, independent of any source pattern.
+Send effects. Defined at the top level via assignment, long-lived, independent of any source pattern.
 
 ```flux
 reverb = send_fx("reverb")'room(0.5)
-delay = send_fx("delay")
+delay  = send_fx("delay")
+```
+
+The master bus effect is a standalone statement — there is no need to keep a reference to it, since all audio routes to master:
+
+```flux
 master_fx("limiter")
 ```
 
