@@ -38,13 +38,13 @@ A modifier always attaches to the _immediately preceding syntactic token_, even 
 
 # 2. **Modifier Precedence Truth Table**
 
-Inner overrides outer. `'lock` beats `'eager(n)`. `'eager(0)` beats `'lock` only when _nested inside_.
+Inner overrides outer. `'lock` beats `'eager(n)`.
 
 | Inner       | Outer       | Result              |
 | ----------- | ----------- | ------------------- |
 | `'lock`     | `'eager(1)` | `'lock`             |
-| `'eager(0)` | `'lock`     | `'eager(0)`         |
-| `'eager(0)` | `'eager(3)` | `'eager(0)`         |
+| `'lock`     | `'eager(3)` | `'lock`             |
+| `'eager(2)` | `'lock`     | inner `'eager(2)`   |
 | `'eager(2)` | `'eager(5)` | inner `'eager(2)`   |
 | none        | `'lock`     | `'lock` applies     |
 | none        | `'eager(n)` | `'eager(n)` applies |
@@ -55,13 +55,13 @@ Inner overrides outer. `'lock` beats `'eager(n)`. `'eager(0)` beats `'lock` only
 
 How stutter counts are sampled.
 
-| Code                        | Interpretation         | Evaluation                                    | Result                    |
-| --------------------------- | ---------------------- | --------------------------------------------- | ------------------------- |
-| `[x]'stut`                  | Default `'stut(2)`     | Draw count once per cycle (default eager(1)). | Each event repeats twice. |
-| `[x]'stut(4)`               | Fixed count.           | No randomness.                                | Repeat each event 4×.     |
-| `[x]'stut(2rand4)`          | Random count eager(1). | Count drawn once per cycle.                   | Each cycle has fixed k.   |
-| `[x]'stut(2rand4'eager(0))` | Random per-event k.    | k drawn for each event.                       | Variable burst lengths.   |
-| `[x]'stut(2rand4'lock)`     | Frozen stutter count.  | k drawn once ever.                            | Same k for whole session. |
+| Code                        | Interpretation                | Evaluation                         | Result                        |
+| --------------------------- | ----------------------------- | ---------------------------------- | ----------------------------- |
+| `[x]'stut`                  | Default `'stut(2)`            | Draw count once per cycle.         | Each event repeats twice.     |
+| `[x]'stut(4)`               | Fixed count.                  | No randomness.                     | Repeat each event 4×.         |
+| `[x]'stut(2rand4)`          | Random count eager(1).        | Count drawn once per cycle.        | Each cycle has fixed k.       |
+| `[x]'stut(2rand4'lock)`     | Frozen stutter count.         | k drawn once ever.                 | Same k for whole session.     |
+| `[x]'stut(2rand4'eager(4))` | Count redrawn every 4 cycles. | k held for 4 cycles, then redrawn. | Slowly varying burst lengths. |
 
 **Error cases**
 
@@ -99,12 +99,16 @@ How weights are interpreted.
 
 Defines how often nested generators are sampled.
 
-| Code                           | Interpretation              | Evaluation                                           | Result                           |
-| ------------------------------ | --------------------------- | ---------------------------------------------------- | -------------------------------- |
-| `(0rand2)rand4`                | Nested white noise.         | Lower bound generator sampled each time outer polls. | min changes per outer event.     |
-| `(0rand2)'lock rand4`          | Frozen nested generator.    | Lower bound sampled once.                            | Constant lower bound.            |
-| `[ (0rand2) 5 ]'eager(0)`      | Per-event eager.            | All elements resampled per event.                    | Both elements change each event. |
-| `[ (0rand2)'lock 5 ]'eager(0)` | Lock overrides outer eager. | First element frozen; second varies per event.       | Mixed behavior.                  |
+| Code                           | Interpretation                    | Evaluation                                                                       | Result                                                   |
+| ------------------------------ | --------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `(0rand2)rand4`                | Nested white noise.               | Lower bound generator sampled each time outer polls.                             | min changes per outer cycle.                             |
+| `(0rand2)'lock rand4`          | Frozen nested generator.          | Lower bound sampled once.                                                        | Constant lower bound.                                    |
+| `[ (0rand2) 5 ]'eager(3)`      | Resample every 3 cycles.          | Both elements redrawn every 3 cycles.                                            | Slowly shifting pattern.                                 |
+| `[ (0rand2)'lock 5 ]'eager(3)` | Lock overrides outer eager.       | First element frozen; second redraws every 3 cycles.                             | Mixed behavior.                                          |
+| `[0.5rand3]`                   | Float lower bound.                | Produces continuous float in [0.5, 3); degree context rounds to nearest integer. | Same MIDI output as `[1rand3]` for degree lookup.        |
+| `'legato(0.5rand1.2)`          | Float rand in non-degree context. | Produces continuous float in [0.5, 1.2).                                         | Duration varies continuously — float is meaningful here. |
+
+**Note:** When either bound of `rand` (or `~`) is a float, the output is a continuous float sampled uniformly from `[min, max)`. When used as a scale degree inside `[]`, the float is rounded to the nearest integer before scale lookup — microtonal degrees are not supported. Float bounds are most useful in non-degree contexts such as `'legato`, `@cent`, and decorator arguments.
 
 **Error cases**
 
@@ -118,11 +122,11 @@ Defines how often nested generators are sampled.
 
 Loop structure is frozen at cycle start.
 
-| Code                     | Interpretation            | Evaluation                      | Result                                   |
-| ------------------------ | ------------------------- | ------------------------------- | ---------------------------------------- |
-| `loop [0rand4]`          | Single-element generator. | Sample once at start of cycle.  | Same value entire cycle; new next cycle. |
-| `loop [0rand4'eager(0)]` | Event-level eager.        | Sample per event.               | New value each subdivision.              |
-| `loop [a b]'lock`        | Lock list values.         | Sample all at first cycle only. | Pattern repeats identically forever.     |
+| Code                     | Interpretation            | Evaluation                                | Result                                   |
+| ------------------------ | ------------------------- | ----------------------------------------- | ---------------------------------------- |
+| `loop [0rand4]`          | Single-element generator. | Sample once at cycle start.               | Same value entire cycle; new next cycle. |
+| `loop [0rand4'eager(4)]` | Resample every 4 cycles.  | Sample held for 4 cycles, then redrawn.   | Slowly shifting value.                   |
+| `loop [a b]'lock`        | Lock list values.         | Each element samples once at first cycle. | Pattern repeats identically forever.     |
 
 **Error cases**
 
@@ -261,14 +265,14 @@ Defines where whitespace is required, forbidden, or irrelevant.
 
 How legato values control note duration.
 
-| Code                                       | Interpretation        | Evaluation                         | Result                               |
-| ------------------------------------------ | --------------------- | ---------------------------------- | ------------------------------------ |
-| `loop [0 2 4]'legato(0.8)`                 | Fixed legato.         | Gate closed at 0.8 × event slot.   | Slightly detached notes.             |
-| `loop [0 2 4]'legato(1.0)`                 | Full legato.          | Gate closed exactly at next event. | Notes touch without overlap.         |
-| `loop [0 2 4]'legato(1.5)`                 | Overlapping legato.   | Gate held past next event onset.   | Notes overlap (pad/drone effect).    |
-| `loop [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1). | Value drawn once per cycle.        | Consistent legato within a cycle.    |
-| `loop [0 2 4]'legato(0.5rand1.2'eager(0))` | Per-event stochastic. | New value drawn for each event.    | Variable articulation per note.      |
-| `loop [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.        | Value drawn once, frozen forever.  | Same articulation for whole session. |
+| Code                                       | Interpretation         | Evaluation                         | Result                               |
+| ------------------------------------------ | ---------------------- | ---------------------------------- | ------------------------------------ |
+| `loop [0 2 4]'legato(0.8)`                 | Fixed legato.          | Gate closed at 0.8 × event slot.   | Slightly detached notes.             |
+| `loop [0 2 4]'legato(1.0)`                 | Full legato.           | Gate closed exactly at next event. | Notes touch without overlap.         |
+| `loop [0 2 4]'legato(1.5)`                 | Overlapping legato.    | Gate held past next event onset.   | Notes overlap (pad/drone effect).    |
+| `loop [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1).  | Value drawn once per cycle.        | Consistent legato within a cycle.    |
+| `loop [0 2 4]'legato(0.5rand1.2'eager(2))` | Redraw every 2 cycles. | New value drawn every 2 cycles.    | Slowly varying articulation.         |
+| `loop [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.         | Value drawn once, frozen forever.  | Same articulation for whole session. |
 
 **Error cases**
 
@@ -352,3 +356,5 @@ Monophonic mode via the `'mono` modifier.
 | `loop[0]`             | Parse error    | Missing space between `loop` and `[`.         |
 | `0 rand 4`            | Parse error    | Whitespace inside generator expression.       |
 | `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.       |
+| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.  |
+| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.      |
