@@ -264,6 +264,12 @@ modifierSuffix  = "'" identifier [ "(" generatorExpr ")" ] ;
    Pitch (reserved):  st(n)   [not implemented in initial version]
 *)
 
+(* Note on 'eager(n) argument:
+   n must be a positive integer ≥ 1. 'eager(0) and negative values are
+   semantic errors. The argument is parsed as a generatorExpr (any scalar
+   generator), but the evaluated value is validated at evaluation time.
+   Bare 'eager is shorthand for 'eager(1). *)
+
 (* Note on 'at argument type:
    'at takes a timeExpr (integer or integer/integer fraction), not a full
    generatorExpr. The `/` in `'at(3/4)` is a time fraction, not a general

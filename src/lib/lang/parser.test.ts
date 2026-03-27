@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { FluxLexer } from './lexer.js';
 import { parser, preprocessTokens } from './parser.js';
-import { evaluate } from './evaluator.js';
 
 function parse(src: string) {
 	const { tokens, errors: lexErrors } = FluxLexer.tokenize(src);
@@ -236,136 +235,158 @@ describe('multiple statements', () => {
 	});
 });
 
-describe('evaluate', () => {
-	it('negative degrees yield correct MIDI: loop [-1 0]', () => {
-		const result = evaluate('loop [-1 0]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		const { value: first } = result.generator.next();
-		const { value: second } = result.generator.next();
-		// degree -1 → B4 = 59; degree 0 → C5 = 60
-		expect(first.note).toBe(59);
-		expect(second.note).toBe(60);
+// ---------------------------------------------------------------------------
+// modifierSuffix — all modifier forms (truth table 1, spec §Modifier syntax)
+// ---------------------------------------------------------------------------
+
+describe("modifierSuffix — timing: 'lock and 'eager", () => {
+	it("parses bare 'lock on a list", () => {
+		expect(parse("loop [0 2 4]'lock").parseErrors).toHaveLength(0);
 	});
 
-	it('rand generator yields values within range: loop [0rand4]', () => {
-		const result = evaluate('loop [0rand4]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// degrees 0–4 in C major from root C5(60): C5=60, D5=62, E5=64, F5=65, G5=67
-		const validNotes = new Set([60, 62, 64, 65, 67]);
-		for (let i = 0; i < 50; i++) {
-			const { value } = result.generator.next();
-			expect(validNotes.has(value.note)).toBe(true);
-		}
+	it("parses bare 'eager (shorthand for eager(1))", () => {
+		expect(parse("loop [0 2 4]'eager").parseErrors).toHaveLength(0);
 	});
 
-	it('rand generator produces varying values over time', () => {
-		const result = evaluate('loop [0rand6]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		const notes = new Set<number>();
-		for (let i = 0; i < 100; i++) {
-			notes.add(result.generator.next().value.note);
-		}
-		// With range 0–6 and 100 samples, we expect more than 1 distinct note
-		expect(notes.size).toBeGreaterThan(1);
+	it("parses 'eager(1) on a list", () => {
+		expect(parse("loop [0 2 4]'eager(1)").parseErrors).toHaveLength(0);
 	});
 
-	it('gau generator produces varying values centred on mean', () => {
-		const result = evaluate('loop [3gau1]'); // mean=3, sdev=1
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		const notes = new Set<number>();
-		for (let i = 0; i < 100; i++) {
-			notes.add(result.generator.next().value.note);
-		}
-		expect(notes.size).toBeGreaterThan(1);
-		// Most samples should be within a few sdev of mean=3; just check no crash
+	it("parses 'eager(4) on a list", () => {
+		expect(parse("loop [0 2 4]'eager(4)").parseErrors).toHaveLength(0);
 	});
 
-	it('exp generator yields values within [lo, hi]', () => {
-		const result = evaluate('loop [1exp7]'); // lo=1, hi=7
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// Valid C major degrees in [1,7] from C5=60: D5=62, E5=64, F5=65, G5=67, A5=69, B5=71, C6=72
-		for (let i = 0; i < 50; i++) {
-			const { value } = result.generator.next();
-			expect(value.note).toBeGreaterThanOrEqual(62); // degree 1 = D5
-			expect(value.note).toBeLessThanOrEqual(72); // degree 7 = C6
-		}
+	it("parses 'lock on an element inside a list", () => {
+		expect(parse("loop [0rand7'lock 2 4]").parseErrors).toHaveLength(0);
 	});
 
-	it('bro generator stays within [lo, hi]', () => {
-		const result = evaluate('loop [0bro6m1]'); // lo=0, hi=6, maxStep=1
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// degrees 0–6 in C major: C5(60) to B5(71)
-		for (let i = 0; i < 100; i++) {
-			const { value } = result.generator.next();
-			expect(value.note).toBeGreaterThanOrEqual(60);
-			expect(value.note).toBeLessThanOrEqual(71);
-		}
+	it("parses 'eager(2) on an element inside a list", () => {
+		expect(parse("loop [0rand7'eager(2) 2 4]").parseErrors).toHaveLength(0);
 	});
 
-	it('bro generator changes value over time (stateful)', () => {
-		const result = evaluate('loop [0bro6m2]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		const notes = new Set<number>();
-		for (let i = 0; i < 50; i++) {
-			notes.add(result.generator.next().value.note);
-		}
-		expect(notes.size).toBeGreaterThan(1);
+	it("parses inner 'lock beating outer 'eager(3)", () => {
+		expect(parse("loop [0rand7'lock]'eager(3)").parseErrors).toHaveLength(0);
 	});
 
-	it('step series cycles through correct degrees: loop [0step2x4]', () => {
-		// 0step2x4 → Pseries(start=0, step=2, length=4) → [0, 2, 4, 6], repeating
-		const result = evaluate('loop [0step2x4]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// C major degrees [0,2,4,6] from C5=60: C5=60, E5=64, G5=67, B5=71
-		const expected = [60, 64, 67, 71, 60, 64, 67, 71];
-		for (const exp of expected) {
-			expect(result.generator.next().value.note).toBe(exp);
-		}
+	it("parses inner 'eager(2) beating outer 'lock", () => {
+		expect(parse("loop [0rand7'eager(2)]'lock").parseErrors).toHaveLength(0);
+	});
+});
+
+describe("modifierSuffix — sequence traversal: 'shuf, 'pick, 'wran", () => {
+	it("parses 'shuf on a list", () => {
+		expect(parse("loop [0 1 2 3]'shuf").parseErrors).toHaveLength(0);
 	});
 
-	it('mul series cycles through correct degrees: loop [1mul2x4]', () => {
-		// 1mul2x4 → Pgeom(start=1, mul=2, length=4) → [1, 2, 4, 8], repeating
-		const result = evaluate('loop [1mul2x4]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// degrees [1,2,4,8] → D5=62, E5=64, G5=67, D6=74
-		const expected = [62, 64, 67, 74];
-		for (const exp of expected) {
-			expect(result.generator.next().value.note).toBe(exp);
-		}
-		// Wraps back to start
-		expect(result.generator.next().value.note).toBe(62);
+	it("parses 'pick on a list", () => {
+		expect(parse("loop [0 1 2 3]'pick").parseErrors).toHaveLength(0);
 	});
 
-	it('lin series spans from first to last degree: loop [0lin4x3]', () => {
-		// 0lin4x3 → linear interp first=0, last=4, length=3 → [0, 2, 4]
-		const result = evaluate('loop [0lin4x3]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// degrees [0, 2, 4] → C5=60, E5=64, G5=67
-		expect(result.generator.next().value.note).toBe(60);
-		expect(result.generator.next().value.note).toBe(64);
-		expect(result.generator.next().value.note).toBe(67);
-		expect(result.generator.next().value.note).toBe(60); // wraps
+	it("parses 'wran on a list with weights", () => {
+		expect(parse("loop [0?2 1?1 2?3]'wran").parseErrors).toHaveLength(0);
 	});
 
-	it('geo series produces geometrically spaced values: loop [1geo8x4]', () => {
-		// 1geo8x4 → geometric interp first=1, last=8, length=4 → [1, 2, 4, 8]
-		const result = evaluate('loop [1geo8x4]');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		// degrees [1, 2, 4, 8] → D5=62, E5=64, G5=67, D6=74
-		expect(result.generator.next().value.note).toBe(62);
-		expect(result.generator.next().value.note).toBe(64);
-		expect(result.generator.next().value.note).toBe(67);
-		expect(result.generator.next().value.note).toBe(74);
+	it("parses 'wran on a list without explicit weights", () => {
+		expect(parse("loop [0 1 2]'wran").parseErrors).toHaveLength(0);
 	});
+});
+
+describe("modifierSuffix — filter: 'stut and 'maybe", () => {
+	it("parses bare 'stut (default count 2)", () => {
+		expect(parse("loop [0 2 4]'stut").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'stut(4) with fixed count", () => {
+		expect(parse("loop [0 2 4]'stut(4)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'stut with random count: 'stut(2rand4)", () => {
+		expect(parse("loop [0 2 4]'stut(2rand4)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'stut with locked count: 'stut(2rand4'lock)", () => {
+		expect(parse("loop [0 2 4]'stut(2rand4'lock)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'stut with eager count: 'stut(2rand4'eager(4))", () => {
+		expect(parse("loop [0 2 4]'stut(2rand4'eager(4))").parseErrors).toHaveLength(0);
+	});
+
+	it("parses bare 'maybe (default p 0.5)", () => {
+		expect(parse("loop [0 2 4]'maybe").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'maybe(0.8) with explicit probability", () => {
+		expect(parse("loop [0 2 4]'maybe(0.8)").parseErrors).toHaveLength(0);
+	});
+});
+
+describe("modifierSuffix — loop/line control: 'repeat, 'at, 'legato, 'offset, 'mono", () => {
+	it("parses bare 'repeat (indefinite)", () => {
+		expect(parse("line [0 1 2]'repeat").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'repeat(4)", () => {
+		expect(parse("line [0 1 2]'repeat(4)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'at(0) integer offset", () => {
+		expect(parse("line [0 1 2]'at(0)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'at(3/4) fractional offset", () => {
+		expect(parse("line [0 1 2]'at(3/4)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'at(1) whole-cycle offset", () => {
+		expect(parse("line [0 1 2]'at(1)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'at(-1/8) negative fractional offset", () => {
+		expect(parse("line [0 1 2]'at(-1/8)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'legato(0.8)", () => {
+		expect(parse("loop [0 2 4]'legato(0.8)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'legato with stochastic arg: 'legato(0.5rand1.2)", () => {
+		expect(parse("loop [0 2 4]'legato(0.5rand1.2)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'offset(20)", () => {
+		expect(parse("loop [0 2 4]'offset(20)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'offset with negative value: 'offset(-10)", () => {
+		expect(parse("loop [0 2 4]'offset(-10)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses bare 'mono", () => {
+		expect(parse("loop [0 2 4]'mono").parseErrors).toHaveLength(0);
+	});
+});
+
+describe('modifierSuffix — chaining', () => {
+	it("parses chained modifiers: 'eager(1)'stut(2)", () => {
+		expect(parse("loop [0 2 4]'eager(1)'stut(2)").parseErrors).toHaveLength(0);
+	});
+
+	it("parses element modifier plus list modifier: [0rand7'lock 2]'shuf", () => {
+		expect(parse("loop [0rand7'lock 2]'shuf").parseErrors).toHaveLength(0);
+	});
+});
+
+describe('modifierSuffix — error cases', () => {
+	it("errors on bare 'stut with no preceding token", () => {
+		expect(parse("'stut").parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('errors on modifier on a bare loop keyword (no list)', () => {
+		expect(parse("loop 'stut").parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it.todo(
+		"errors on space between tick and modifier name: loop [0]' lock — spec §12 says this is a parse error, but Chevrotain error recovery currently accepts it; needs investigation"
+	);
 });

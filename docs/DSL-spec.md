@@ -32,6 +32,12 @@ Specifically for `'wran`: weight for each element is 1 by default. The weight ca
 0.rand4  // Pwhite(min = 0.0, max = 4) => 3.123891023, 0.23123424, 2.023909
 0~4      // Shorthand for rand — syntactic sugar
 
+// When either bound is a float, rand produces a continuous float in [min, max).
+// The float passes through the generator unchanged; rounding happens downstream.
+// In degree context (inside []) degreeToMidi rounds to nearest integer before
+// scale lookup — microtonal degrees are not supported. Float bounds are most
+// meaningful in non-degree contexts, e.g. 'legato(0.5rand1.2).
+
 0gau4    // Pgauss(mean = 0, sdev = 4)
 
 1exp7    // Pexprand(min = 1, max = 7)
@@ -94,14 +100,13 @@ loop [0rand7 4rand6]'stut(4)
 // repeat each value 2-4 times, count drawn once per cycle (default eager(1))
 loop [0rand7 4rand6]'stut(2rand4)
 
-// each event gets its own independently-drawn stutter count
-loop [0rand7 4rand6]'stut(2rand4'eager(0))
+// count redrawn every 4 cycles
+loop [0rand7 4rand6]'stut(2rand4'eager(4))
 ```
 
 How `'eager` and `'lock` apply to `'stut`:
 
 - Default (`'eager(1)`): stutter count is drawn once per cycle — `loop [0rand7 4rand6]'stut(2rand4)`.
-- `'eager(0)` on the count argument: each event draws its own stutter count independently.
 - `'stut(2rand4'eager(4))`: count is redrawn every 4 cycles.
 - `'stut(2rand4'lock)`: stutter count is chosen once and frozen forever.
 
@@ -155,7 +160,7 @@ Legato is a modifier, patternisable like any other stochastic argument:
 ```flux
 loop [0 2 4 7]'legato(0.8)                  // fixed legato
 loop [0 2 4 7]'legato(0.5rand1.2)            // stochastic legato, eager(1) by default
-loop [0 2 4 7]'legato(0.5rand1.2'eager(0))  // new legato value per event
+loop [0 2 4 7]'legato(0.5rand1.2'eager(4))  // new legato value every 4 cycles
 ```
 
 Legato values > 1.0 produce overlap (useful for pads/drones).
@@ -341,7 +346,7 @@ For single-expression use, decorators may appear inline on the same line:
 
 **Decorator vs. modifier boundary:** the distinction is functional, not syntactic. **Decorators (`@`) affect how the numbers inside `[]` are used to calculate the final pitch** — they are parameters in the degree-to-frequency chain: `degree → scale → root → octave → cent → mtranspose → frequency`. **Modifiers (`'`) are everything else** — operations on the event stream or synth parameters.
 
-**Stochastic decorator arguments** follow the same `'lock`/`'eager(n)` semantics as everything else. `@root(3rand7)` with `'eager(0)` redraws on every event; with `'lock` the value is drawn once when the block is first entered and frozen thereafter. `'lock` is the sensible default for decorators — a randomly wandering root is an opt-in, not the default.
+**Stochastic decorator arguments** follow the same `'lock`/`'eager(n)` semantics as everything else. `@root(3rand7)` with `'eager(4)` redraws every 4 cycles; with `'lock` the value is drawn once when the block is first entered and frozen thereafter. `'lock` is the sensible default for decorators — a randomly wandering root is an opt-in, not the default.
 
 ---
 
@@ -414,31 +419,34 @@ Modifiers attach to the **immediately preceding token**, not to the whole expres
 
 Modifiers are generally written **after** the list they modify. Evaluation order is left-to-right.
 
+> **Implementation note:** The spec requires no whitespace between `'` and the modifier name (`[0]'lock`, not `[0]' lock`). The current JS parser does not enforce this — it accepts a space because the lexer tokenises `'` and the identifier separately and Chevrotain ignores inter-token whitespace. This is a known deviation; enforcing it would require a compound lexer token or a contextual lexer mode. For now, treat `[0]' lock` as valid input with a style warning.
+
 ### `'lock` and `'eager(n)`
 
-`'eager(1)` is the default for all generators and modifiers. The argument is a cycle period:
+`'eager(1)` is the default for all generators. The argument is a positive integer cycle period:
 
-- `'eager(0)` — draw a new value per event
 - `'eager(1)` — draw once per cycle (default; bare `'eager` is shorthand for this)
-- `'eager(n)` — redraw every n cycles
+- `'eager(n)` — redraw every n cycles (n must be a positive integer ≥ 1)
 - `'lock` — draw once at first evaluation, freeze forever
 
+`'eager(0)` and negative arguments are semantic errors — the cycle-boundary evaluation model requires n ≥ 1.
+
+Each generator is an independent stateful object. `'eager(n)` on a list propagates down as the default to each element; each element applies the annotation to its own generator independently. There is no implicit value-sharing between elements.
+
 ```flux
-// draw new values on every cycle iteration (explicit, same as default)
+// draw new values on every cycle (explicit, same as default)
 loop [0rand7 4]'eager(1)
-// draw new values on every event
-loop [0rand7 4]'eager(0)
 // redraw every 4 cycles
 loop [0 4rand6]'eager(4)
-// frozen after first evaluation
-loop [0rand7 4]'lock
+// frozen after first evaluation — each element locks at its own first-drawn value
+loop [0rand7 4rand6]'lock
 ```
 
 `'lock` and `'eager` can be used at whatever level of granularity is needed (list-level, element-level, modifier argument-level).
 
 ```flux
-loop [0rand7 4rand6]'lock       // values are locked to the selection from the first iteration
-loop [0rand7'lock 4rand6]       // first step is locked (local overrides global), second is eager
+loop [0rand7 4rand6]'lock       // both elements lock at their own first-drawn values
+loop [0rand7'lock 4rand6]       // first element locked, second draws every cycle (inner overrides outer)
 ```
 
 ### Modifier continuation lines
@@ -461,9 +469,11 @@ Redefinition of a running `loop` takes effect at the next cycle boundary. This i
 
 ### Eager evaluation at cycle/line boundary
 
-All generators are evaluated eagerly at the cycle or line boundary, not lazily mid-cycle. This is a deliberate design decision:
+All generators are evaluated eagerly at the cycle or line boundary — never lazily mid-cycle. This is a fundamental design constraint:
 
 - For `loop`: all generators inside the list are fully evaluated at the start of each cycle. The resulting event array is handed off to the scheduler as a concrete sequence. No generator polling happens during playback.
 - For `line`: all generators are evaluated once when the line is first scheduled, producing a fixed event array for the entire duration of the line (including all repetitions of a `'repeat`ed line).
 
-This means generators have no access to external runtime state (e.g. MIDI input, sensor values, another loop's current position) at the moment of playback. Values are committed at cycle/line start. This is considered acceptable: Flux is a live coding tool, not a DAW. If a value should change, the performer re-evaluates the expression, which takes effect at the next cycle boundary.
+This guarantee is what makes `'stut` and other count-modifying modifiers tractable: the scheduler receives a complete, fixed-length event array per cycle and can calculate durations, gate times, and subdivisions without needing to consult generators again during playback.
+
+Generators have no access to external runtime state (e.g. MIDI input, sensor values, another loop's current position) at the moment of playback. Values are committed at cycle/line start. This is intentional: Flux is a live coding tool, not a DAW. If a value should change, the performer re-evaluates the expression, which takes effect at the next cycle boundary.

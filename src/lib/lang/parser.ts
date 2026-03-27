@@ -701,13 +701,53 @@ class FluxParser extends CstParser {
 	});
 
 	modifierSuffix = this.RULE('modifierSuffix', () => {
-		// `'modName` or `'modName(generatorExpr)`
+		// `'modName` or `'modName(generatorExpr)` or `'at(timeExpr)`
+		// 'at is the one modifier whose argument is a timeExpr (integer or
+		// integer/integer fraction) rather than a generatorExpr.  We gate on
+		// LA(2) being the identifier "at" before the tick is consumed so the
+		// parser can branch correctly.
+		this.OR([
+			{
+				GATE: () => this.LA(2).image === 'at',
+				ALT: () => this.SUBRULE(this.atModifier)
+			},
+			{
+				ALT: () => {
+					this.CONSUME(Tick);
+					this.CONSUME(Identifier);
+					this.OPTION(() => {
+						this.CONSUME(LParen);
+						this.SUBRULE(this.generatorExpr);
+						this.CONSUME(RParen);
+					});
+				}
+			}
+		]);
+	});
+
+	atModifier = this.RULE('atModifier', () => {
+		// 'at(timeExpr) — start offset for loop/line.
+		// timeExpr is integer or integer/integer (e.g. 0, 1, 3/4, -1/8).
+		// The leading minus on a negative offset is consumed as part of timeExpr.
 		this.CONSUME(Tick);
-		this.CONSUME(Identifier);
+		this.CONSUME(Identifier); // always "at"
 		this.OPTION(() => {
 			this.CONSUME(LParen);
-			this.SUBRULE(this.generatorExpr);
+			this.SUBRULE(this.atTimeExpr);
 			this.CONSUME(RParen);
+		});
+	});
+
+	atTimeExpr = this.RULE('atTimeExpr', () => {
+		// [ "-" ] integer [ "/" integer ]
+		// Mirrors timeExpr but allows a leading minus for negative offsets.
+		this.OPTION(() => {
+			this.CONSUME(Minus);
+		});
+		this.CONSUME(Integer);
+		this.OPTION2(() => {
+			this.CONSUME(Slash);
+			this.CONSUME2(Integer);
 		});
 	});
 
