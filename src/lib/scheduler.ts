@@ -28,6 +28,8 @@ export const LOOKAHEAD_SECONDS = 0.1;
 
 export interface SchedulerHandle {
 	stop(): void;
+	/** Stop after all events strictly before `beat` have been scheduled. */
+	setStopBeat(beat: number): void;
 }
 
 function durationOf<T>(value: T, fallback: number): number {
@@ -42,6 +44,7 @@ export function run<T>(
 ): SchedulerHandle {
 	let active = true;
 	let nextBeat = startBeat;
+	let stopBeat = Infinity;
 	let timerId: ReturnType<typeof setTimeout>;
 
 	function tick() {
@@ -59,6 +62,10 @@ export function run<T>(
 		const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
 
 		while (clock.beatToAudioTime(nextBeat) <= horizon) {
+			if (nextBeat >= stopBeat) {
+				active = false;
+				return;
+			}
 			const { value, done } = gen.next();
 			if (done) {
 				active = false;
@@ -78,6 +85,9 @@ export function run<T>(
 		stop() {
 			active = false;
 			clearTimeout(timerId);
+		},
+		setStopBeat(beat: number) {
+			stopBeat = beat;
 		}
 	};
 }

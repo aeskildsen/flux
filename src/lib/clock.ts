@@ -8,7 +8,7 @@
 
 let _ctx: AudioContext | null = null;
 let _startTime: number | null = null;
-let _bpm = 120;
+let _bpm = 100;
 
 function getCtx(): AudioContext {
 	if (!_ctx) _ctx = new AudioContext();
