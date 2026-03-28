@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Sync SvelteKit submodule
+        run: pnpm --dir svelte-supersonic exec svelte-kit sync
+
       - name: Build
         run: pnpm build
 
