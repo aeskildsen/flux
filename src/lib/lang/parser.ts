@@ -56,7 +56,7 @@ import {
 	At,
 	Integer,
 	Float,
-	StringLiteral,
+	Symbol,
 	Minus,
 	Plus,
 	Slash,
@@ -345,7 +345,7 @@ class FluxParser extends CstParser {
 
 	synthdefArg = this.RULE('synthdefArg', () => {
 		this.CONSUME(LParen);
-		this.CONSUME(StringLiteral);
+		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
 	});
 
@@ -370,7 +370,7 @@ class FluxParser extends CstParser {
 		this.CONSUME(Equals);
 		this.CONSUME(SendFx);
 		this.CONSUME(LParen);
-		this.CONSUME(StringLiteral);
+		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
 		this.MANY(() => {
 			this.SUBRULE(this.modifierSuffix);
@@ -381,7 +381,7 @@ class FluxParser extends CstParser {
 		// master_fx("limiter")'gain(0.8)
 		this.CONSUME(MasterFx);
 		this.CONSUME(LParen);
-		this.CONSUME(StringLiteral);
+		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
 		this.MANY(() => {
 			this.SUBRULE(this.modifierSuffix);
@@ -436,17 +436,17 @@ class FluxParser extends CstParser {
 	});
 
 	decoratorArg = this.RULE('decoratorArg', () => {
-		// pitchClass (e.g. g#, Ab) or generatorExpr (e.g. 3rand7, "minor", 120)
+		// pitchClass (e.g. g#, Ab) or generatorExpr (e.g. 3rand7, 120) or symbol (e.g. \minor)
 		this.OR([
 			// pitchClass: a single-char identifier [a-gA-G] optionally followed by Sharp/Flat
 			{
 				GATE: () => this.isPitchClass(),
 				ALT: () => this.SUBRULE(this.pitchClass)
 			},
-			// Scale names and other identifiers (e.g. "lydian", "minor")
+			// Scale names and other identifiers (e.g. lydian, minor)
 			{ ALT: () => this.CONSUME(Identifier) },
-			// String literals for scale names passed as strings: set scale("minor")
-			{ ALT: () => this.CONSUME(StringLiteral) },
+			// Symbol literals for names: set scale(\minor), @scale(\minor)
+			{ ALT: () => this.CONSUME(Symbol) },
 			// Numeric generator expressions: @root(3rand7), set tempo(120)
 			{ ALT: () => this.SUBRULE(this.numericGenerator) }
 		]);
@@ -538,7 +538,7 @@ class FluxParser extends CstParser {
 		// fx("lpf")'cutoff(1200)
 		this.CONSUME(Fx);
 		this.CONSUME(LParen);
-		this.CONSUME(StringLiteral);
+		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
 		this.MANY(() => {
 			this.SUBRULE(this.modifierSuffix);

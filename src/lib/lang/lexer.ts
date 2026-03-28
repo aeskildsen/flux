@@ -518,12 +518,14 @@ export const Integer = createToken({
 });
 
 /**
- * String literal, e.g. `"moog"`, `"reverb"`.
- * Used for synthdef names and scale names.
+ * Symbol literal, e.g. `\moog`, `\reverb`, `\minor`.
+ * Used for synthdef names, FX names, and scale names passed as arguments.
+ * The backslash and identifier form a single token — no whitespace allowed between them.
+ * Borrowed from SuperCollider's symbol notation.
  */
-export const StringLiteral = createToken({
-	name: 'StringLiteral',
-	pattern: /"[^"]*"/
+export const Symbol = createToken({
+	name: 'Symbol',
+	pattern: /\\[a-zA-Z_][a-zA-Z0-9_]*/
 	// Monaco scope: 'string'
 });
 
@@ -607,7 +609,7 @@ export const allTokens = [
 	// Literals — Float before Integer
 	Float,
 	Integer,
-	StringLiteral,
+	Symbol,
 	// Whitespace — always last
 	WhiteSpace
 ];

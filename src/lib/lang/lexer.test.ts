@@ -28,7 +28,7 @@ import {
 	Geo,
 	LenSep,
 	Question,
-	StringLiteral,
+	Symbol,
 	Sharp,
 	Flat,
 	Bang
@@ -303,12 +303,37 @@ describe('FluxLexer', () => {
 		});
 	});
 
-	describe('StringLiteral', () => {
-		it('tokenizes a double-quoted string', () => {
-			const { tokens, errors } = FluxLexer.tokenize('"moog"');
+	describe('Symbol', () => {
+		it('tokenizes \\moog as a single Symbol token', () => {
+			const { tokens, errors } = FluxLexer.tokenize('\\moog');
 			expect(errors).toHaveLength(0);
-			expect(tokens[0].tokenType).toBe(StringLiteral);
-			expect(tokens[0].image).toBe('"moog"');
+			expect(tokens).toHaveLength(1);
+			expect(tokens[0].tokenType).toBe(Symbol);
+			expect(tokens[0].image).toBe('\\moog');
+		});
+
+		it('tokenizes \\minor as a single Symbol token', () => {
+			const { tokens, errors } = FluxLexer.tokenize('\\minor');
+			expect(errors).toHaveLength(0);
+			expect(tokens[0].tokenType).toBe(Symbol);
+			expect(tokens[0].image).toBe('\\minor');
+		});
+
+		it('symbol name can contain underscores and digits', () => {
+			const { tokens, errors } = FluxLexer.tokenize('\\my_synth2');
+			expect(errors).toHaveLength(0);
+			expect(tokens[0].tokenType).toBe(Symbol);
+			expect(tokens[0].image).toBe('\\my_synth2');
+		});
+
+		it('double-quoted string "moog" is NOT a valid token (lex error)', () => {
+			const { errors } = FluxLexer.tokenize('"moog"');
+			expect(errors.length).toBeGreaterThan(0);
+		});
+
+		it('bare backslash with no following identifier is a lex error', () => {
+			const { errors } = FluxLexer.tokenize('\\ ');
+			expect(errors.length).toBeGreaterThan(0);
 		});
 	});
 
