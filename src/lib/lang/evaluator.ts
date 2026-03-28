@@ -1523,17 +1523,19 @@ export function createInstance(source: string): EvalInstance {
 export type EvalEvent = { note: number; duration: number };
 
 export type EvalResult =
-	| { ok: true; generator: Generator<EvalEvent, never, unknown> }
+	| { ok: true; generator: Generator<EvalEvent, void, unknown> }
 	| { ok: false; error: string };
 
 export function evaluate(source: string): EvalResult {
 	const inst = createInstance(source);
 	if (!inst.ok) return { ok: false, error: inst.error };
 
-	function* gen(): Generator<EvalEvent, never, unknown> {
+	const okInst: { ok: true; evaluate: (ctx: CycleContext) => EvalCycleResult } = inst;
+
+	function* gen(): Generator<EvalEvent, void, unknown> {
 		let cycle = 0;
 		while (true) {
-			const result = inst.evaluate({ cycleNumber: cycle++ });
+			const result = okInst.evaluate({ cycleNumber: cycle++ });
 			if (!result.ok) return; // stop on error
 			for (const ev of result.events) {
 				yield { note: ev.note, duration: ev.duration };
