@@ -672,16 +672,16 @@ function applyDecoratorToContext(
 
 /**
  * Extract a scale name from a decoratorArg node.
- * Scale names appear as Identifier tokens or StringLiteral tokens.
+ * Scale names appear as Identifier tokens (e.g. minor) or Symbol tokens (e.g. \minor).
  */
 function extractScaleNameFromArg(arg: CstNode): string | null {
 	// Identifier (e.g. minor, lydian, major_pentatonic)
 	const idTok = ((arg.children.Identifier as IToken[]) ?? [])[0];
 	if (idTok) return idTok.image;
 
-	// StringLiteral (e.g. "minor") — strip surrounding quotes
-	const strTok = ((arg.children.StringLiteral as IToken[]) ?? [])[0];
-	if (strTok) return strTok.image.slice(1, -1);
+	// Symbol (e.g. \minor) — strip leading backslash
+	const symTok = ((arg.children.Symbol as IToken[]) ?? [])[0];
+	if (symTok) return symTok.image.slice(1);
 
 	return null;
 }
@@ -1228,8 +1228,8 @@ type CompiledFx = {
 };
 
 function compileFxNode(fxNode: CstNode): CompiledFx {
-	const strTok = ((fxNode.children.StringLiteral as IToken[]) ?? [])[0];
-	const synthdef = strTok ? strTok.image.slice(1, -1) : 'unknown';
+	const symTok = ((fxNode.children.Symbol as IToken[]) ?? [])[0];
+	const synthdef = symTok ? symTok.image.slice(1) : 'unknown';
 
 	const mods = (fxNode.children.modifierSuffix as CstNode[]) ?? [];
 	const paramRunners: Array<{ name: string; runner: RunnerState }> = [];

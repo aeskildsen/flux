@@ -43,8 +43,8 @@ describe('lineStatement', () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses line with synthdef arg', () => {
-		const { parseErrors } = parse('line("moog") [0 1 2]');
+	it('parses line with synthdef symbol arg', () => {
+		const { parseErrors } = parse('line(\\moog) [0 1 2]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
@@ -55,15 +55,20 @@ describe('lineStatement', () => {
 });
 
 describe('loopStatement — synthdef and full form', () => {
-	it('parses loop with synthdef arg', () => {
-		const { parseErrors } = parse('loop("moog") [0 2 4]');
+	it('parses loop with synthdef symbol arg', () => {
+		const { parseErrors } = parse('loop(\\moog) [0 2 4]');
 		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('rejects loop with string synthdef arg (strings are errors)', () => {
+		const { lexErrors } = parse('loop("moog") [0 2 4]');
+		expect(lexErrors.length).toBeGreaterThan(0);
 	});
 });
 
 describe('setStatement', () => {
-	it('parses set scale("minor")', () => {
-		const { parseErrors } = parse('set scale("minor")');
+	it('parses set scale(\\minor) with symbol', () => {
+		const { parseErrors } = parse('set scale(\\minor)');
 		expect(parseErrors).toHaveLength(0);
 	});
 
@@ -79,25 +84,25 @@ describe('setStatement', () => {
 });
 
 describe('fxAssignment', () => {
-	it('parses a named send_fx assignment', () => {
-		const { parseErrors } = parse('reverb = send_fx("reverb")');
+	it('parses a named send_fx assignment with symbol', () => {
+		const { parseErrors } = parse('reverb = send_fx(\\reverb)');
 		expect(parseErrors).toHaveLength(0);
 	});
 
 	it('parses send_fx assignment with modifier', () => {
-		const { parseErrors } = parse('reverb = send_fx("reverb")\'room(0.5)');
+		const { parseErrors } = parse("reverb = send_fx(\\reverb)'room(0.5)");
 		expect(parseErrors).toHaveLength(0);
 	});
 });
 
 describe('masterFxStatement', () => {
-	it('parses master_fx("limiter")', () => {
-		const { parseErrors } = parse('master_fx("limiter")');
+	it('parses master_fx(\\limiter) with symbol', () => {
+		const { parseErrors } = parse('master_fx(\\limiter)');
 		expect(parseErrors).toHaveLength(0);
 	});
 
 	it('parses master_fx with modifier', () => {
-		const { parseErrors } = parse('master_fx("limiter")\'gain(0.8)');
+		const { parseErrors } = parse("master_fx(\\limiter)'gain(0.8)");
 		expect(parseErrors).toHaveLength(0);
 	});
 });
@@ -171,13 +176,13 @@ describe('continuation modifiers', () => {
 });
 
 describe('decorators', () => {
-	it('parses an inline decorator: @scale("minor") loop [0 1 2]', () => {
-		const { parseErrors } = parse('@scale("minor") loop [0 1 2]');
+	it('parses an inline decorator with symbol: @scale(\\minor) loop [0 1 2]', () => {
+		const { parseErrors } = parse('@scale(\\minor) loop [0 1 2]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses a block decorator with indented loop', () => {
-		const { parseErrors } = parse('@scale("minor")\n  loop [0 1 2]');
+	it('parses a block decorator with symbol', () => {
+		const { parseErrors } = parse('@scale(\\minor)\n  loop [0 1 2]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
@@ -186,8 +191,8 @@ describe('decorators', () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses nested decorator blocks', () => {
-		const src = '@root(7)\n  @scale("minor")\n    loop [0 1 2]';
+	it('parses nested decorator blocks with symbol', () => {
+		const src = '@root(7)\n  @scale(\\minor)\n    loop [0 1 2]';
 		const { parseErrors } = parse(src);
 		expect(parseErrors).toHaveLength(0);
 	});
@@ -231,20 +236,20 @@ describe('timed lists', () => {
 });
 
 describe('pipe / FX', () => {
-	it('parses loop with fx pipe: loop [0] | fx("lpf")', () => {
-		const { parseErrors } = parse('loop [0] | fx("lpf")');
+	it('parses loop with fx pipe using symbol: loop [0] | fx(\\lpf)', () => {
+		const { parseErrors } = parse('loop [0] | fx(\\lpf)');
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses fx with modifier: loop [0] | fx("lpf")\'cutoff(1200)', () => {
-		const { parseErrors } = parse('loop [0] | fx("lpf")\'cutoff(1200)');
+	it("parses fx with modifier: loop [0] | fx(\\lpf)'cutoff(1200)", () => {
+		const { parseErrors } = parse("loop [0] | fx(\\lpf)'cutoff(1200)");
 		expect(parseErrors).toHaveLength(0);
 	});
 });
 
 describe('multiple statements', () => {
 	it('parses multiple statements on separate lines', () => {
-		const src = 'loop [0 2 4]\nline [0 1 2]\nset scale("minor")';
+		const src = 'loop [0 2 4]\nline [0 1 2]\nset scale(\\minor)';
 		const { parseErrors } = parse(src);
 		expect(parseErrors).toHaveLength(0);
 	});

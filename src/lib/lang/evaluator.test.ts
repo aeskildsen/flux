@@ -1487,8 +1487,8 @@ describe('modifier continuation lines (truth table 1)', () => {
 // ---------------------------------------------------------------------------
 
 describe('FX pipe (truth table 9)', () => {
-	it('loop [0] | fx("lpf") — result includes exactly one FxEvent', () => {
-		const r = inst('loop [0] | fx("lpf")').evaluate({ cycleNumber: 0 });
+	it('loop [0] | fx(\\lpf) — result includes exactly one FxEvent', () => {
+		const r = inst('loop [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
 		const fxEvents = r.events.filter((e) => (e as { type?: string }).type === 'fx');
@@ -1496,8 +1496,8 @@ describe('FX pipe (truth table 9)', () => {
 		expect((fxEvents[0] as { synthdef?: string }).synthdef).toBe('lpf');
 	});
 
-	it('loop [0] | fx("lpf") — note events are still present', () => {
-		const r = inst('loop [0] | fx("lpf")').evaluate({ cycleNumber: 0 });
+	it('loop [0] | fx(\\lpf) — note events are still present', () => {
+		const r = inst('loop [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
 		const noteEvents = r.events.filter((e) => (e as { type?: string }).type !== 'fx');
 		expect(noteEvents).toHaveLength(1);
@@ -1505,7 +1505,7 @@ describe('FX pipe (truth table 9)', () => {
 	});
 
 	it("fx event has type:'fx', synthdef, params, cycleOffset", () => {
-		const r = inst('loop [0] | fx("lpf")').evaluate({ cycleNumber: 0 });
+		const r = inst('loop [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
 		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
 			type: string;
@@ -1521,7 +1521,7 @@ describe('FX pipe (truth table 9)', () => {
 	});
 
 	it('fx modifier params are included in fx event params', () => {
-		const r = inst('loop [0] | fx("lpf")\'cutoff(1200)').evaluate({ cycleNumber: 0 });
+		const r = inst("loop [0] | fx(\\lpf)'cutoff(1200)").evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
 		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
 			params: Record<string, number>;
@@ -1531,7 +1531,7 @@ describe('FX pipe (truth table 9)', () => {
 	});
 
 	it("fx modifier params respect 'lock semantics", () => {
-		const i = inst('loop [0] | fx("lpf")\'cutoff(800rand1600\'lock)');
+		const i = inst("loop [0] | fx(\\lpf)'cutoff(800rand1600'lock)");
 		const r0 = i.evaluate({ cycleNumber: 0 });
 		const r1 = i.evaluate({ cycleNumber: 1 });
 		if (!r0.ok || !r1.ok) throw new Error('eval failed');
@@ -1709,28 +1709,28 @@ describe('timed lists — @ and : are absolute beat offsets from cycle start', (
 // ---------------------------------------------------------------------------
 // 14. SynthDef selection
 //
-// loop("moog") [0 2 4] and line("sine") [0 1 2] are valid DSL syntax. The
+// loop(\moog) [0 2 4] and line(\sine) [0 1 2] are valid DSL syntax. The
 // current evaluator ignores the synthdef argument; events are emitted normally
 // without a synthdef field on note events.  These tests document current
 // behaviour.
 // ---------------------------------------------------------------------------
 
-describe('synthdef selection — loop("…") / line("…")', () => {
-	it('loop("moog") [0 2 4] — produces 3 note events (synthdef arg currently ignored)', () => {
-		const evs = eval0('loop("moog") [0 2 4]');
+describe('synthdef selection — loop(\\moog) / line(\\sine)', () => {
+	it('loop(\\moog) [0 2 4] — produces 3 note events (synthdef arg currently ignored)', () => {
+		const evs = eval0('loop(\\moog) [0 2 4]');
 		expect(evs).toHaveLength(3);
 	});
 
-	it('loop("moog") [0 2 4] — notes are correct (pitch chain unaffected by synthdef)', () => {
-		expect(notes('loop("moog") [0 2 4]')).toEqual([60, 64, 67]);
+	it('loop(\\moog) [0 2 4] — notes are correct (pitch chain unaffected by synthdef)', () => {
+		expect(notes('loop(\\moog) [0 2 4]')).toEqual([60, 64, 67]);
 	});
 
-	it('line("sine") [0 1 2] — produces 3 note events', () => {
-		expect(eval0('line("sine") [0 1 2]')).toHaveLength(3);
+	it('line(\\sine) [0 1 2] — produces 3 note events', () => {
+		expect(eval0('line(\\sine) [0 1 2]')).toHaveLength(3);
 	});
 
 	it('note events do not carry a synthdef field (synthdef arg is not yet threaded through)', () => {
-		for (const e of eval0('loop("moog") [0 2 4]')) {
+		for (const e of eval0('loop(\\moog) [0 2 4]')) {
 			// synthdef is only defined on FX events currently
 			expect((e as { synthdef?: string }).synthdef).toBeUndefined();
 		}
@@ -1804,9 +1804,9 @@ describe('accidentals in non-default pitch contexts', () => {
 		expect(notes('@root(7) loop [2#]')[0]).toBe(notes('@root(7) loop [2]')[0] + 1);
 	});
 
-	it('@scale("minor") loop [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
+	it('@scale(\\minor) loop [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
 		// C minor, degree 4 = G5 = 67 (minor has same perfect 5th), flat → 66 = F#5
-		expect(notes('@scale("minor") loop [4b]')[0]).toBe(notes('@scale("minor") loop [4]')[0] - 1);
+		expect(notes('@scale(\\minor) loop [4b]')[0]).toBe(notes('@scale(\\minor) loop [4]')[0] - 1);
 	});
 
 	it('@key(g major 4) loop [3#] — accidental in compound key context', () => {

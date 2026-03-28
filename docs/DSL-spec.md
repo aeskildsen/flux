@@ -343,7 +343,7 @@ Accidentals are interpreted as literals at parse time — `2b` is a single token
 `set` is a top-level statement for setting ambient session parameters that apply globally unless overridden. This avoids modifier sprawl and prevents the DSL from reinventing Pbind-style key-value pairs piecemeal.
 
 ```flux
-set scale("minor")
+set scale(\minor)
 set root(7)
 set tempo(120)
 set key(g# lydian)
@@ -356,21 +356,21 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `mtranspose`, `key`.
 `@` decorators apply session parameters to a scoped block of expressions, overriding global `set` values within that scope. They use a parenthesised argument list — the same syntax supports single arguments (`@root(7)`), compound arguments (`@key(g# lydian 4)`), and stochastic arguments (`@root(3rand7)`).
 
 ```flux
-@scale("minor") @root(7)
+@scale(\minor) @root(7)
   loop [0 1 2]
   @mtranspose(2)
     line [0 2 4 5]
 ```
 
-Here `loop [0 1 2]` inherits `@scale("minor")` and `@root(7)`. `line [0 2 4 5]` inherits all three, with `@mtranspose(2)` added at the nested level.
+Here `loop [0 1 2]` inherits `@scale(\minor)` and `@root(7)`. `line [0 2 4 5]` inherits all three, with `@mtranspose(2)` added at the nested level.
 
 For single-expression use, decorators may appear inline on the same line:
 
 ```flux
-@scale("minor") loop [0 1 2]
+@scale(\minor) loop [0 1 2]
 ```
 
-**`set` is `@` at global scope.** `set scale("minor")` is sugar for a top-level `@scale("minor")` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
+**`set` is `@` at global scope.** `set scale(\minor)` is sugar for a top-level `@scale(\minor)` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
 
 **Indentation:** block scope uses fixed indentation (2 spaces). Variable indentation is not supported — indentation level is determined by the number of leading 2-space units. This keeps the parser simple and the code visually consistent.
 
@@ -380,12 +380,28 @@ For single-expression use, decorators may appear inline on the same line:
 
 ---
 
+## Symbols
+
+Names in Flux — SynthDef names, FX names, and scale names passed as arguments — are written as **symbols**: a backslash immediately followed by an identifier, with no space.
+
+```flux
+\moog     // symbol whose name is "moog"
+\lpf      // symbol whose name is "lpf"
+\minor    // symbol whose name is "minor"
+```
+
+This is borrowed from SuperCollider. The backslash+identifier is a single token; whitespace between `\` and the name is not permitted.
+
+String literals (`"moog"`) are not valid in Flux — use symbols instead.
+
+---
+
 ## SynthDef selection
 
 `loop` and `line` take exactly one optional argument to choose a SynthDef.
 
 ```flux
-line("moog") [0 1 2 3]'lfoRate(1/4)
+line(\moog) [0 1 2 3]'lfoRate(1/4)
 ```
 
 ---
@@ -403,14 +419,14 @@ Two categories of FX node, distinguished syntactically by whether they are named
 Send effects. Defined at the top level via assignment, long-lived, independent of any source pattern.
 
 ```flux
-reverb = send_fx("reverb")'room(0.5)
-delay  = send_fx("delay")
+reverb = send_fx(\reverb)'room(0.5)
+delay  = send_fx(\delay)
 ```
 
 The master bus effect is a standalone statement — there is no need to keep a reference to it, since all audio routes to master:
 
 ```flux
-master_fx("limiter")
+master_fx(\limiter)
 ```
 
 ### Anonymous FX (insert)
@@ -418,7 +434,7 @@ master_fx("limiter")
 Scoped to a source pattern via the `|` pipe operator. Created when the source starts, released after a configurable silence tail when the source stops.
 
 ```flux
-loop [0 2 4 7] | fx("lpf")'cutoff([800 1200 2000 400]'eager)
+loop [0 2 4 7] | fx(\lpf)'cutoff([800 1200 2000 400]'eager)
 ```
 
 The pipe operator implicitly passes the source as the audio input to the FX node — no explicit lambda required.
@@ -426,7 +442,7 @@ The pipe operator implicitly passes the source as the audio input to the FX node
 Silence tail duration for anonymous inserts is controlled via `'tail` on the `fx(...)` call (default TBD):
 
 ```flux
-loop [0 2 4 7] | fx("lpf")'cutoff(1200)'tail(4)  // release after 4s silence
+loop [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(4)  // release after 4s silence
 ```
 
 ---

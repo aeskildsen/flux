@@ -65,12 +65,12 @@ lineStatement   = "line" [ synthdefArg ]
 
 setStatement    = "set" identifier "(" setArg ")" ;
 
-fxAssignment    = identifier "=" "send_fx" "(" stringLiteral ")"
+fxAssignment    = identifier "=" "send_fx" "(" symbolLiteral ")"
                   { modifierSuffix } ;
 
-masterFxStatement = "master_fx" "(" stringLiteral ")" { modifierSuffix } ;
+masterFxStatement = "master_fx" "(" symbolLiteral ")" { modifierSuffix } ;
 
-synthdefArg     = "(" stringLiteral ")" ;
+synthdefArg     = "(" symbolLiteral ")" ;
 
 (* Modal transposition — RHS must be a non-negative scalar generator.
    A double-negative (e.g. loop [0] - -4) is a syntax error. *)
@@ -87,7 +87,7 @@ continuationModifier = INDENT "'" identifier [ "(" generatorExpr ")" ] ;
 
 pipeExpr        = "|" fxExpr ;
 
-fxExpr          = "fx" "(" stringLiteral ")" { modifierSuffix } ;
+fxExpr          = "fx" "(" symbolLiteral ")" { modifierSuffix } ;
 
 lineComment     = "//" /[^\n]*/ ;
 
@@ -108,6 +108,7 @@ decoratorArgList = decoratorArg { decoratorArg } ;
 
 decoratorArg    = pitchClass      (* for @key: root note, e.g. g# *)
                 | scaleName       (* for @key: scale name, e.g. lydian *)
+                | symbolLiteral   (* symbol argument, e.g. \minor *)
                 | generatorExpr ; (* numeric/generator argument *)
 
 pitchClass      = /[a-gA-G]/ [ "#" | "b" ] ;   (* e.g. g#, Ab, c *)
@@ -216,6 +217,11 @@ geoGen          = "geo"  numericLiteral "x" numericLiteral ;
 float           = /\d+\.\d*/ ;     (* 0., 0.5, 1.2  — NOT .5 *)
 integer         = /\d+/ ;
 
+(* Symbol literal: backslash immediately followed by an identifier (no space).
+   e.g.  \moog  \lpf  \minor  \reverb
+   The backslash and name form a single token. *)
+symbolLiteral   = /\\[a-zA-Z_][a-zA-Z0-9_]*/ ;
+
 
 (* -------------------------------------------------------------------------
    Degree literals and accidentals
@@ -307,7 +313,7 @@ modifierSuffix  = "'" identifier [ "(" generatorExpr ")" ] ;
    Single-char separators:  ~  m  x   (adjacent-only, digit-lookahead-guarded)
    Operators:               '  @  |  +  -  /  =  ?  :  ~
    Brackets:                [  ]  (  )  {  }
-   Literals:                INTEGER=/\d+/  FLOAT=/\d+\.\d*/  STRING=/"[^"]*"/
+   Literals:                INTEGER=/\d+/  FLOAT=/\d+\.\d*/  SYMBOL=/\\[a-zA-Z_][a-zA-Z0-9_]*/
    Accidentals:             #  b  (only valid immediately after an integer)
    Identifier:              /[a-zA-Z_][a-zA-Z0-9_]*/
    Comment:                 // to end of line (skipped by lexer)
