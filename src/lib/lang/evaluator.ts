@@ -89,7 +89,9 @@ export type ScheduledEvent = {
 	params?: Record<string, number>; // FX params (only for type:'fx')
 };
 
-export type EvalCycleResult = { ok: true; events: ScheduledEvent[] } | { ok: false; error: string };
+export type EvalCycleResult =
+	| { ok: true; events: ScheduledEvent[]; done: boolean }
+	| { ok: false; error: string };
 
 export type EvalInstance =
 	| {
@@ -441,6 +443,11 @@ type CompiledScalar = {
 	accidentalOffset: number;
 	/** Per-element weight for 'wran (default: 1). */
 	weight: RunnerState;
+	/**
+	 * Absolute beat offset from cycle start, set by the `@` timing syntax.
+	 * When present, overrides the natural uniform-slot position of this element.
+	 */
+	beatOverride?: number;
 };
 
 type CompiledSubsequence = {
@@ -974,16 +981,15 @@ type CompiledLoop = {
 /** Collect all modifiers from the loop/line node itself plus continuation block.
  *
  * Parser structure: modifiers written after [...] are consumed by sequenceExpr's
- * MANY2, not by loopStatement's MANY. So we must look in sequenceExpr (or
- * relTimedList / absTimedList) as well as on the loop node itself.
+ * MANY2, not by loopStatement's MANY. So we must look in sequenceExpr or
+ * relTimedList as well as on the loop node itself.
  * Continuation modifiers are found as continuationModifier children on the loop node.
  */
 function collectLoopModifiers(loopNode: CstNode): CstNode[] {
 	// Modifiers on the sequenceExpr (written directly after [...])
 	const seqNode =
 		((loopNode.children.sequenceExpr as CstNode[]) ?? [])[0] ??
-		((loopNode.children.relTimedList as CstNode[]) ?? [])[0] ??
-		((loopNode.children.absTimedList as CstNode[]) ?? [])[0];
+		((loopNode.children.relTimedList as CstNode[]) ?? [])[0];
 	const seqMods = seqNode ? ((seqNode.children.modifierSuffix as CstNode[]) ?? []) : [];
 
 	// Any modifier suffixes directly on the loop statement (rare — after transposition etc.)
@@ -1083,16 +1089,15 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 }
 
 // ---------------------------------------------------------------------------
-// Line compilation (mirrors loop but for relTimedList / absTimedList too)
+// Line compilation (mirrors loop but also handles relTimedList)
 // ---------------------------------------------------------------------------
 
 function compileLine(lineNode: CstNode): CompiledLoop | string {
-	// lineStatement may use sequenceExpr, relTimedList, or absTimedList
+	// lineStatement may use sequenceExpr or relTimedList (timedList with optional @ per element)
 	const seqNode = ((lineNode.children.sequenceExpr as CstNode[]) ?? [])[0];
 	const relNode = ((lineNode.children.relTimedList as CstNode[]) ?? [])[0];
-	const absNode = ((lineNode.children.absTimedList as CstNode[]) ?? [])[0];
 
-	const bodyNode = seqNode ?? relNode ?? absNode;
+	const bodyNode = seqNode ?? relNode;
 	if (!bodyNode) return 'line has no body';
 
 	// List-level modifiers
@@ -1104,7 +1109,6 @@ function compileLine(lineNode: CstNode): CompiledLoop | string {
 	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
 	else if (hasModifier(listMods, 'wran')) traversal = 'wran';
 
-	// Compile elements (same for all body types — timedElement vs sequenceElement differ slightly)
 	const compiled: CompiledElement[] = [];
 
 	if (seqNode) {
@@ -1119,12 +1123,6 @@ function compileLine(lineNode: CstNode): CompiledLoop | string {
 		const elems = (relNode.children.timedElement as CstNode[]) ?? [];
 		for (const elem of elems) {
 			const ce = compileTimedElement(elem, listMode);
-			if (ce) compiled.push(ce);
-		}
-	} else if (absNode) {
-		const elems = (absNode.children.absTimedElement as CstNode[]) ?? [];
-		for (const elem of elems) {
-			const ce = compileAbsTimedElement(elem, listMode);
 			if (ce) compiled.push(ce);
 		}
 	}
@@ -1175,6 +1173,17 @@ function compileLine(lineNode: CstNode): CompiledLoop | string {
 	};
 }
 
+/** Parse a timeExpr CST node into a cycle-position value (>= 0). */
+function extractTimeExpr(timeNode: CstNode): number {
+	const floatToks = (timeNode.children.Float as IToken[]) ?? [];
+	if (floatToks.length > 0) return parseFloat(floatToks[0].image);
+	const intToks = (timeNode.children.Integer as IToken[]) ?? [];
+	if (intToks.length === 0) return 0;
+	const num = parseInt(intToks[0].image, 10);
+	const denom = intToks[1] ? parseInt(intToks[1].image, 10) : 1;
+	return num / denom;
+}
+
 function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
 	const intTok = ((elem.children.Integer as IToken[]) ?? [])[0];
 	if (!intTok) return null;
@@ -1185,11 +1194,15 @@ function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledEleme
 	accidentalOffset += sharps.length;
 	for (const f of flats) accidentalOffset -= f.image.length;
 	const weight = makeRunner(() => 1, { kind: 'lock' });
-	return { kind: 'scalar', runner: makeRunner(() => degree, inherited), accidentalOffset, weight };
-}
-
-function compileAbsTimedElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
-	return compileTimedElement(elem, inherited); // same structure
+	const timeNode = ((elem.children.timeExpr as CstNode[]) ?? [])[0];
+	const beatOverride = timeNode !== undefined ? extractTimeExpr(timeNode) : undefined;
+	return {
+		kind: 'scalar',
+		runner: makeRunner(() => degree, inherited),
+		accidentalOffset,
+		weight,
+		...(beatOverride !== undefined && { beatOverride })
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -1315,9 +1328,10 @@ function expandSlot(
 	// scalar
 	const rawDegree = sampleRunner(el.runner, p.cycle);
 	const note = degreeToMidiCtx(rawDegree + p.transposeDelta, p.scaleCtx) + el.accidentalOffset;
+	const beatOffset = el.beatOverride !== undefined ? el.beatOverride : slotStart;
 	const event: ScheduledEvent = {
 		note,
-		beatOffset: slotStart,
+		beatOffset,
 		duration: slotDuration * p.legato
 	};
 	if (p.scaleCtx.cent !== 0) event.cent = p.scaleCtx.cent;
@@ -1336,7 +1350,7 @@ function evaluateCompiledLoop(
 	scaleCtx: ScaleContext,
 	cycle: number,
 	isLine: boolean
-): ScheduledEvent[] {
+): { events: ScheduledEvent[]; done: boolean } {
 	const { elements, stutRunner, maybeRunner, legatoRunner, offsetRunner, mono, atOffset, repeat } =
 		compiled;
 
@@ -1377,6 +1391,13 @@ function evaluateCompiledLoop(
 	// Determine repeat count for cycleOffset calculation
 	const repeatCount = repeat === null ? 1 : repeat === 0 ? Infinity : repeat;
 
+	// For a line, check if this cycle is past the last scheduled cycle.
+	// A line occupies cycles [atOffset, atOffset + repeatCount). If cycle >= atOffset + repeatCount
+	// the line is done and should produce no events.
+	if (isLine && cycle >= atOffset + (repeatCount === Infinity ? Infinity : repeatCount)) {
+		return { events: [], done: true };
+	}
+
 	for (let rep = 0; rep < (isLine ? Math.min(repeatCount, 999) : 1); rep++) {
 		const cycleOff = atOffset + rep;
 		for (let i = 0; i < n; i++) {
@@ -1403,7 +1424,12 @@ function evaluateCompiledLoop(
 		events.push(evaluateFxEvent(compiled.fx, cycle, atOffset));
 	}
 
-	return events;
+	// Sort by beatOffset so the scheduler always sees non-decreasing times.
+	// @ overrides can place events out of source order; negative gaps would
+	// cause them to fire simultaneously or in the wrong order.
+	events.sort((a, b) => a.beatOffset - b.beatOffset);
+
+	return { events, done: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -1575,8 +1601,8 @@ export function createInstance(source: string): EvalInstance {
 				const { elements } = compiled;
 				if (elements.length === 0) continue;
 
-				const events = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber, isLine);
-				return { ok: true, events };
+				const { events, done } = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber, isLine);
+				return { ok: true, events, done };
 			}
 
 			return { ok: false, error: 'No loop found in evaluate' };

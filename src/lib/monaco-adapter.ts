@@ -67,8 +67,6 @@ const SCOPE_MAP: Record<string, string> = {
 	RBracket: 'delimiter.bracket',
 	LParen: 'delimiter.parenthesis',
 	RParen: 'delimiter.parenthesis',
-	LBrace: 'delimiter.bracket',
-	RBrace: 'delimiter.bracket',
 	Pipe: 'operator',
 	At: 'operator',
 	Tilde: 'operator',
@@ -77,7 +75,6 @@ const SCOPE_MAP: Record<string, string> = {
 	Plus: 'operator',
 	Minus: 'operator',
 	Slash: 'operator',
-	Colon: 'operator',
 	// Literals
 	Float: 'number',
 	Integer: 'number',

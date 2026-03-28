@@ -50,8 +50,6 @@ import {
 	Identifier,
 	LBracket,
 	RBracket,
-	LBrace,
-	RBrace,
 	LParen,
 	RParen,
 	Pipe,
@@ -62,7 +60,6 @@ import {
 	Minus,
 	Plus,
 	Slash,
-	Colon,
 	Tilde,
 	Rand,
 	Gau,
@@ -284,20 +281,18 @@ class FluxParser extends CstParser {
 	});
 
 	lineStatement = this.RULE('lineStatement', () => {
-		// `line [...]`  or  `line("synthdef") [...]`  or  `line {4:1/2 7:3/2}`
+		// `line [...]`  or  `line("synthdef") [...]`
 		this.CONSUME(Line);
 		this.OPTION(() => {
 			this.SUBRULE(this.synthdefArg);
 		});
 		this.OR([
-			// relTimedList starts with '[' then degreeLiteral '@'
-			// We use a GATE to peek ahead: if after '[' we see Integer (At|Sharp|Flat)?* '@'
-			// then it's a relTimedList. Otherwise fall through to sequenceExpr.
+			// timedList starts with '[' containing at least one 'degree@time' element.
+			// We use a GATE to peek ahead: if any element in [...] has '@', it's a timedList.
 			{
 				GATE: () => this.isRelTimedList(),
 				ALT: () => this.SUBRULE(this.relTimedList)
 			},
-			{ ALT: () => this.SUBRULE(this.absTimedList) },
 			{ ALT: () => this.SUBRULE(this.sequenceExpr) }
 		]);
 		this.MANY(() => {
@@ -320,21 +315,31 @@ class FluxParser extends CstParser {
 	});
 
 	/**
-	 * Lookahead predicate: returns true if the next tokens look like a
-	 * relative-timed list `[degreeLiteral @ ...]`.
-	 * We look for: LBracket Integer (Sharp|Flat)* At
+	 * Lookahead predicate: returns true if the token stream looks like a
+	 * relative-timed list `[degreeLiteral@ ...]`.
+	 *
+	 * A relTimedList contains elements of the form `Integer (Sharp|Flat)* @`.
+	 * The `@` may appear on any element, not necessarily the first, so we scan
+	 * forward skipping `Integer (Sharp|Flat)*` groups until we find `@` (return
+	 * true) or hit `]` / something that can't be part of a timed element (return
+	 * false).
 	 */
 	private isRelTimedList(): boolean {
 		let la = 1;
 		if (this.LA(la).tokenType !== LBracket) return false;
 		la++;
-		// Skip optional whitespace (already skipped by lexer)
-		if (this.LA(la).tokenType !== Integer) return false;
-		la++;
-		// Skip accidentals
-		while (this.LA(la).tokenType === Sharp || this.LA(la).tokenType === Flat) la++;
-		// Should be '@'
-		return this.LA(la).tokenType === At;
+		while (true) {
+			// Each timed element starts with an Integer
+			if (this.LA(la).tokenType !== Integer) return false;
+			la++;
+			// Skip accidentals
+			while (this.LA(la).tokenType === Sharp || this.LA(la).tokenType === Flat) la++;
+			// If we see '@', this is a relTimedList
+			if (this.LA(la).tokenType === At) return true;
+			// If we see ']' or something other than an Integer, no '@' found
+			if (this.LA(la).tokenType !== Integer) return false;
+			// Another Integer: next element — continue scanning
+		}
 	}
 
 	synthdefArg = this.RULE('synthdefArg', () => {
@@ -635,45 +640,32 @@ class FluxParser extends CstParser {
 	});
 
 	timedElement = this.RULE('timedElement', () => {
-		// degreeLiteral @ timeExpr
-		// degreeLiteral here is always a plain integer (no accidental form in timed lists per spec)
+		// degreeLiteral  or  degreeLiteral @ timeExpr
+		// The @ and timeExpr are optional: a bare degree keeps its natural uniform slot.
 		this.CONSUME(Integer);
 		this.MANY(() => {
 			this.OR([{ ALT: () => this.CONSUME(Sharp) }, { ALT: () => this.CONSUME(Flat) }]);
 		});
-		this.CONSUME(At);
-		this.SUBRULE(this.timeExpr);
-	});
-
-	absTimedList = this.RULE('absTimedList', () => {
-		// {4:1/2 7:3/2} — offset from cycle start
-		this.CONSUME(LBrace);
-		this.MANY(() => {
-			this.SUBRULE(this.absTimedElement);
+		this.OPTION(() => {
+			this.CONSUME(At);
+			this.SUBRULE(this.timeExpr);
 		});
-		this.CONSUME(RBrace);
-		this.MANY2(() => {
-			this.SUBRULE(this.modifierSuffix);
-		});
-	});
-
-	absTimedElement = this.RULE('absTimedElement', () => {
-		// degreeLiteral : timeExpr
-		this.CONSUME(Integer);
-		this.MANY(() => {
-			this.OR([{ ALT: () => this.CONSUME(Sharp) }, { ALT: () => this.CONSUME(Flat) }]);
-		});
-		this.CONSUME(Colon);
-		this.SUBRULE(this.timeExpr);
 	});
 
 	timeExpr = this.RULE('timeExpr', () => {
-		// integer  or  integer/integer  (e.g. 1/4, 3/2, 0)
-		this.CONSUME(Integer);
-		this.OPTION(() => {
-			this.CONSUME(Slash);
-			this.CONSUME2(Integer);
-		});
+		// float (e.g. 1.5)  or  integer  or  integer/integer (e.g. 1/4, 3/2, 0)
+		this.OR([
+			{ ALT: () => this.CONSUME(Float) },
+			{
+				ALT: () => {
+					this.CONSUME(Integer);
+					this.OPTION(() => {
+						this.CONSUME(Slash);
+						this.CONSUME2(Integer);
+					});
+				}
+			}
+		]);
 	});
 
 	// -------------------------------------------------------------------------

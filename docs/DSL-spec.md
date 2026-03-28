@@ -220,14 +220,17 @@ Like `loop`, structural length for a `line` is frozen at evaluation time — all
 
 ### Custom event timing
 
-Two ways to specify event timing:
-
-- `[4@1/2 7@1/4]`: 4 scheduled at one half cycle, then 7 one quarter cycle later (delta from previous).
-- `{4:1/2 7:3/2}`: 4 scheduled at one half cycle, 7 scheduled at 3/2 cycles (absolute from cycle start).
+The `@` operator schedules an element at an absolute position within the cycle (0 = cycle start, 1 = one full cycle). Positions are fractions, written the same way as everywhere else in the DSL:
 
 ```flux
-line [0@0 4@1/4 7@5/8] // relative to previous event
-line {0:0 4:1/4 7:5/8} // relative to cycle start
+line [0@0 4@1/4 7@5/8]   // 0 at 0, 4 at 1/4 cycle, 7 at 5/8 cycle
+```
+
+`@` is optional on individual elements. A bare degree keeps its natural uniform-spacing slot; only elements with `@` have their position overridden:
+
+```flux
+line [0 4 7@1/2]   // 0 at 0, 4 at 1/3 (natural slot), 7 at 1/2 (override)
+line [0 2@1]       // 0 at 0 (natural), 2 at 1 (one full cycle in)
 ```
 
 ---

@@ -1418,6 +1418,52 @@ describe('line statement (truth table 7)', () => {
 		const co = (eval0("line [0 1]\n  'at(1)")[0] as { cycleOffset?: number }).cycleOffset;
 		expect(co).toBeCloseTo(1);
 	});
+
+	it('line [0 1 2] returns done:false on cycle 0 (the one cycle it runs)', () => {
+		const r = inst('line [0 1 2]').evaluate({ cycleNumber: 0 });
+		expect(r.ok).toBe(true);
+		if (r.ok) expect(r.done).toBe(false);
+	});
+
+	it('line [0 1 2] returns done:true on cycle 1 (line has finished)', () => {
+		const i = inst('line [0 1 2]');
+		i.evaluate({ cycleNumber: 0 }); // consume cycle 0
+		const r = i.evaluate({ cycleNumber: 1 });
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.events).toHaveLength(0);
+			expect(r.done).toBe(true);
+		}
+	});
+
+	it("line'at(2) is not done until after cycle 2", () => {
+		const i = inst("line [0]'at(2)");
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		expect(r0.ok && !r0.done).toBe(true);
+		const r2 = i.evaluate({ cycleNumber: 2 });
+		expect(r2.ok && !r2.done).toBe(true);
+		const r3 = i.evaluate({ cycleNumber: 3 });
+		expect(r3.ok && r3.done).toBe(true);
+	});
+
+	it("line'repeat(3) is done after its 3 cycles", () => {
+		const i = inst("line [0]'repeat(3)");
+		for (let c = 0; c < 3; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			expect(r.ok && !r.done).toBe(true);
+		}
+		const r = i.evaluate({ cycleNumber: 3 });
+		expect(r.ok && r.done).toBe(true);
+	});
+
+	it('loop [0 1 2] never returns done:true', () => {
+		const i = inst('loop [0 1 2]');
+		for (let c = 0; c < 5; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			expect(r.ok).toBe(true);
+			if (r.ok) expect(r.done).toBe(false);
+		}
+	});
 });
 
 describe('modifier continuation lines (truth table 1)', () => {
@@ -1599,31 +1645,64 @@ describe("'wran edge cases", () => {
 // behaviour.
 // ---------------------------------------------------------------------------
 
-describe('timed lists (current: uniform spacing)', () => {
-	it('line [4@1/2 7@1/4] — 2 events, correct notes', () => {
-		// degree 4 → G5=67, degree 7 → C6=72
-		expect(notes('line [4@1/2 7@1/4]')).toEqual([67, 72]);
+describe('timed lists — @ and : are absolute beat offsets from cycle start', () => {
+	it('line [4@1/2 7@1/4] — 2 events, sorted by beat (7@1/4 first, 4@1/2 second)', () => {
+		// sorted by beatOffset: 7@1/4 = C6=72 first, 4@1/2 = G5=67 second
+		expect(notes('line [4@1/2 7@1/4]')).toEqual([72, 67]);
 	});
 
-	it('line [4@1/2 7@1/4] — beatOffsets are uniform (timing offsets currently ignored)', () => {
+	it('line [4@1/2 7@1/4] — events sorted by beatOffset (7 at 1/4 before 4 at 1/2)', () => {
 		const evs = eval0('line [4@1/2 7@1/4]');
-		expect(evs[0].beatOffset).toBeCloseTo(0);
-		expect(evs[1].beatOffset).toBeCloseTo(0.5);
-	});
-
-	it('line {4:0 7:1/2} — 2 events, correct notes', () => {
-		expect(notes('line {4:0 7:1/2}')).toEqual([67, 72]);
-	});
-
-	it('line {4:0 7:1/2} — absolute list also produces uniform spacing currently', () => {
-		const evs = eval0('line {4:0 7:1/2}');
-		expect(evs[0].beatOffset).toBeCloseTo(0);
-		expect(evs[1].beatOffset).toBeCloseTo(0.5);
+		expect(evs[0].beatOffset).toBeCloseTo(0.25); // 7@1/4
+		expect(evs[1].beatOffset).toBeCloseTo(0.5); // 4@1/2
+		expect(evs[0].note).toBe(72); // degree 7 = C6
+		expect(evs[1].note).toBe(67); // degree 4 = G5
 	});
 
 	it('timed list supports pitch context', () => {
 		// @key(g major) line [0@0 2@1/2] → G5=67, B5=71
 		expect(notes('@key(g major) line [0@0 2@1/2]')).toEqual([67, 71]);
+	});
+
+	it('line [0 2@1] — bare degree gets natural slot, @-timed degree gets override', () => {
+		const evs = eval0('line [0 2@1]');
+		expect(evs[0].beatOffset).toBeCloseTo(0); // 0 is in slot 0 of 2 = beat 0
+		expect(evs[1].beatOffset).toBeCloseTo(1.0); // 2@1 → absolute beat 1
+	});
+
+	it('line [0 4 7@1/2] — two bare degrees then one timed', () => {
+		const evs = eval0('line [0 4 7@1/2]');
+		expect(evs[0].beatOffset).toBeCloseTo(0); // slot 0 of 3
+		expect(evs[1].beatOffset).toBeCloseTo(1 / 3); // slot 1 of 3
+		expect(evs[2].beatOffset).toBeCloseTo(0.5); // 7@1/2 → absolute 0.5
+	});
+
+	it('line [0 2@1] — notes are correct', () => {
+		expect(notes('line [0 2@1]')).toEqual([60, 64]);
+	});
+
+	it('line [0 2@1.5] — float time is honoured', () => {
+		const evs = eval0('line [0 2@1.5]');
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(1.5);
+	});
+
+	it('line [0@0.0 4@0.5] — float times on all elements', () => {
+		const evs = eval0('line [0@0.0 4@0.5]');
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.5);
+	});
+
+	it('events are sorted by beatOffset — out-of-source-order @ does not produce negative gaps', () => {
+		// source order: 0 (natural slot 0), 1 (natural slot 1/3), 4@0.01 (override 0.01)
+		// sorted order: 0 at 0, 4 at 0.01, 1 at 0.333
+		const evs = eval0('line [0 1 4@0.01]');
+		for (let i = 1; i < evs.length; i++) {
+			expect(evs[i].beatOffset).toBeGreaterThanOrEqual(evs[i - 1].beatOffset);
+		}
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.01);
+		expect(evs[2].beatOffset).toBeCloseTo(1 / 3);
 	});
 });
 
