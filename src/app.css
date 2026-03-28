@@ -1,3 +1,22 @@
+:root {
+	--color-bg: #111;
+	--color-bg-dark: #0d0d0d;
+	--color-bg-surface: #1e1e1e;
+	--color-bg-surface-hover: #2a2a2a;
+	--color-bg-border: #222;
+	--color-border: #333;
+	--color-text: #eee;
+	--color-text-muted: #ccc;
+	--color-text-dim: #888;
+	--color-text-faint: #666;
+	--color-text-hint: #555;
+	--color-text-hint-dark: #444;
+	--color-status-ok: #5c5;
+	--color-status-error: #e55;
+	--color-link: rgb(96, 133, 144);
+	--color-log-info: #7ab;
+}
+
 *,
 *::before,
 *::after {
@@ -9,8 +28,8 @@ body {
 	height: 100%;
 	margin: 0;
 	padding: 0;
-	background: #111;
-	color: #eee;
+	background: var(--color-bg);
+	color: var(--color-text);
 	font-family: monospace;
 }
 
@@ -41,7 +60,7 @@ body {
 
 .page-header p {
 	font-size: 0.85rem;
-	color: #666;
+	color: var(--color-text-faint);
 	margin: 0;
 }
 
@@ -56,7 +75,7 @@ body {
 
 .hint {
 	font-size: 0.72rem;
-	color: #444;
+	color: var(--color-text-hint-dark);
 	margin: 5px 0 0 0;
 }
 
@@ -76,17 +95,17 @@ button {
 	padding: 9px 14px;
 	font-family: monospace;
 	font-size: 0.9rem;
-	background: #1e1e1e;
-	color: #ccc;
-	border: 1px solid #333;
+	background: var(--color-bg-surface);
+	color: var(--color-text-muted);
+	border: 1px solid var(--color-border);
 	border-radius: 3px;
 	cursor: pointer;
 	text-align: left;
 }
 
 button:hover:not(:disabled) {
-	background: #2a2a2a;
-	color: #eee;
+	background: var(--color-bg-surface-hover);
+	color: var(--color-text);
 }
 
 button:disabled {
@@ -97,29 +116,29 @@ button:disabled {
 /* Status */
 .status {
 	font-size: 0.78rem;
-	color: #555;
+	color: var(--color-text-hint);
 	min-height: 1.2em;
 	padding: 0 2px;
 }
 
 .status.ok {
-	color: #5c5;
+	color: var(--color-status-ok);
 }
 
 .status.error {
-	color: #e55;
+	color: var(--color-status-error);
 }
 
 a {
-	color: rgb(96, 133, 144);
+	color: var(--color-link);
 }
 
 /* Feedback log */
 .feedback-log {
 	flex: 1;
 	overflow-y: auto;
-	background: #0d0d0d;
-	border: 1px solid #222;
+	background: var(--color-bg-dark);
+	border: 1px solid var(--color-bg-border);
 	border-radius: 3px;
 	padding: 8px;
 	font-size: 0.75rem;
@@ -128,15 +147,15 @@ a {
 }
 
 .feedback-log .log-entry {
-	color: #888;
+	color: var(--color-text-dim);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
 
 .feedback-log .log-entry.error {
-	color: #e55;
+	color: var(--color-status-error);
 }
 
 .feedback-log .log-entry.info {
-	color: #7ab;
+	color: var(--color-log-info);
 }
