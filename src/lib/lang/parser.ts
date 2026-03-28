@@ -36,7 +36,7 @@
  *   const parseErrors = parser.errors;
  */
 
-import { CstParser, type IToken, createToken, Lexer } from 'chevrotain';
+import { CstParser, type IToken, createToken } from 'chevrotain';
 import {
 	allTokens,
 	LineComment,

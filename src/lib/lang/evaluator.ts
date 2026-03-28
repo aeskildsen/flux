@@ -411,7 +411,7 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		// Count sharps and flats
 		const sharps = (degreeLitNode.children.Sharp as IToken[]) ?? [];
 		const flats = (degreeLitNode.children.Flat as IToken[]) ?? [];
-		for (const _s of sharps) accidentalOffset += 1;
+		accidentalOffset += sharps.length;
 		for (const f of flats) accidentalOffset -= f.image.length; // 'b' = -1, 'bb' = -2
 		// Degree literal has no modifiers — uses inherited mode
 		const poll: PollFn = () => degree;
@@ -1079,7 +1079,7 @@ function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledEleme
 	const sharps = (elem.children.Sharp as IToken[]) ?? [];
 	const flats = (elem.children.Flat as IToken[]) ?? [];
 	let accidentalOffset = 0;
-	for (const _s of sharps) accidentalOffset += 1;
+	accidentalOffset += sharps.length;
 	for (const f of flats) accidentalOffset -= f.image.length;
 	const weight = makeRunner(() => 1, { kind: 'lock' });
 	return { runner: makeRunner(() => degree, inherited), accidentalOffset, weight };
@@ -1265,77 +1265,6 @@ function evaluateCompiledLoop(
 	}
 
 	return events;
-}
-
-// ---------------------------------------------------------------------------
-// Program compilation — walk all statements
-// ---------------------------------------------------------------------------
-
-/**
- * Walk the top-level program CST and produce a list of compiled statements.
- * Each statement is either a loop (with compiled element runners), a set
- * statement (to be applied to global context at evaluate time), or a
- * decorator block wrapping a loop.
- */
-function compileProgram(
-	cst: CstNode
-): Array<
-	| { kind: 'loop'; compiled: CompiledLoop; scaleCtxNode: CstNode | null }
-	| { kind: 'set'; node: CstNode }
-	| { kind: 'skip' }
-> {
-	const statements = (cst.children.statement ?? []) as CstNode[];
-	const result: Array<
-		| { kind: 'loop'; compiled: CompiledLoop; scaleCtxNode: CstNode | null }
-		| { kind: 'set'; node: CstNode }
-		| { kind: 'skip' }
-	> = [];
-
-	for (const stmt of statements) {
-		// loop statement at top level
-		const loopNodes = stmt.children.loopStatement as CstNode[] | undefined;
-		if (loopNodes?.length) {
-			const compiled = compileLoop(loopNodes[0]);
-			if (typeof compiled === 'string') continue;
-			result.push({ kind: 'loop', compiled, scaleCtxNode: null });
-			continue;
-		}
-
-		// set statement
-		const setNodes = stmt.children.setStatement as CstNode[] | undefined;
-		if (setNodes?.length) {
-			result.push({ kind: 'set', node: setNodes[0] });
-			continue;
-		}
-
-		// decorator block
-		const decBlockNodes = stmt.children.decoratorBlock as CstNode[] | undefined;
-		if (decBlockNodes?.length) {
-			result.push({
-				kind: 'loop',
-				compiled: {
-					elements: [],
-					listMode: DEFAULT_MODE,
-					traversal: 'seq',
-					stutRunner: null,
-					maybeRunner: null,
-					legatoRunner: null,
-					offsetRunner: null,
-					mono: false,
-					atOffset: 0,
-					repeat: null,
-					transposition: null,
-					fx: null
-				},
-				scaleCtxNode: decBlockNodes[0]
-			});
-			continue;
-		}
-
-		result.push({ kind: 'skip' });
-	}
-
-	return result;
 }
 
 // ---------------------------------------------------------------------------
