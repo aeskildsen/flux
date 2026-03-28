@@ -24,7 +24,7 @@ describe('/+page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'boot engine' })).not.toBeDisabled();
 	});
 
-	it('"stop" is disabled before any loop is running', async () => {
+	it('"stop" is disabled before boot', async () => {
 		render(Page);
 		await expect.element(page.getByRole('button', { name: 'stop' })).toBeDisabled();
 	});
