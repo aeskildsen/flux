@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
+	import { boot, serverState, getServer } from 'svelte-supersonic';
 	import { run, type SchedulerHandle } from '$lib/scheduler';
 	import { sc as scProxy, clock } from '$lib/lab-context';
 	import { createInstance } from '$lib/lang/evaluator';
@@ -44,6 +44,10 @@
 	}
 
 	function handleKeyDown(e: KeyboardEvent) {
+		if (e.ctrlKey && e.key === 'b') {
+			e.preventDefault();
+			if (!serverState.booting && !serverState.booted) handleBoot();
+		}
 		if (e.ctrlKey && e.key === '.') {
 			e.preventDefault();
 			handleStop();
@@ -121,7 +125,9 @@
 
 	<div class="editor-area">
 		<FluxEditor onEvaluate={handleEvaluate} />
-		<p class="hint">Ctrl+Enter to evaluate &nbsp;&middot;&nbsp; Ctrl+. to stop</p>
+		<p class="hint">
+			Ctrl+B to boot &nbsp;&middot;&nbsp; Ctrl+Enter to evaluate &nbsp;&middot;&nbsp; Ctrl+. to stop
+		</p>
 	</div>
 
 	<aside class="sidebar">

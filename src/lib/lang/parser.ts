@@ -78,6 +78,7 @@ import {
 	Question,
 	Sharp,
 	Flat,
+	Bang,
 	INDENT,
 	DEDENT
 } from './lexer.js';
@@ -571,7 +572,7 @@ class FluxParser extends CstParser {
 
 	sequenceElement = this.RULE('sequenceElement', () => {
 		// A degree literal (possibly with accidentals) or a generator expression,
-		// with an optional `?weight` for 'wran lists.
+		// with an optional `?weight` for 'wran lists and an optional `!n` repeat count.
 		this.OR([
 			// degreeLiteral: Integer followed by accidentals (Sharp/Flat)
 			{
@@ -594,6 +595,11 @@ class FluxParser extends CstParser {
 					}
 				}
 			]);
+		});
+		// `!n` inline repetition: 1!4 expands to four copies of element 1 in the list
+		this.OPTION2(() => {
+			this.CONSUME(Bang);
+			this.CONSUME(Integer);
 		});
 	});
 

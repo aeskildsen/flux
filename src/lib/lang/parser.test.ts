@@ -377,6 +377,38 @@ describe('modifierSuffix — chaining', () => {
 	});
 });
 
+describe('sequenceElement — !n inline repetition', () => {
+	it('parses loop [1!4]', () => {
+		expect(parse('loop [1!4]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses loop [1!2 3!3]', () => {
+		expect(parse('loop [1!2 3!3]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses loop [0rand7!4]', () => {
+		expect(parse('loop [0rand7!4]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses loop [2b!2] — accidental + repetition', () => {
+		expect(parse('loop [2b!2]').parseErrors).toHaveLength(0);
+	});
+});
+
+describe('BlockComment', () => {
+	it('ignores a block comment before a loop statement', () => {
+		expect(parse('/* comment */ loop [0 2 4]').parseErrors).toHaveLength(0);
+	});
+
+	it('ignores a multi-line block comment', () => {
+		expect(parse('/* line one\nline two */ loop [0]').parseErrors).toHaveLength(0);
+	});
+
+	it('ignores a block comment on its own line', () => {
+		expect(parse('loop [0]\n/* comment */\nloop [2]').parseErrors).toHaveLength(0);
+	});
+});
+
 describe('modifierSuffix — error cases', () => {
 	it("errors on bare 'stut with no preceding token", () => {
 		expect(parse("'stut").parseErrors.length).toBeGreaterThan(0);

@@ -454,6 +454,18 @@ type CompiledSubsequence = {
 type CompiledElement = CompiledScalar | CompiledSubsequence;
 
 /**
+ * Read the `!n` inline-repetition count from a sequenceElement CST node.
+ * Returns 1 if no `!` suffix is present.
+ */
+function repeatCountFromElem(elem: CstNode): number {
+	const bangToks = (elem.children.Bang as IToken[]) ?? [];
+	if (bangToks.length === 0) return 1;
+	const intToks = (elem.children.Integer as IToken[]) ?? [];
+	const n = intToks.length > 0 ? parseInt(intToks[0].image, 10) : 1;
+	return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+/**
  * Compile a sequenceElement CST node into a CompiledElement.
  *
  * @param elem      The sequenceElement CST node.
@@ -506,7 +518,9 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		const subElements: CompiledElement[] = [];
 		for (const se of subElemNodes) {
 			const ce = compileElement(se, subListMode);
-			if (ce) subElements.push(ce);
+			if (!ce) continue;
+			const n = repeatCountFromElem(se);
+			for (let k = 0; k < n; k++) subElements.push(ce);
 		}
 		if (subElements.length === 0) return null;
 		return {
@@ -1001,7 +1015,9 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	const compiled: CompiledElement[] = [];
 	for (const elem of elements) {
 		const ce = compileElement(elem, listMode);
-		if (ce) compiled.push(ce);
+		if (!ce) continue;
+		const n = repeatCountFromElem(elem);
+		for (let k = 0; k < n; k++) compiled.push(ce);
 	}
 
 	if (compiled.length === 0) return 'loop sequence is empty';
@@ -1095,7 +1111,9 @@ function compileLine(lineNode: CstNode): CompiledLoop | string {
 		const elems = (seqNode.children.sequenceElement as CstNode[]) ?? [];
 		for (const elem of elems) {
 			const ce = compileElement(elem, listMode);
-			if (ce) compiled.push(ce);
+			if (!ce) continue;
+			const n = repeatCountFromElem(elem);
+			for (let k = 0; k < n; k++) compiled.push(ce);
 		}
 	} else if (relNode) {
 		const elems = (relNode.children.timedElement as CstNode[]) ?? [];

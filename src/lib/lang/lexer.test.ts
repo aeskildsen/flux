@@ -30,7 +30,8 @@ import {
 	Question,
 	StringLiteral,
 	Sharp,
-	Flat
+	Flat,
+	Bang
 } from './lexer.js';
 
 describe('FluxLexer', () => {
@@ -433,5 +434,47 @@ describe('FluxLexer', () => {
 			expect(errors).toHaveLength(0);
 			expect(tokens[0].tokenType).toBe(Loop);
 		});
+	});
+});
+
+describe('Bang — inline repetition operator', () => {
+	it('tokenizes 1!4 as Integer Bang Integer', () => {
+		const { tokens, errors } = FluxLexer.tokenize('1!4');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(3);
+		expect(tokens[0].tokenType).toBe(Integer);
+		expect(tokens[1].tokenType).toBe(Bang);
+		expect(tokens[2].tokenType).toBe(Integer);
+	});
+
+	it('tokenizes loop [1!4] correctly', () => {
+		const { tokens, errors } = FluxLexer.tokenize('loop [1!4]');
+		expect(errors).toHaveLength(0);
+		const bangIdx = tokens.findIndex((t) => t.tokenType === Bang);
+		expect(bangIdx).toBeGreaterThan(0);
+		expect(tokens[bangIdx - 1].tokenType).toBe(Integer);
+		expect(tokens[bangIdx + 1].tokenType).toBe(Integer);
+	});
+});
+
+describe('BlockComment — multi-line comment (SKIPPED)', () => {
+	it('single-line block comment is invisible to the token array', () => {
+		const { tokens, errors } = FluxLexer.tokenize('/* a comment */ loop [0]');
+		expect(errors).toHaveLength(0);
+		// BlockComment is SKIPPED — only Loop, LBracket, Integer, RBracket remain
+		expect(tokens.find((t) => t.tokenType.name === 'BlockComment')).toBeUndefined();
+		expect(tokens[0].tokenType).toBe(Loop);
+	});
+
+	it('block comment spanning the whole line is invisible', () => {
+		const { tokens, errors } = FluxLexer.tokenize('/* full line comment */');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(0);
+	});
+
+	it('does not affect tokens after the closing */', () => {
+		const { tokens, errors } = FluxLexer.tokenize('/* ignored */ loop [0]');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(Loop);
 	});
 });

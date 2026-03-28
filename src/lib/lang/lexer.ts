@@ -37,6 +37,26 @@
 import { createToken, Lexer } from 'chevrotain';
 
 // ---------------------------------------------------------------------------
+// Block comment — must appear before LineComment in allTokens so `/*` is not
+// split into Slash + something.  Added to SKIPPED so neither the parser nor
+// Monaco's token array see it; multi-line handling is done in the Monaco
+// adapter's state machine.
+// ---------------------------------------------------------------------------
+
+/**
+ * `/* … * /` — block comment. Matches across newlines.
+ * group: SKIPPED means it is invisible to the parser and token-based tooling;
+ * syntax highlighting is handled separately in the Monaco tokenize() state.
+ */
+export const BlockComment = createToken({
+	name: 'BlockComment',
+	pattern: /\/\*[\s\S]*?\*\//,
+	line_breaks: true,
+	group: Lexer.SKIPPED
+	// Monaco scope: 'comment' (applied manually in state machine)
+});
+
+// ---------------------------------------------------------------------------
 // Identifier — declared first so keywords can reference it in longer_alt.
 // It must still appear AFTER all keywords in allTokens (that array controls
 // lexer precedence, not JS declaration order).
@@ -454,6 +474,13 @@ export const Colon = createToken({
 	// Monaco scope: 'operator'
 });
 
+/** `!` — duplication / inline-repetition operator. `1!4` inside `[...]` expands to four copies of 1. */
+export const Bang = createToken({
+	name: 'Bang',
+	pattern: /!/
+	// Monaco scope: 'operator'
+});
+
 // ---------------------------------------------------------------------------
 // Literals
 // ---------------------------------------------------------------------------
@@ -523,7 +550,8 @@ export const WhiteSpace = createToken({
 // ---------------------------------------------------------------------------
 
 export const allTokens = [
-	// Comments
+	// Comments (block before line — both start with '/', longest match wins)
+	BlockComment,
 	LineComment,
 	// Statement keywords (longer ones first where prefixes overlap)
 	SendFx, // 'send_fx' before 'set' and 'fx'
@@ -568,6 +596,7 @@ export const allTokens = [
 	Minus,
 	Slash,
 	Colon,
+	Bang,
 	// Literals — Float before Integer
 	Float,
 	Integer,
