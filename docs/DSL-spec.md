@@ -1,5 +1,20 @@
 # Flux DSL
 
+## Comments
+
+Line comments begin with `//` and run to end of line. Block comments are delimited by `/*` and `*/` and may span multiple lines. Both are invisible to the parser.
+
+```flux
+// this is a line comment
+loop [0 2 4]  // inline comment
+
+/*
+  This is a
+  multi-line comment
+*/
+loop [0 1 2 3]
+```
+
 ## Generators
 
 Generators are objects that yield a stream of values for use in synth instantiation or set messages. Literal numbers are generators that always yield the same value. Everything in `[...]` brackets is also a generator — not a data structure, but a stateful object that yields its elements on each call.
@@ -24,6 +39,18 @@ Inside `[...]` sequence generators, elements are separated by spaces. Commas are
 ```
 
 Specifically for `'wran`: weight for each element is 1 by default. The weight can be overridden with the `?` operator. The `?` weight syntax is only meaningful when `'wran` is present — using `?` without `'wran` is a semantic error.
+
+### Rests
+
+`_` marks an event slot as silence. It occupies the same time as any other element but no synth is spawned. The evaluator emits a `ScheduledEvent` with `type: 'rest'` so the scheduler knows the slot was intentionally silent (useful for `'mono` legato handling and visualisation).
+
+```flux
+loop [0 2 _ 4]    // rest on the 3rd slot — 4 elements, each gets 1/4 cycle
+loop [_ 2 4]      // rest on the 1st slot
+[0 _ 2]'stut      // rest is repeated alongside notes
+```
+
+`_` cannot carry accidentals, `?` weights, or generator suffixes — it is purely syntactic and carries no pitch information.
 
 ### Random number generators
 

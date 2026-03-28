@@ -1818,3 +1818,56 @@ describe('accidentals in non-default pitch contexts', () => {
 		expect(notes('@root(7) loop [2bb]')[0]).toBe(notes('@root(7) loop [2]')[0] - 2);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Rests (_) — spec §Sequence generators / Rests
+// ---------------------------------------------------------------------------
+
+describe('rests (_) — structural slot count', () => {
+	it('loop [0 2 _ 4] emits 4 events, 3rd is type:rest', () => {
+		const evs = eval0('loop [0 2 _ 4]');
+		expect(evs).toHaveLength(4);
+		expect(evs[2].type).toBe('rest');
+	});
+
+	it('rest event has no note pitch (note is -1 or absent)', () => {
+		const evs = eval0('loop [0 2 _ 4]');
+		// note is -1 for rests — no synth should be spawned
+		expect(evs[2].note).toBe(-1);
+	});
+
+	it('rest occupies the correct beat offset (uniformly spaced, 1/4 cycle each)', () => {
+		const evs = eval0('loop [0 2 _ 4]');
+		expect(evs[2].beatOffset).toBeCloseTo(0.5);
+	});
+
+	it('rest at start: loop [_ 2 4] — first event is rest', () => {
+		const evs = eval0('loop [_ 2 4]');
+		expect(evs[0].type).toBe('rest');
+		expect(evs[1].note).toBe(notes('loop [2]')[0]);
+	});
+
+	it('rest at end: loop [0 2 _] — last event is rest', () => {
+		const evs = eval0('loop [0 2 _]');
+		expect(evs[2].type).toBe('rest');
+	});
+
+	it('all rests: loop [_ _ _] — 3 events all type:rest', () => {
+		const evs = eval0('loop [_ _ _]');
+		expect(evs).toHaveLength(3);
+		expect(evs.every((e) => e.type === 'rest')).toBe(true);
+	});
+
+	it('note events are type:note (or undefined) — not type:rest', () => {
+		const evs = eval0('loop [0 2 4]');
+		for (const e of evs) {
+			expect(e.type).not.toBe('rest');
+		}
+	});
+
+	it('rest duration spans its slot (same as a note slot)', () => {
+		const evs = eval0('loop [0 2 _ 4]');
+		// 4 elements → slot = 0.25; rest duration should equal the slot
+		expect(evs[2].duration).toBeCloseTo(0.25);
+	});
+});
