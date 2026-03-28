@@ -14,9 +14,9 @@ describe('/+page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'boot engine' })).toBeInTheDocument();
 	});
 
-	it('renders a "play sound" button', async () => {
+	it('renders a "stop" button', async () => {
 		render(Page);
-		await expect.element(page.getByRole('button', { name: 'play sound' })).toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'stop' })).toBeInTheDocument();
 	});
 
 	it('"boot engine" is enabled before boot', async () => {
@@ -24,9 +24,9 @@ describe('/+page.svelte', () => {
 		await expect.element(page.getByRole('button', { name: 'boot engine' })).not.toBeDisabled();
 	});
 
-	it('"play sound" is disabled before boot', async () => {
+	it('"stop" is disabled before any loop is running', async () => {
 		render(Page);
-		await expect.element(page.getByRole('button', { name: 'play sound' })).toBeDisabled();
+		await expect.element(page.getByRole('button', { name: 'stop' })).toBeDisabled();
 	});
 
 	it('shows the initial status message', async () => {
