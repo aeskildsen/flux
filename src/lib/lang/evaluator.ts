@@ -294,11 +294,42 @@ function expSample(lo: number, hi: number): number {
 // CST compilation: numericGenerator → PollFn
 // ---------------------------------------------------------------------------
 
+/**
+ * Compile a generatorExpr CST node to a raw PollFn, ignoring eager/lock
+ * modifiers (those are applied by the Runner layer above). Used to resolve
+ * parenthesised sub-generators used as bases, e.g. (-2rand2)step1x4.
+ */
+function genExprToPollFn(genExpr: CstNode): PollFn | null {
+	const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+	if (!atomic) return null;
+	const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
+	if (numGen) return numGenToPollFn(numGen);
+	return null; // sequenceGenerators cannot serve as scalar generator bases
+}
+
 function numGenToPollFn(numGen: CstNode): PollFn | null {
+	// Base: numericLiteral (common path) or parenGenerator (nested sub-generator).
 	const lit = ((numGen.children.numericLiteral as CstNode[]) ?? [])[0];
-	if (!lit) return null;
-	const minVal = litToNumber(lit);
-	if (minVal === null) return null;
+	const parenNode = ((numGen.children.parenGenerator as CstNode[]) ?? [])[0];
+
+	let basePoll: PollFn;
+	let baseLit: CstNode | null = null; // kept for the float-bounds check on rand/tilde
+
+	if (lit) {
+		const minVal = litToNumber(lit);
+		if (minVal === null) return null;
+		const fixed = minVal;
+		basePoll = () => fixed;
+		baseLit = lit;
+	} else if (parenNode) {
+		const innerGenExpr = ((parenNode.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!innerGenExpr) return null;
+		const inner = genExprToPollFn(innerGenExpr);
+		if (!inner) return null;
+		basePoll = inner;
+	} else {
+		return null;
+	}
 
 	const randNode =
 		((numGen.children.randGen as CstNode[]) ?? [])[0] ??
@@ -306,28 +337,37 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 	if (randNode) {
 		const maxLit = ((randNode.children.numericLiteral as CstNode[]) ?? [])[0];
 		const maxVal = maxLit ? litToNumber(maxLit) : null;
-		if (maxVal === null) return () => minVal;
-		const floatBounds = litIsFloat(lit) || (maxLit ? litIsFloat(maxLit) : false);
+		if (maxVal === null) return basePoll;
+		// Float bounds: if either bound is a float literal, use continuous range.
+		// Paren bases default to integer (we can't inspect them statically).
+		const floatBounds =
+			(baseLit ? litIsFloat(baseLit) : false) || (maxLit ? litIsFloat(maxLit) : false);
 		if (floatBounds) {
-			return () => Math.random() * (maxVal - minVal) + minVal;
+			return () => {
+				const base = basePoll();
+				return Math.random() * (maxVal - base) + base;
+			};
 		}
-		return () => Math.floor(Math.random() * (maxVal - minVal + 1)) + minVal;
+		return () => {
+			const base = basePoll();
+			return Math.floor(Math.random() * (maxVal - base + 1)) + base;
+		};
 	}
 
 	const gauNode = ((numGen.children.gauGen as CstNode[]) ?? [])[0];
 	if (gauNode) {
 		const sdevLit = ((gauNode.children.numericLiteral as CstNode[]) ?? [])[0];
 		const sdev = sdevLit ? litToNumber(sdevLit) : null;
-		if (sdev === null) return () => minVal;
-		return () => gaussSample(minVal, sdev);
+		if (sdev === null) return basePoll;
+		return () => gaussSample(basePoll(), sdev);
 	}
 
 	const expNode = ((numGen.children.expGen as CstNode[]) ?? [])[0];
 	if (expNode) {
 		const maxLit = ((expNode.children.numericLiteral as CstNode[]) ?? [])[0];
 		const maxVal = maxLit ? litToNumber(maxLit) : null;
-		if (maxVal === null) return () => minVal;
-		return () => expSample(minVal, maxVal);
+		if (maxVal === null) return basePoll;
+		return () => expSample(basePoll(), maxVal);
 	}
 
 	const broNode = ((numGen.children.broGen as CstNode[]) ?? [])[0];
@@ -335,13 +375,14 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 		const lits = (broNode.children.numericLiteral as CstNode[]) ?? [];
 		const maxVal = lits[0] ? litToNumber(lits[0]) : null;
 		const maxStep = lits[1] ? litToNumber(lits[1]) : null;
-		if (maxVal === null) return () => minVal;
+		if (maxVal === null) return basePoll;
 		const hi = maxVal;
 		const step = maxStep ?? 1;
-		let current = (minVal + hi) / 2;
+		const lo = basePoll(); // sample base once as the fixed lower bound
+		let current = (lo + hi) / 2;
 		return () => {
 			current += (Math.random() * 2 - 1) * step;
-			current = Math.max(minVal, Math.min(hi, current));
+			current = Math.max(lo, Math.min(hi, current));
 			return current;
 		};
 	}
@@ -353,18 +394,26 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 		const lits = (node.children.numericLiteral as CstNode[]) ?? [];
 		const arg = lits[0] ? litToNumber(lits[0]) : null;
 		const len = lits[1] ? litToNumber(lits[1]) : null;
-		if (arg === null || len === null || len < 1) return () => minVal;
+		if (arg === null || len === null || len < 1) return basePoll;
 		const length = Math.round(len);
-		let values: number[];
-		if (key === 'stepGen') values = stepSeries(minVal, arg, length);
-		else if (key === 'mulGen') values = mulSeries(minVal, arg, length);
-		else if (key === 'linGen') values = linSeries(minVal, arg, length);
-		else values = geoSeries(minVal, arg, length);
+		// Compute or recompute the series from the current base value.
+		// For paren bases the base is re-polled each time the series loops,
+		// giving a new start point; for literal bases the value is constant.
+		const makeSeries = (start: number): number[] => {
+			if (key === 'stepGen') return stepSeries(start, arg, length);
+			if (key === 'mulGen') return mulSeries(start, arg, length);
+			if (key === 'linGen') return linSeries(start, arg, length);
+			return geoSeries(start, arg, length);
+		};
+		let values = makeSeries(basePoll());
 		let idx = 0;
-		return () => values[idx++ % values.length];
+		return () => {
+			if (idx > 0 && idx % length === 0) values = makeSeries(basePoll());
+			return values[idx++ % length];
+		};
 	}
 
-	return () => minVal;
+	return basePoll;
 }
 
 /** Read the numeric value from a numericLiteral CST node. */
@@ -385,13 +434,24 @@ function litToNumber(lit: CstNode): number | null {
 // Compiled element: a Runner plus the list-level modifiers already applied
 // ---------------------------------------------------------------------------
 
-type CompiledElement = {
+type CompiledScalar = {
+	kind: 'scalar';
 	runner: RunnerState;
 	/** Accidental semitone offset (0 = none). Applied before scale lookup. */
 	accidentalOffset: number;
 	/** Per-element weight for 'wran (default: 1). */
 	weight: RunnerState;
 };
+
+type CompiledSubsequence = {
+	kind: 'sequence';
+	elements: CompiledElement[];
+	traversal: TraversalMode;
+	/** Per-element weight for parent 'wran selection (default: 1). */
+	weight: RunnerState;
+};
+
+type CompiledElement = CompiledScalar | CompiledSubsequence;
 
 /**
  * Compile a sequenceElement CST node into a CompiledElement.
@@ -416,7 +476,7 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		// Degree literal has no modifiers — uses inherited mode
 		const poll: PollFn = () => degree;
 		const weight = makeRunner(() => 1, { kind: 'lock' });
-		return { runner: makeRunner(poll, inherited), accidentalOffset, weight };
+		return { kind: 'scalar', runner: makeRunner(poll, inherited), accidentalOffset, weight };
 	}
 
 	// Element-level modifiers come from the generatorExpr's modifierSuffix children.
@@ -431,6 +491,31 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 
 	const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
 	if (!atomic) return null;
+
+	// Handle nested sequence generator: [1 2] inside [0 4 [1 2]]
+	// The sub-list subdivides the parent slot — each sub-element gets slot/n time.
+	const seqGen = ((atomic.children.sequenceGenerator as CstNode[]) ?? [])[0];
+	if (seqGen) {
+		const subListMods = (seqGen.children.modifierSuffix as CstNode[]) ?? [];
+		const subListMode = extractEagerMode(subListMods) ?? inherited;
+		let subTraversal: TraversalMode = 'seq';
+		if (hasModifier(subListMods, 'shuf')) subTraversal = 'shuf';
+		else if (hasModifier(subListMods, 'pick')) subTraversal = 'pick';
+		else if (hasModifier(subListMods, 'wran')) subTraversal = 'wran';
+		const subElemNodes = (seqGen.children.sequenceElement as CstNode[]) ?? [];
+		const subElements: CompiledElement[] = [];
+		for (const se of subElemNodes) {
+			const ce = compileElement(se, subListMode);
+			if (ce) subElements.push(ce);
+		}
+		if (subElements.length === 0) return null;
+		return {
+			kind: 'sequence',
+			elements: subElements,
+			traversal: subTraversal,
+			weight: makeRunner(() => 1, { kind: 'lock' })
+		};
+	}
 
 	const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
 	if (!numGen) return null;
@@ -458,7 +543,7 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		}
 	}
 
-	return { runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
+	return { kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
 }
 
 // ---------------------------------------------------------------------------
@@ -1082,7 +1167,7 @@ function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledEleme
 	accidentalOffset += sharps.length;
 	for (const f of flats) accidentalOffset -= f.image.length;
 	const weight = makeRunner(() => 1, { kind: 'lock' });
-	return { runner: makeRunner(() => degree, inherited), accidentalOffset, weight };
+	return { kind: 'scalar', runner: makeRunner(() => degree, inherited), accidentalOffset, weight };
 }
 
 function compileAbsTimedElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
@@ -1148,6 +1233,82 @@ function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number
 // Evaluate a compiled loop/line for one cycle
 // ---------------------------------------------------------------------------
 
+/** Apply traversal strategy to an element array, returning the ordered sequence. */
+function orderedSubElements(
+	elements: CompiledElement[],
+	traversal: TraversalMode,
+	cycle: number
+): CompiledElement[] {
+	if (traversal === 'pick') {
+		return elements.map(() => elements[Math.floor(Math.random() * elements.length)]);
+	} else if (traversal === 'shuf') {
+		const arr = [...elements];
+		for (let i = arr.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[arr[i], arr[j]] = [arr[j], arr[i]];
+		}
+		return arr;
+	} else if (traversal === 'wran') {
+		return elements.map(() => {
+			const weights = elements.map((el) => Math.max(0, sampleRunner(el.weight, cycle)));
+			const total = weights.reduce((a, b) => a + b, 0);
+			if (total === 0) return elements[0];
+			let r = Math.random() * total;
+			for (let i = 0; i < elements.length; i++) {
+				r -= weights[i];
+				if (r <= 0) return elements[i];
+			}
+			return elements[elements.length - 1];
+		});
+	}
+	return elements; // 'seq
+}
+
+type SlotParams = {
+	legato: number;
+	cycle: number;
+	scaleCtx: ScaleContext;
+	transposeDelta: number;
+	mono: boolean;
+	offsetMs: number | undefined;
+	cycleOff: number;
+};
+
+/**
+ * Expand a single CompiledElement slot into ScheduledEvent[].
+ * Scalar elements produce one event; subsequences subdivide the slot recursively.
+ */
+function expandSlot(
+	el: CompiledElement,
+	slotStart: number,
+	slotDuration: number,
+	p: SlotParams
+): ScheduledEvent[] {
+	if (el.kind === 'sequence') {
+		const ordered = orderedSubElements(el.elements, el.traversal, p.cycle);
+		if (ordered.length === 0) return [];
+		const subSlot = slotDuration / ordered.length;
+		const out: ScheduledEvent[] = [];
+		for (let j = 0; j < ordered.length; j++) {
+			out.push(...expandSlot(ordered[j], slotStart + j * subSlot, subSlot, p));
+		}
+		return out;
+	}
+	// scalar
+	const rawDegree = sampleRunner(el.runner, p.cycle);
+	const note = degreeToMidiCtx(rawDegree + p.transposeDelta, p.scaleCtx) + el.accidentalOffset;
+	const event: ScheduledEvent = {
+		note,
+		beatOffset: slotStart,
+		duration: slotDuration * p.legato
+	};
+	if (p.scaleCtx.cent !== 0) event.cent = p.scaleCtx.cent;
+	if (p.offsetMs !== undefined && p.offsetMs !== 0) event.offsetMs = p.offsetMs;
+	if (p.mono) event.mono = true;
+	if (p.cycleOff !== 0) event.cycleOffset = p.cycleOff;
+	return [event];
+}
+
 /**
  * Produce ScheduledEvent[] from a compiled loop for a given cycle.
  * Handles 'stut, 'maybe, traversal, 'legato, 'offset, 'mono, transposition, accidentals, FX.
@@ -1181,39 +1342,7 @@ function evaluateCompiledLoop(
 	}
 
 	// Determine the ordered sequence of elements (traversal strategy)
-	let orderedElements: CompiledElement[];
-	const traversal = compiled.traversal;
-
-	if (traversal === 'pick') {
-		// Pick a random element each "slot" — produce N slots, each independently random
-		// Each slot draws a random element from the pool
-		orderedElements = elements.map(() => elements[Math.floor(Math.random() * elements.length)]);
-	} else if (traversal === 'shuf') {
-		// Shuffle once per cycle, then traverse in order
-		orderedElements = [...elements];
-		// Fisher-Yates shuffle
-		for (let i = orderedElements.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[orderedElements[i], orderedElements[j]] = [orderedElements[j], orderedElements[i]];
-		}
-	} else if (traversal === 'wran') {
-		// Weighted random: pick one element per slot, weighted
-		// All N elements produce N events (each slot picks from the pool)
-		orderedElements = elements.map(() => {
-			const weights = elements.map((el) => Math.max(0, sampleRunner(el.weight, cycle)));
-			const total = weights.reduce((a, b) => a + b, 0);
-			if (total === 0) return elements[0]; // fallback
-			let r = Math.random() * total;
-			for (let i = 0; i < elements.length; i++) {
-				r -= weights[i];
-				if (r <= 0) return elements[i];
-			}
-			return elements[elements.length - 1];
-		});
-	} else {
-		// Default sequential traversal
-		orderedElements = elements;
-	}
+	const orderedElements = orderedSubElements(elements, compiled.traversal, cycle);
 
 	// Apply 'stut: expand each element into stutCount copies
 	const expandedElements: CompiledElement[] = [];
@@ -1231,31 +1360,23 @@ function evaluateCompiledLoop(
 	const repeatCount = repeat === null ? 1 : repeat === 0 ? Infinity : repeat;
 
 	for (let rep = 0; rep < (isLine ? Math.min(repeatCount, 999) : 1); rep++) {
+		const cycleOff = atOffset + rep;
 		for (let i = 0; i < n; i++) {
 			// Apply 'maybe filter
 			if (maybeProb !== null && Math.random() >= maybeProb) continue;
 
 			const el = expandedElements[i];
-			const rawDegree = sampleRunner(el.runner, cycle);
-			const transposedDegree = rawDegree + transposeDelta;
-			const note = degreeToMidiCtx(transposedDegree, scaleCtx) + el.accidentalOffset;
-			const duration = slotDuration * legato;
-
-			const event: ScheduledEvent = {
-				note,
-				beatOffset: i * slotDuration,
-				duration
-			};
-
-			if (scaleCtx.cent !== 0) event.cent = scaleCtx.cent;
-			if (offsetMs !== undefined && offsetMs !== 0) event.offsetMs = offsetMs;
-			if (mono) event.mono = true;
-
-			// cycleOffset: 'at for base, + rep for each repetition
-			const cycleOff = atOffset + rep;
-			if (cycleOff !== 0) event.cycleOffset = cycleOff;
-
-			events.push(event);
+			events.push(
+				...expandSlot(el, i * slotDuration, slotDuration, {
+					legato,
+					cycle,
+					scaleCtx,
+					transposeDelta,
+					mono,
+					offsetMs,
+					cycleOff
+				})
+			);
 		}
 	}
 
@@ -1443,34 +1564,4 @@ export function createInstance(source: string): EvalInstance {
 			return { ok: false, error: 'No loop found in evaluate' };
 		}
 	};
-}
-
-// ---------------------------------------------------------------------------
-// Legacy API — preserved for existing call sites
-// ---------------------------------------------------------------------------
-
-export type EvalEvent = { note: number; duration: number };
-
-export type EvalResult =
-	| { ok: true; generator: Generator<EvalEvent, void, unknown> }
-	| { ok: false; error: string };
-
-export function evaluate(source: string): EvalResult {
-	const inst = createInstance(source);
-	if (!inst.ok) return { ok: false, error: inst.error };
-
-	const okInst: { ok: true; evaluate: (ctx: CycleContext) => EvalCycleResult } = inst;
-
-	function* gen(): Generator<EvalEvent, void, unknown> {
-		let cycle = 0;
-		while (true) {
-			const result = okInst.evaluate({ cycleNumber: cycle++ });
-			if (!result.ok) return; // stop on error
-			for (const ev of result.events) {
-				yield { note: ev.note, duration: ev.duration };
-			}
-		}
-	}
-
-	return { ok: true, generator: gen() };
 }

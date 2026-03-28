@@ -2,7 +2,7 @@
 	import { boot, serverState, getServer, getInstance, defaultConfig } from 'svelte-supersonic';
 	import { run, type SchedulerHandle } from '$lib/scheduler';
 	import { sc as scProxy, clock } from '$lib/lab-context';
-	import { evaluate } from '$lib/lang/evaluator';
+	import { createInstance } from '$lib/lang/evaluator';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	const sc = $derived(getServer());
 
@@ -17,13 +17,10 @@
 
 	// Outgoing handle: the previous loop, kept alive until the next cycle boundary.
 	let outgoingHandle: SchedulerHandle | null = null;
-	let outgoingTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function clearOutgoing() {
-		if (outgoingTimer !== null) clearTimeout(outgoingTimer);
 		outgoingHandle?.stop();
 		outgoingHandle = null;
-		outgoingTimer = null;
 	}
 
 	function appendLog(message: string, kind: 'error' | 'info') {
@@ -59,43 +56,54 @@
 			return;
 		}
 
-		const result = evaluate(content);
-		if (!result.ok) {
-			appendLog(result.error, 'error');
+		const instResult = createInstance(content);
+		if (!instResult.ok) {
+			appendLog(instResult.error, 'error');
 			return;
 		}
+		const inst = instResult;
 
 		if (clock.startTime === null) clock.start();
 
-		const CYCLE_BEATS = 4;
+		const CYCLE_BEATS = 4; // 1 DSL cycle = 4 real beats
 		const nextCycleBeat = Math.ceil(clock.currentBeat / CYCLE_BEATS) * CYCLE_BEATS;
 
 		// Let the current loop finish its cycle, then stop it.
+		// setStopBeat prevents the old loop from scheduling the event at
+		// nextCycleBeat, eliminating the double-trigger overlap.
 		clearOutgoing();
 		if (handle) {
-			const dying = handle;
-			const msUntilSwitch =
-				(clock.beatToAudioTime(nextCycleBeat) - clock.audioContext!.currentTime) * 1000;
-			outgoingHandle = dying;
-			outgoingTimer = setTimeout(
-				() => {
-					dying.stop();
-					outgoingHandle = null;
-					outgoingTimer = null;
-				},
-				Math.max(0, msUntilSwitch)
-			);
+			handle.setStopBeat(nextCycleBeat);
+			outgoingHandle = handle;
+		}
+
+		// Yield one entry per scheduled event; `duration` is the gap to the next
+		// event (drives scheduler advancement) and `release` is the synth gate time.
+		function* gen() {
+			let cycleNumber = 0;
+			while (true) {
+				const result = inst.evaluate({ cycleNumber: cycleNumber++ });
+				if (!result.ok) return;
+				const events = result.events;
+				for (let i = 0; i < events.length; i++) {
+					const ev = events[i];
+					const nextBeatOffset = i + 1 < events.length ? events[i + 1].beatOffset : 1; // 1 = end of cycle
+					const gap = (nextBeatOffset - ev.beatOffset) * CYCLE_BEATS;
+					const release = clock.beatsToSeconds(ev.duration * CYCLE_BEATS) * 0.9;
+					yield { note: ev.note, duration: gap, release };
+				}
+			}
 		}
 
 		handle = run(
-			result.generator,
+			gen(),
 			(event, ntpTime) =>
 				scProxy.synthAt(ntpTime, 'sonic-pi-prophet', 'source', {
 					note: event.note,
-					release: 0.8,
+					release: event.release,
 					cutoff: 90
 				}),
-			4 / 3,
+			CYCLE_BEATS,
 			nextCycleBeat
 		);
 

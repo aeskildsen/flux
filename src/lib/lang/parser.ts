@@ -687,7 +687,6 @@ class FluxParser extends CstParser {
 
 	atomicGenerator = this.RULE('atomicGenerator', () => {
 		this.OR([
-			{ ALT: () => this.SUBRULE(this.parenGenerator) },
 			{ ALT: () => this.SUBRULE(this.sequenceGenerator) },
 			{ ALT: () => this.SUBRULE(this.numericGenerator) }
 		]);
@@ -752,11 +751,14 @@ class FluxParser extends CstParser {
 	});
 
 	numericGenerator = this.RULE('numericGenerator', () => {
-		// A number (integer or float) followed by an optional generator keyword.
-		// If no generator keyword follows, this is a plain scalar literal.
-		this.SUBRULE(this.numericLiteral);
+		// Base: a plain numeric literal or a parenthesised sub-generator
+		// (e.g. (-2rand2)step1x4 — nested generator as the start value).
+		this.OR([
+			{ ALT: () => this.SUBRULE(this.parenGenerator) },
+			{ ALT: () => this.SUBRULE(this.numericLiteral) }
+		]);
 		this.OPTION(() => {
-			this.OR([
+			this.OR2([
 				{ ALT: () => this.SUBRULE(this.randGen) },
 				{ ALT: () => this.SUBRULE(this.tildeGen) },
 				{ ALT: () => this.SUBRULE(this.gauGen) },
