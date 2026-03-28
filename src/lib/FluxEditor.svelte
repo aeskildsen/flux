@@ -72,7 +72,7 @@
 <div class="cst-panel">
 	{#if parseErrors.length > 0}
 		<div class="errors">
-			{#each parseErrors as err}
+			{#each parseErrors as err (err.message)}
 				<div class="error-line">⚠ {err.message}</div>
 			{/each}
 		</div>
