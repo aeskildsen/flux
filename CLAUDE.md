@@ -55,6 +55,8 @@ E2e tests live in `e2e/` and use Playwright directly (builds the app before runn
 
 The Flux DSL is documented in `docs/DSL-spec.md` — this is the single source of truth for language design. Always consult it when working on the parser, evaluator, or anything DSL-related. Do not infer DSL behaviour from the codebase; if there is a conflict, the spec rules.
 
+When fixing a DSL bug or implementing a DSL feature, invoke the `/tdd` skill. Language design is full of ambiguity — use `AskUserQuestion` to confirm intent before assuming.
+
 `docs/` is git-tracked. `dev-notes/` is not tracked yet — it contains work-in-progress design notes, open questions, and the roadmap.
 
 ## Svelte MCP Tools
