@@ -120,7 +120,7 @@
 		<button onclick={handleBoot} disabled={serverState.booting || serverState.booted}>
 			boot engine
 		</button>
-		<button onclick={handleStop} disabled={!handle}>stop</button>
+		<button onclick={handleStop} disabled={!serverState.booted}>stop</button>
 
 		<div
 			class="status"
