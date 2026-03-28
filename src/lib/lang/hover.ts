@@ -287,6 +287,18 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'```flux',
 		'line {0:0 4:1/4 7:5/8}',
 		'```'
+	].join('\n'),
+
+	Bang: [
+		'**`!n`** — inline repetition.',
+		'',
+		'Expands the preceding element n times in-place inside a sequence list.',
+		'',
+		'```flux',
+		'loop [1!4]        // same as loop [1 1 1 1]',
+		'loop [1!2 3!3]    // same as loop [1 1 3 3 3]',
+		'loop [0rand7!4]   // one random degree, played four times per cycle',
+		'```'
 	].join('\n')
 };
 

@@ -57,6 +57,8 @@ const SCOPE_MAP: Record<string, string> = {
 	// Accidentals
 	Flat: 'operator',
 	Sharp: 'operator',
+	// Repetition
+	Bang: 'operator',
 	// Identifiers
 	Identifier: 'variable',
 	// Operators
@@ -87,13 +89,30 @@ function tokenTypeToScope(name: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// ITokensProvider state — Flux is single-line, so state is trivial.
+// ITokensProvider state
+//
+// Most lines have no special state, but block comments can span multiple lines.
+// `inBlockComment` tracks whether we're currently inside a `/* ... */`.
 // ---------------------------------------------------------------------------
 
-const EMPTY_STATE: Monaco.languages.IState = {
-	clone: () => EMPTY_STATE,
-	equals: (other) => other === EMPTY_STATE
-};
+interface FluxTokenizerState extends Monaco.languages.IState {
+	readonly inBlockComment: boolean;
+}
+
+function makeFluxState(inBlockComment: boolean): FluxTokenizerState {
+	const s: FluxTokenizerState = {
+		inBlockComment,
+		clone() {
+			return makeFluxState(this.inBlockComment);
+		},
+		equals(other: Monaco.languages.IState) {
+			return (other as FluxTokenizerState).inBlockComment === this.inBlockComment;
+		}
+	};
+	return s;
+}
+
+const INITIAL_FLUX_STATE = makeFluxState(false);
 
 // ---------------------------------------------------------------------------
 // Semantic token legend
@@ -135,19 +154,65 @@ export function registerFluxLanguage(monaco: typeof Monaco): void {
 
 	// ------------------------------------------------------------------
 	// 1. Syntax highlighting — lexer-driven ITokensProvider
+	//
+	// The state carries `inBlockComment` so multi-line `/* ... */` blocks
+	// are highlighted correctly across line boundaries.
 	// ------------------------------------------------------------------
 
+	/** Lex `text` with the Chevrotain lexer and append Monaco token objects
+	 *  to `out`, offsetting each startIndex by `offset`. */
+	function addLexedTokens(out: Monaco.languages.IToken[], text: string, offset: number): void {
+		const { tokens } = FluxLexer.tokenize(text);
+		for (const t of tokens) {
+			out.push({ startIndex: t.startOffset + offset, scopes: tokenTypeToScope(t.tokenType.name) });
+		}
+	}
+
 	monaco.languages.setTokensProvider('flux', {
-		getInitialState: () => EMPTY_STATE,
-		tokenize: (line) => {
-			const { tokens } = FluxLexer.tokenize(line);
-			return {
-				tokens: tokens.map((t) => ({
-					startIndex: t.startOffset,
-					scopes: tokenTypeToScope(t.tokenType.name)
-				})),
-				endState: EMPTY_STATE
-			};
+		getInitialState: () => INITIAL_FLUX_STATE,
+
+		tokenize(line, state) {
+			const fluxState = state as FluxTokenizerState;
+			const out: Monaco.languages.IToken[] = [];
+
+			if (fluxState.inBlockComment) {
+				const endIdx = line.indexOf('*/');
+				if (endIdx >= 0) {
+					// Comment ends on this line; lex what follows
+					out.push({ startIndex: 0, scopes: 'comment' });
+					addLexedTokens(out, line.slice(endIdx + 2), endIdx + 2);
+					return { tokens: out, endState: makeFluxState(false) };
+				}
+				// Still inside the block comment
+				out.push({ startIndex: 0, scopes: 'comment' });
+				return { tokens: out, endState: makeFluxState(true) };
+			}
+
+			// Not in a block comment — find the first `/*` on this line,
+			// but only if it precedes any `//` line comment.
+			const lineCommentIdx = line.indexOf('//');
+			const blockStartIdx = line.indexOf('/*');
+
+			if (blockStartIdx >= 0 && (lineCommentIdx < 0 || blockStartIdx < lineCommentIdx)) {
+				// Lex tokens before the block comment start
+				addLexedTokens(out, line.slice(0, blockStartIdx), 0);
+
+				const blockEndIdx = line.indexOf('*/', blockStartIdx + 2);
+				if (blockEndIdx >= 0) {
+					// Block comment opens and closes on the same line
+					out.push({ startIndex: blockStartIdx, scopes: 'comment' });
+					addLexedTokens(out, line.slice(blockEndIdx + 2), blockEndIdx + 2);
+					return { tokens: out, endState: makeFluxState(false) };
+				}
+
+				// Block comment extends to subsequent lines
+				out.push({ startIndex: blockStartIdx, scopes: 'comment' });
+				return { tokens: out, endState: makeFluxState(true) };
+			}
+
+			// Normal line — lex entirely with Chevrotain
+			addLexedTokens(out, line, 0);
+			return { tokens: out, endState: makeFluxState(false) };
 		}
 	});
 

@@ -1662,6 +1662,63 @@ describe('synthdef selection — loop("…") / line("…")', () => {
 // 15. Accidentals in non-default pitch contexts
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 16. Inline repetition — !n operator
+// ---------------------------------------------------------------------------
+
+describe('inline repetition — !n', () => {
+	it('loop [1!4] produces 4 events at the same note', () => {
+		const ns = notes('loop [1!4]');
+		expect(ns).toHaveLength(4);
+		expect(new Set(ns).size).toBe(1); // all identical
+	});
+
+	it('loop [1!2 3!3] produces 5 events (2+3)', () => {
+		const ns = notes('loop [1!2 3!3]');
+		expect(ns).toHaveLength(5);
+		// first two are degree 1, last three are degree 3
+		const d1 = notes('loop [1]')[0];
+		const d3 = notes('loop [3]')[0];
+		expect(ns.slice(0, 2).every((n) => n === d1)).toBe(true);
+		expect(ns.slice(2).every((n) => n === d3)).toBe(true);
+	});
+
+	it('loop [1!1] is identical to loop [1]', () => {
+		expect(notes('loop [1!1]')).toEqual(notes('loop [1]'));
+	});
+
+	it('events are evenly spaced within a 1!4 loop', () => {
+		const offs = offsets('loop [1!4]');
+		expect(offs).toHaveLength(4);
+		// Each slot is 1/4 of a cycle in beats (cycle = 1 beat in the evaluator model)
+		expect(offs[0]).toBeCloseTo(0);
+		expect(offs[1]).toBeCloseTo(0.25);
+		expect(offs[2]).toBeCloseTo(0.5);
+		expect(offs[3]).toBeCloseTo(0.75);
+	});
+
+	it('stochastic element 0rand7!4 — all four copies share the same drawn value per cycle', () => {
+		const ns = notes('loop [0rand7!4]');
+		expect(ns).toHaveLength(4);
+		// eager(1): value drawn once per cycle — all four copies identical
+		expect(new Set(ns).size).toBe(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 17. Block comments are invisible to the evaluator
+// ---------------------------------------------------------------------------
+
+describe('block comments', () => {
+	it('/* comment */ before loop is ignored', () => {
+		expect(notes('/* ignored */ loop [0 2 4]')).toEqual(notes('loop [0 2 4]'));
+	});
+
+	it('block comment between two elements is ignored', () => {
+		expect(notes('loop [0 /* mid */ 2 4]')).toEqual(notes('loop [0 2 4]'));
+	});
+});
+
 describe('accidentals in non-default pitch contexts', () => {
 	it('@root(7) loop [2#] — sharp applied after root shift (G major, degree 2 = B5 = 71, +1 = 72)', () => {
 		// G5=67, G major scale, degree 2 = B5 = 71, sharp → 72 = C6
