@@ -1,5 +1,5 @@
 /**
- * Flux DSL evaluator — Phase 6c.
+ * Flux DSL evaluator — Phase 6d.
  *
  * ## API
  *
@@ -40,6 +40,21 @@
  * EagerMode down the CST; a node with its own explicit annotation uses that
  * instead of inherited.
  *
+ * ## Phase 6d additions
+ *
+ * - 'stut(n): repeat each event n times; total events = N×k, each slot = 1/(N×k)
+ * - 'maybe(p): pass each event with probability p; empty array is ok
+ * - 'shuf: shuffle elements once per cycle, then traverse in order
+ * - 'pick: pick a random element each slot
+ * - 'wran: weighted random selection (uses ? weight syntax per element)
+ * - 'legato(n): gate-close time = n × slot
+ * - 'offset(ms): shift all event times by ms
+ * - 'mono: single synth node; events carry mono:true
+ * - transposition: loop [0 2] + 3  adds scalar to each degree before pitch chain
+ * - accidentals: 2b, 4# — semitone offset added before scale lookup
+ * - line statement: evaluated once, produces fixed event array; 'at sets cycleOffset
+ * - FX pipe: loop [0] | fx("lpf") emits FxEvent alongside note events
+ *
  * ## Legacy compatibility
  *
  * The original `evaluate(source)` function is preserved unchanged — it wraps
@@ -66,6 +81,12 @@ export type ScheduledEvent = {
 	beatOffset: number; // position within the cycle in beats (0 = cycle start)
 	duration: number; // gate-close time in beats (legato × slot)
 	cent?: number; // pitch deviation in cents (0 = none)
+	cycleOffset?: number; // cycle-level offset (for 'at and 'repeat)
+	offsetMs?: number; // ms shift (positive = late, negative = early)
+	mono?: boolean; // if true, send set instead of new synth
+	type?: 'note' | 'fx'; // 'fx' for FX events
+	synthdef?: string; // FX synthdef name (only for type:'fx')
+	params?: Record<string, number>; // FX params (only for type:'fx')
 };
 
 export type EvalCycleResult = { ok: true; events: ScheduledEvent[] } | { ok: false; error: string };
@@ -366,6 +387,10 @@ function litToNumber(lit: CstNode): number | null {
 
 type CompiledElement = {
 	runner: RunnerState;
+	/** Accidental semitone offset (0 = none). Applied before scale lookup. */
+	accidentalOffset: number;
+	/** Per-element weight for 'wran (default: 1). */
+	weight: RunnerState;
 };
 
 /**
@@ -375,6 +400,25 @@ type CompiledElement = {
  * @param inherited The EagerMode propagated from the containing list.
  */
 function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
+	let accidentalOffset = 0;
+
+	// Check for degreeLiteral (integer with accidental suffix)
+	const degreeLitNode = ((elem.children.degreeLiteral as CstNode[]) ?? [])[0];
+	if (degreeLitNode) {
+		const intTok = ((degreeLitNode.children.Integer as IToken[]) ?? [])[0];
+		if (!intTok) return null;
+		const degree = parseInt(intTok.image, 10);
+		// Count sharps and flats
+		const sharps = (degreeLitNode.children.Sharp as IToken[]) ?? [];
+		const flats = (degreeLitNode.children.Flat as IToken[]) ?? [];
+		for (const _s of sharps) accidentalOffset += 1;
+		for (const f of flats) accidentalOffset -= f.image.length; // 'b' = -1, 'bb' = -2
+		// Degree literal has no modifiers — uses inherited mode
+		const poll: PollFn = () => degree;
+		const weight = makeRunner(() => 1, { kind: 'lock' });
+		return { runner: makeRunner(poll, inherited), accidentalOffset, weight };
+	}
+
 	// Element-level modifiers come from the generatorExpr's modifierSuffix children.
 	const genExpr = ((elem.children.generatorExpr as CstNode[]) ?? [])[0];
 	if (!genExpr) return null;
@@ -394,7 +438,27 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 	const poll = numGenToPollFn(numGen);
 	if (!poll) return null;
 
-	return { runner: makeRunner(poll, effectiveMode) };
+	// Weight from ?expr syntax
+	let weight = makeRunner(() => 1, { kind: 'lock' });
+	const questionToks = (elem.children.Question as IToken[]) ?? [];
+	if (questionToks.length > 0) {
+		// Weight is either a numericLiteral child or a generatorExpr child (in parens)
+		const weightLit = ((elem.children.numericLiteral as CstNode[]) ?? [])[0];
+		const weightGenExpr = ((elem.children.generatorExpr as CstNode[]) ?? [])[1]; // second generatorExpr
+		if (weightLit) {
+			const w = litToNumber(weightLit) ?? 1;
+			weight = makeRunner(() => w, { kind: 'lock' });
+		} else if (weightGenExpr) {
+			const wAtomic = ((weightGenExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+			const wNumGen = wAtomic ? ((wAtomic.children.numericGenerator as CstNode[]) ?? [])[0] : null;
+			const wPoll = wNumGen ? numGenToPollFn(wNumGen) : null;
+			const wMods = (weightGenExpr.children.modifierSuffix as CstNode[]) ?? [];
+			const wMode = extractEagerMode(wMods) ?? { kind: 'lock' };
+			if (wPoll) weight = makeRunner(wPoll, wMode);
+		}
+	}
+
+	return { runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
 }
 
 // ---------------------------------------------------------------------------
@@ -600,13 +664,237 @@ function applySetStatement(setNode: CstNode, ctx: ScaleContext, cycle: number): 
 }
 
 // ---------------------------------------------------------------------------
+// Modifier extraction helpers for phase 6d
+// ---------------------------------------------------------------------------
+
+/** Get the effective modifier name from a modifierSuffix node.
+ * Handles both direct (Tick + Identifier) and atModifier sub-node cases.
+ */
+function getModifierName(mod: CstNode): string | null {
+	// Direct Identifier on mod
+	const directId = ((mod.children.Identifier as IToken[]) ?? [])[0];
+	if (directId) return directId.image;
+	// atModifier sub-node
+	const atMod = ((mod.children.atModifier as CstNode[]) ?? [])[0];
+	if (atMod) {
+		const atId = ((atMod.children.Identifier as IToken[]) ?? [])[0];
+		if (atId) return atId.image;
+	}
+	return null;
+}
+
+/** Extract the first modifier with a given name from a list, returning its generatorExpr (or null). */
+function findModifier(mods: CstNode[], name: string): CstNode | null {
+	for (const mod of mods) {
+		if (getModifierName(mod) === name) {
+			return ((mod.children.generatorExpr as CstNode[]) ?? [])[0] ?? null;
+		}
+	}
+	return null;
+}
+
+/** Check if a modifier with a given name exists. */
+function hasModifier(mods: CstNode[], name: string): boolean {
+	return mods.some((mod) => getModifierName(mod) === name);
+}
+
+/** Extract a scalar number from a modifierSuffix's generatorExpr, with a default. */
+function extractModifierScalar(
+	mods: CstNode[],
+	name: string,
+	defaultVal: number,
+	cycle: number,
+	defaultMode: EagerMode = DEFAULT_MODE
+): RunnerState {
+	const genExpr = findModifier(mods, name);
+	if (!genExpr) return makeRunner(() => defaultVal, defaultMode);
+
+	const modMods = (genExpr.children.modifierSuffix as CstNode[]) ?? [];
+	const mode = extractEagerMode(modMods) ?? defaultMode;
+
+	const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+	if (!atomic) return makeRunner(() => defaultVal, mode);
+
+	const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
+	if (!numGen) return makeRunner(() => defaultVal, mode);
+
+	const poll = numGenToPollFn(numGen) ?? (() => defaultVal);
+	return makeRunner(poll, mode);
+}
+
+/**
+ * Extract the 'at(timeExpr) offset as a fractional cycle value.
+ * Returns 0 if no 'at modifier is present.
+ *
+ * Two cases:
+ * 1. Inline modifier: modifierSuffix { atModifier { Tick, Identifier("at"), LParen, atTimeExpr, RParen } }
+ * 2. Continuation modifier: continuationModifier { Tick, Identifier("at"), LParen, generatorExpr, RParen }
+ *    (continuationModifier uses generatorExpr, which only supports integers, not fractions)
+ */
+function extractAtOffset(mods: CstNode[]): number {
+	for (const mod of mods) {
+		// Case 1: inline 'at via atModifier sub-rule
+		const atModNode = ((mod.children.atModifier as CstNode[]) ?? [])[0];
+		if (atModNode) {
+			const nameTok = ((atModNode.children.Identifier as IToken[]) ?? [])[0];
+			if (nameTok?.image !== 'at') continue;
+
+			const atTimeExpr = ((atModNode.children.atTimeExpr as CstNode[]) ?? [])[0];
+			if (!atTimeExpr) return 0;
+
+			const negative = ((atTimeExpr.children.Minus as IToken[]) ?? []).length > 0;
+			const intToks = (atTimeExpr.children.Integer as IToken[]) ?? [];
+			if (intToks.length === 0) return 0;
+
+			const num = parseInt(intToks[0].image, 10);
+			const denom = intToks[1] ? parseInt(intToks[1].image, 10) : 1;
+			const value = num / denom;
+			return negative ? -value : value;
+		}
+
+		// Case 2: continuation 'at via generatorExpr (integers only)
+		const nameTok = ((mod.children.Identifier as IToken[]) ?? [])[0];
+		if (nameTok?.image !== 'at') continue;
+
+		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!genExpr) return 0;
+		const n = extractConstantNumber(genExpr);
+		return n ?? 0;
+	}
+	return 0;
+}
+
+/**
+ * Extract 'repeat(n) value. Returns:
+ *   null   — no 'repeat modifier
+ *   0      — bare 'repeat (indefinite)
+ *   n      — explicit count
+ */
+function extractRepeat(mods: CstNode[]): number | null {
+	for (const mod of mods) {
+		const nameTok = ((mod.children.Identifier as IToken[]) ?? [])[0];
+		if (nameTok?.image !== 'repeat') continue;
+		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!genExpr) return 0; // bare 'repeat = indefinite
+		const n = extractConstantNumber(genExpr);
+		return n !== null ? Math.max(1, Math.round(n)) : 0;
+	}
+	return null;
+}
+
+// ---------------------------------------------------------------------------
+// Transposition extraction
+// ---------------------------------------------------------------------------
+
+type CompiledTransposition = {
+	sign: 1 | -1;
+	runner: RunnerState;
+} | null;
+
+function compileTransposition(loopOrLineNode: CstNode): CompiledTransposition {
+	const transpNode = ((loopOrLineNode.children.transposition as CstNode[]) ?? [])[0];
+	if (!transpNode) return null;
+
+	const plusToks = (transpNode.children.Plus as IToken[]) ?? [];
+	const sign: 1 | -1 = plusToks.length > 0 ? 1 : -1;
+
+	const posScalar = ((transpNode.children.positiveScalar as CstNode[]) ?? [])[0];
+	if (!posScalar) return null;
+
+	// posScalar = (parenGenerator | positiveNumericGenerator) + modifierSuffix*
+	const scalarMods = (posScalar.children.modifierSuffix as CstNode[]) ?? [];
+	const mode = extractEagerMode(scalarMods) ?? DEFAULT_MODE;
+
+	// Try positiveNumericGenerator
+	const posNumGen = ((posScalar.children.positiveNumericGenerator as CstNode[]) ?? [])[0];
+	if (posNumGen) {
+		// positiveNumericGenerator has Float | Integer at top level (no Minus)
+		const intTok = ((posNumGen.children.Integer as IToken[]) ?? [])[0];
+		const floatTok = ((posNumGen.children.Float as IToken[]) ?? [])[0];
+		let baseVal: number | null = null;
+		if (intTok) baseVal = parseInt(intTok.image, 10);
+		else if (floatTok) baseVal = parseFloat(floatTok.image);
+
+		if (baseVal === null) return null;
+
+		// Check for generator suffix (rand, gau, etc.) — reuse numericGenerator compilation
+		// by constructing a synthetic numericGenerator-like node from the positiveNumericGenerator
+		const syntheticNumGen: CstNode = {
+			name: 'numericGenerator',
+			children: {
+				numericLiteral: [
+					{
+						name: 'numericLiteral',
+						children: {
+							Integer: intTok ? [intTok] : [],
+							Float: floatTok ? [floatTok] : [],
+							Minus: []
+						}
+					}
+				],
+				randGen: posNumGen.children.randGen ?? [],
+				tildeGen: posNumGen.children.tildeGen ?? [],
+				gauGen: posNumGen.children.gauGen ?? [],
+				expGen: posNumGen.children.expGen ?? [],
+				broGen: posNumGen.children.broGen ?? [],
+				stepGen: posNumGen.children.stepGen ?? [],
+				mulGen: posNumGen.children.mulGen ?? [],
+				linGen: posNumGen.children.linGen ?? [],
+				geoGen: posNumGen.children.geoGen ?? []
+			}
+		};
+		const poll = numGenToPollFn(syntheticNumGen) ?? (() => baseVal!);
+		return { sign, runner: makeRunner(poll, mode) };
+	}
+
+	return null;
+}
+
+// ---------------------------------------------------------------------------
 // Loop compilation
 // ---------------------------------------------------------------------------
+
+/** List-level traversal modifier. */
+type TraversalMode = 'seq' | 'shuf' | 'pick' | 'wran';
 
 type CompiledLoop = {
 	elements: CompiledElement[];
 	listMode: EagerMode; // mode from list-level modifiers (inherited by elements)
+	traversal: TraversalMode;
+	stutRunner: RunnerState | null; // null = no stutter
+	maybeRunner: RunnerState | null; // null = no maybe filter
+	legatoRunner: RunnerState | null; // null = default legato (1.0)
+	offsetRunner: RunnerState | null; // null = no offset
+	mono: boolean;
+	atOffset: number; // cycle offset from 'at modifier
+	repeat: number | null; // null = no repeat, 0 = infinite, n = count
+	transposition: CompiledTransposition;
+	fx: CompiledFx | null; // compiled FX (stateful runners; null = no FX)
 };
+
+/** Collect all modifiers from the loop/line node itself plus continuation block.
+ *
+ * Parser structure: modifiers written after [...] are consumed by sequenceExpr's
+ * MANY2, not by loopStatement's MANY. So we must look in sequenceExpr (or
+ * relTimedList / absTimedList) as well as on the loop node itself.
+ * Continuation modifiers are found as continuationModifier children on the loop node.
+ */
+function collectLoopModifiers(loopNode: CstNode): CstNode[] {
+	// Modifiers on the sequenceExpr (written directly after [...])
+	const seqNode =
+		((loopNode.children.sequenceExpr as CstNode[]) ?? [])[0] ??
+		((loopNode.children.relTimedList as CstNode[]) ?? [])[0] ??
+		((loopNode.children.absTimedList as CstNode[]) ?? [])[0];
+	const seqMods = seqNode ? ((seqNode.children.modifierSuffix as CstNode[]) ?? []) : [];
+
+	// Any modifier suffixes directly on the loop statement (rare — after transposition etc.)
+	const directMods = (loopNode.children.modifierSuffix as CstNode[]) ?? [];
+
+	// Continuation modifiers (from INDENT block)
+	const contMods = (loopNode.children.continuationModifier as CstNode[]) ?? [];
+
+	return [...seqMods, ...directMods, ...contMods];
+}
 
 function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	const seqNode = (
@@ -618,6 +906,12 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	const listMods = (seqNode.children.modifierSuffix as CstNode[]) ?? [];
 	const listMode = extractEagerMode(listMods) ?? DEFAULT_MODE;
 
+	// Traversal mode
+	let traversal: TraversalMode = 'seq';
+	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
+	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
+	else if (hasModifier(listMods, 'wran')) traversal = 'wran';
+
 	const elements = (seqNode.children.sequenceElement as CstNode[]) ?? [];
 	const compiled: CompiledElement[] = [];
 	for (const elem of elements) {
@@ -626,17 +920,356 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	}
 
 	if (compiled.length === 0) return 'loop sequence is empty';
-	return { elements: compiled, listMode };
+
+	// Loop-level modifiers (direct + continuation)
+	const allLoopMods = collectLoopModifiers(loopNode);
+
+	// 'stut
+	let stutRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'stut')) {
+		stutRunner = extractModifierScalar(allLoopMods, 'stut', 2, 0);
+	}
+
+	// 'maybe
+	let maybeRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'maybe')) {
+		maybeRunner = extractModifierScalar(allLoopMods, 'maybe', 0.5, 0);
+	}
+
+	// 'legato
+	let legatoRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'legato')) {
+		legatoRunner = extractModifierScalar(allLoopMods, 'legato', 1.0, 0);
+	}
+
+	// 'offset
+	let offsetRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'offset')) {
+		offsetRunner = extractModifierScalar(allLoopMods, 'offset', 0, 0);
+	}
+
+	// 'mono
+	const mono = hasModifier(allLoopMods, 'mono');
+
+	// 'at
+	const atOffset = extractAtOffset(allLoopMods);
+
+	// 'repeat
+	const repeat = extractRepeat(allLoopMods);
+
+	// Transposition
+	const transposition = compileTransposition(loopNode);
+
+	// FX pipe
+	const pipeNode = ((loopNode.children.pipeExpr as CstNode[]) ?? [])[0];
+	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
+	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
+
+	return {
+		elements: compiled,
+		listMode,
+		traversal,
+		stutRunner,
+		maybeRunner,
+		legatoRunner,
+		offsetRunner,
+		mono,
+		atOffset,
+		repeat,
+		transposition,
+		fx
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Line compilation (mirrors loop but for relTimedList / absTimedList too)
+// ---------------------------------------------------------------------------
+
+function compileLine(lineNode: CstNode): CompiledLoop | string {
+	// lineStatement may use sequenceExpr, relTimedList, or absTimedList
+	const seqNode = ((lineNode.children.sequenceExpr as CstNode[]) ?? [])[0];
+	const relNode = ((lineNode.children.relTimedList as CstNode[]) ?? [])[0];
+	const absNode = ((lineNode.children.absTimedList as CstNode[]) ?? [])[0];
+
+	const bodyNode = seqNode ?? relNode ?? absNode;
+	if (!bodyNode) return 'line has no body';
+
+	// List-level modifiers
+	const listMods = (bodyNode.children.modifierSuffix as CstNode[]) ?? [];
+	const listMode = extractEagerMode(listMods) ?? DEFAULT_MODE;
+
+	let traversal: TraversalMode = 'seq';
+	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
+	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
+	else if (hasModifier(listMods, 'wran')) traversal = 'wran';
+
+	// Compile elements (same for all body types — timedElement vs sequenceElement differ slightly)
+	const compiled: CompiledElement[] = [];
+
+	if (seqNode) {
+		const elems = (seqNode.children.sequenceElement as CstNode[]) ?? [];
+		for (const elem of elems) {
+			const ce = compileElement(elem, listMode);
+			if (ce) compiled.push(ce);
+		}
+	} else if (relNode) {
+		const elems = (relNode.children.timedElement as CstNode[]) ?? [];
+		for (const elem of elems) {
+			const ce = compileTimedElement(elem, listMode);
+			if (ce) compiled.push(ce);
+		}
+	} else if (absNode) {
+		const elems = (absNode.children.absTimedElement as CstNode[]) ?? [];
+		for (const elem of elems) {
+			const ce = compileAbsTimedElement(elem, listMode);
+			if (ce) compiled.push(ce);
+		}
+	}
+
+	if (compiled.length === 0) return 'line sequence is empty';
+
+	const allLoopMods = collectLoopModifiers(lineNode);
+
+	let stutRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'stut')) {
+		stutRunner = extractModifierScalar(allLoopMods, 'stut', 2, 0);
+	}
+	let maybeRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'maybe')) {
+		maybeRunner = extractModifierScalar(allLoopMods, 'maybe', 0.5, 0);
+	}
+	let legatoRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'legato')) {
+		legatoRunner = extractModifierScalar(allLoopMods, 'legato', 1.0, 0);
+	}
+	let offsetRunner: RunnerState | null = null;
+	if (hasModifier(allLoopMods, 'offset')) {
+		offsetRunner = extractModifierScalar(allLoopMods, 'offset', 0, 0);
+	}
+
+	const mono = hasModifier(allLoopMods, 'mono');
+	const atOffset = extractAtOffset(allLoopMods);
+	const repeat = extractRepeat(allLoopMods);
+	const transposition = compileTransposition(lineNode);
+
+	const pipeNode = ((lineNode.children.pipeExpr as CstNode[]) ?? [])[0];
+	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
+	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
+
+	return {
+		elements: compiled,
+		listMode,
+		traversal,
+		stutRunner,
+		maybeRunner,
+		legatoRunner,
+		offsetRunner,
+		mono,
+		atOffset,
+		repeat,
+		transposition,
+		fx
+	};
+}
+
+function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
+	const intTok = ((elem.children.Integer as IToken[]) ?? [])[0];
+	if (!intTok) return null;
+	const degree = parseInt(intTok.image, 10);
+	const sharps = (elem.children.Sharp as IToken[]) ?? [];
+	const flats = (elem.children.Flat as IToken[]) ?? [];
+	let accidentalOffset = 0;
+	for (const _s of sharps) accidentalOffset += 1;
+	for (const f of flats) accidentalOffset -= f.image.length;
+	const weight = makeRunner(() => 1, { kind: 'lock' });
+	return { runner: makeRunner(() => degree, inherited), accidentalOffset, weight };
+}
+
+function compileAbsTimedElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
+	return compileTimedElement(elem, inherited); // same structure
+}
+
+// ---------------------------------------------------------------------------
+// FX compilation (compile once, evaluate per cycle)
+// ---------------------------------------------------------------------------
+
+type CompiledFx = {
+	synthdef: string;
+	paramRunners: Array<{ name: string; runner: RunnerState }>;
+};
+
+function compileFxNode(fxNode: CstNode): CompiledFx {
+	const strTok = ((fxNode.children.StringLiteral as IToken[]) ?? [])[0];
+	const synthdef = strTok ? strTok.image.slice(1, -1) : 'unknown';
+
+	const mods = (fxNode.children.modifierSuffix as CstNode[]) ?? [];
+	const paramRunners: Array<{ name: string; runner: RunnerState }> = [];
+
+	for (const mod of mods) {
+		const nameTok = ((mod.children.Identifier as IToken[]) ?? [])[0];
+		if (!nameTok) continue;
+		const paramName = nameTok.image;
+		if (paramName === 'lock' || paramName === 'eager') continue;
+
+		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!genExpr) continue;
+
+		const genMods = (genExpr.children.modifierSuffix as CstNode[]) ?? [];
+		const mode = extractEagerMode(genMods) ?? DEFAULT_MODE;
+		const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+		if (!atomic) continue;
+		const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
+		if (!numGen) continue;
+		const poll = numGenToPollFn(numGen);
+		if (!poll) continue;
+		paramRunners.push({ name: paramName, runner: makeRunner(poll, mode) });
+	}
+
+	return { synthdef, paramRunners };
+}
+
+function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number): ScheduledEvent {
+	const params: Record<string, number> = {};
+	for (const { name, runner } of compiledFx.paramRunners) {
+		params[name] = sampleRunner(runner, cycle);
+	}
+	return {
+		note: 0,
+		beatOffset: 0,
+		duration: 0,
+		type: 'fx',
+		synthdef: compiledFx.synthdef,
+		params,
+		cycleOffset: atOffset // always present on FX events
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Evaluate a compiled loop/line for one cycle
+// ---------------------------------------------------------------------------
+
+/**
+ * Produce ScheduledEvent[] from a compiled loop for a given cycle.
+ * Handles 'stut, 'maybe, traversal, 'legato, 'offset, 'mono, transposition, accidentals, FX.
+ */
+function evaluateCompiledLoop(
+	compiled: CompiledLoop,
+	scaleCtx: ScaleContext,
+	cycle: number,
+	isLine: boolean
+): ScheduledEvent[] {
+	const { elements, stutRunner, maybeRunner, legatoRunner, offsetRunner, mono, atOffset, repeat } =
+		compiled;
+
+	// Sample stutter count once per cycle
+	const stutCount = stutRunner ? Math.max(1, Math.round(sampleRunner(stutRunner, cycle))) : 1;
+
+	// Sample legato once per cycle
+	const legato = legatoRunner ? sampleRunner(legatoRunner, cycle) : 1.0;
+
+	// Sample offset once per cycle
+	const offsetMs = offsetRunner ? sampleRunner(offsetRunner, cycle) : undefined;
+
+	// Sample maybe probability once per cycle
+	const maybeProb = maybeRunner ? sampleRunner(maybeRunner, cycle) : null;
+
+	// Sample transposition once per cycle
+	let transposeDelta = 0;
+	if (compiled.transposition) {
+		const { sign, runner } = compiled.transposition;
+		transposeDelta = sign * sampleRunner(runner, cycle);
+	}
+
+	// Determine the ordered sequence of elements (traversal strategy)
+	let orderedElements: CompiledElement[];
+	const traversal = compiled.traversal;
+
+	if (traversal === 'pick') {
+		// Pick a random element each "slot" — produce N slots, each independently random
+		// Each slot draws a random element from the pool
+		orderedElements = elements.map(() => elements[Math.floor(Math.random() * elements.length)]);
+	} else if (traversal === 'shuf') {
+		// Shuffle once per cycle, then traverse in order
+		orderedElements = [...elements];
+		// Fisher-Yates shuffle
+		for (let i = orderedElements.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[orderedElements[i], orderedElements[j]] = [orderedElements[j], orderedElements[i]];
+		}
+	} else if (traversal === 'wran') {
+		// Weighted random: pick one element per slot, weighted
+		// All N elements produce N events (each slot picks from the pool)
+		orderedElements = elements.map(() => {
+			const weights = elements.map((el) => Math.max(0, sampleRunner(el.weight, cycle)));
+			const total = weights.reduce((a, b) => a + b, 0);
+			if (total === 0) return elements[0]; // fallback
+			let r = Math.random() * total;
+			for (let i = 0; i < elements.length; i++) {
+				r -= weights[i];
+				if (r <= 0) return elements[i];
+			}
+			return elements[elements.length - 1];
+		});
+	} else {
+		// Default sequential traversal
+		orderedElements = elements;
+	}
+
+	// Apply 'stut: expand each element into stutCount copies
+	const expandedElements: CompiledElement[] = [];
+	for (const el of orderedElements) {
+		for (let s = 0; s < stutCount; s++) {
+			expandedElements.push(el);
+		}
+	}
+
+	const n = expandedElements.length;
+	const slotDuration = 1 / n;
+	const events: ScheduledEvent[] = [];
+
+	// Determine repeat count for cycleOffset calculation
+	const repeatCount = repeat === null ? 1 : repeat === 0 ? Infinity : repeat;
+
+	for (let rep = 0; rep < (isLine ? Math.min(repeatCount, 999) : 1); rep++) {
+		for (let i = 0; i < n; i++) {
+			// Apply 'maybe filter
+			if (maybeProb !== null && Math.random() >= maybeProb) continue;
+
+			const el = expandedElements[i];
+			const rawDegree = sampleRunner(el.runner, cycle);
+			const transposedDegree = rawDegree + transposeDelta;
+			const note = degreeToMidiCtx(transposedDegree, scaleCtx) + el.accidentalOffset;
+			const duration = slotDuration * legato;
+
+			const event: ScheduledEvent = {
+				note,
+				beatOffset: i * slotDuration,
+				duration
+			};
+
+			if (scaleCtx.cent !== 0) event.cent = scaleCtx.cent;
+			if (offsetMs !== undefined && offsetMs !== 0) event.offsetMs = offsetMs;
+			if (mono) event.mono = true;
+
+			// cycleOffset: 'at for base, + rep for each repetition
+			const cycleOff = atOffset + rep;
+			if (cycleOff !== 0) event.cycleOffset = cycleOff;
+
+			events.push(event);
+		}
+	}
+
+	// FX event
+	if (compiled.fx) {
+		events.push(evaluateFxEvent(compiled.fx, cycle, atOffset));
+	}
+
+	return events;
 }
 
 // ---------------------------------------------------------------------------
 // Program compilation — walk all statements
 // ---------------------------------------------------------------------------
-
-type CompiledStatement =
-	| { kind: 'loop'; compiled: CompiledLoop }
-	| { kind: 'set'; node: CstNode }
-	| { kind: 'decoratorBlock'; node: CstNode; bodyKind: 'loop' | 'decoratorBlock' };
 
 /**
  * Walk the top-level program CST and produce a list of compiled statements.
@@ -680,7 +1313,20 @@ function compileProgram(
 		if (decBlockNodes?.length) {
 			result.push({
 				kind: 'loop',
-				compiled: { elements: [], listMode: DEFAULT_MODE },
+				compiled: {
+					elements: [],
+					listMode: DEFAULT_MODE,
+					traversal: 'seq',
+					stutRunner: null,
+					maybeRunner: null,
+					legatoRunner: null,
+					offsetRunner: null,
+					mono: false,
+					atOffset: 0,
+					repeat: null,
+					transposition: null,
+					fx: null
+				},
 				scaleCtxNode: decBlockNodes[0]
 			});
 			continue;
@@ -704,6 +1350,7 @@ function compileProgram(
  */
 type CompiledDecoratedLoop = {
 	compiled: CompiledLoop;
+	isLine: boolean;
 	/** Ordered list of decorator node arrays, outer → inner, to apply at evaluate time. */
 	decoratorLayers: CstNode[][];
 };
@@ -720,7 +1367,15 @@ function compileDecoratorBlock(
 	for (const ln of loopNodes) {
 		const compiled = compileLoop(ln);
 		if (typeof compiled !== 'string') {
-			results.push({ compiled, decoratorLayers: layers });
+			results.push({ compiled, isLine: false, decoratorLayers: layers });
+		}
+	}
+
+	const lineNodes = (blockNode.children.lineStatement as CstNode[]) ?? [];
+	for (const ln of lineNodes) {
+		const compiled = compileLine(ln);
+		if (typeof compiled !== 'string') {
+			results.push({ compiled, isLine: true, decoratorLayers: layers });
 		}
 	}
 
@@ -774,10 +1429,9 @@ export function createInstance(source: string): EvalInstance {
 
 	const statements = (cst.children.statement ?? []) as CstNode[];
 
-	// Separate set nodes (applied to global ctx) and loop/decorator entries
 	type LoopEntry =
-		| { kind: 'plain'; compiled: CompiledLoop }
-		| { kind: 'decorated'; compiled: CompiledLoop; decoratorLayers: CstNode[][] };
+		| { kind: 'plain'; compiled: CompiledLoop; isLine: boolean }
+		| { kind: 'decorated'; compiled: CompiledLoop; isLine: boolean; decoratorLayers: CstNode[][] };
 
 	const setNodes: CstNode[] = [];
 	const loopEntries: LoopEntry[] = [];
@@ -787,7 +1441,16 @@ export function createInstance(source: string): EvalInstance {
 		if (loopNodes?.length) {
 			const compiled = compileLoop(loopNodes[0]);
 			if (typeof compiled !== 'string') {
-				loopEntries.push({ kind: 'plain', compiled });
+				loopEntries.push({ kind: 'plain', compiled, isLine: false });
+			}
+			continue;
+		}
+
+		const lineNodes = stmt.children.lineStatement as CstNode[] | undefined;
+		if (lineNodes?.length) {
+			const compiled = compileLine(lineNodes[0]);
+			if (typeof compiled !== 'string') {
+				loopEntries.push({ kind: 'plain', compiled, isLine: true });
 			}
 			continue;
 		}
@@ -803,8 +1466,8 @@ export function createInstance(source: string): EvalInstance {
 			// Compile loops eagerly (runners keep state across cycles).
 			// Decorator context is resolved lazily per cycle.
 			const compiled = compileDecoratorBlock(decBlockNodes[0], []);
-			for (const { compiled: cl, decoratorLayers } of compiled) {
-				loopEntries.push({ kind: 'decorated', compiled: cl, decoratorLayers });
+			for (const { compiled: cl, isLine, decoratorLayers } of compiled) {
+				loopEntries.push({ kind: 'decorated', compiled: cl, isLine, decoratorLayers });
 			}
 			continue;
 		}
@@ -829,37 +1492,22 @@ export function createInstance(source: string): EvalInstance {
 			for (const entry of loopEntries) {
 				let compiled: CompiledLoop;
 				let scaleCtx: ScaleContext;
+				let isLine: boolean;
 
 				if (entry.kind === 'plain') {
 					compiled = entry.compiled;
 					scaleCtx = globalCtx;
+					isLine = entry.isLine;
 				} else {
 					compiled = entry.compiled;
 					scaleCtx = resolveDecoratorContext(entry.decoratorLayers, globalCtx, cycleNumber);
+					isLine = entry.isLine;
 				}
 
 				const { elements } = compiled;
-				const n = elements.length;
-				if (n === 0) continue;
+				if (elements.length === 0) continue;
 
-				const slotDuration = 1 / n;
-				const events: ScheduledEvent[] = [];
-
-				for (let i = 0; i < n; i++) {
-					const { runner } = elements[i];
-					const degree = sampleRunner(runner, cycleNumber);
-					const note = degreeToMidiCtx(degree, scaleCtx);
-					const event: ScheduledEvent = {
-						note,
-						beatOffset: i * slotDuration,
-						duration: slotDuration
-					};
-					if (scaleCtx.cent !== 0) {
-						event.cent = scaleCtx.cent;
-					}
-					events.push(event);
-				}
-
+				const events = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber, isLine);
 				return { ok: true, events };
 			}
 
