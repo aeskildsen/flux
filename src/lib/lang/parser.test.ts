@@ -441,3 +441,29 @@ describe('modifierSuffix — error cases', () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 });
+
+describe('rests (_)', () => {
+	it('parses a rest in a loop: loop [0 2 _ 4]', () => {
+		expect(parse('loop [0 2 _ 4]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses a rest at the start: loop [_ 2 4]', () => {
+		expect(parse('loop [_ 2 4]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses a rest at the end: loop [0 2 _]', () => {
+		expect(parse('loop [0 2 _]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses a list of all rests: loop [_ _ _]', () => {
+		expect(parse('loop [_ _ _]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses a rest in a line: line [0 _ 2]', () => {
+		expect(parse('line [0 _ 2]').parseErrors).toHaveLength(0);
+	});
+
+	it('parses a nested sublist with a rest: loop [0 [_ 2] 4]', () => {
+		expect(parse('loop [0 [_ 2] 4]').parseErrors).toHaveLength(0);
+	});
+});

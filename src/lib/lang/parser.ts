@@ -76,6 +76,7 @@ import {
 	Sharp,
 	Flat,
 	Bang,
+	Rest,
 	INDENT,
 	DEDENT
 } from './lexer.js';
@@ -576,9 +577,12 @@ class FluxParser extends CstParser {
 	});
 
 	sequenceElement = this.RULE('sequenceElement', () => {
-		// A degree literal (possibly with accidentals) or a generator expression,
-		// with an optional `?weight` for 'wran lists and an optional `!n` repeat count.
+		// A degree literal (possibly with accidentals), a rest (_), or a generator
+		// expression, with an optional `?weight` for 'wran lists and an optional
+		// `!n` repeat count.
 		this.OR([
+			// rest: a silent slot — no pitch, no synth
+			{ ALT: () => this.CONSUME(Rest) },
 			// degreeLiteral: Integer followed by accidentals (Sharp/Flat)
 			{
 				GATE: () => this.hasDegreeAccidental(),

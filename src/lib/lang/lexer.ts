@@ -466,6 +466,29 @@ export const Bang = createToken({
 	// Monaco scope: 'operator'
 });
 
+/**
+ * `_` — rest: a silent slot in a sequence. No synth is spawned; the slot occupies time.
+ * Uses a custom pattern that matches a standalone `_` — not followed by alphanumeric or
+ * additional underscore characters — so that identifiers like `_foo` or `__bar` still
+ * tokenise as Identifier rather than Rest + Identifier.
+ */
+export const Rest = createToken({
+	name: 'Rest',
+	pattern: {
+		exec: (text: string, offset: number) => {
+			if (text[offset] !== '_') return null;
+			const next = text[offset + 1];
+			if (next !== undefined && /[a-zA-Z0-9_]/.test(next)) return null;
+			const match = ['_'] as unknown as RegExpExecArray;
+			match.index = offset;
+			match.input = text;
+			return match;
+		}
+	},
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
 // ---------------------------------------------------------------------------
 // Literals
 // ---------------------------------------------------------------------------
@@ -559,7 +582,9 @@ export const allTokens = [
 	// Accidentals — before Identifier so standalone 'b' and '#' tokenise correctly
 	Flat, // 'b' — must come after Bro/BroStep so 'bro...' is not split
 	Sharp, // '#'
-	// Identifier — after all keywords and accidentals
+	// Rest — before Identifier so standalone '_' doesn't tokenise as Identifier
+	Rest,
+	// Identifier — after all keywords, accidentals and Rest
 	Identifier,
 	// Synthetic indent/dedent tokens (pattern: NA — injected by preprocessTokens)
 	INDENT,

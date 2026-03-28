@@ -84,7 +84,7 @@ export type ScheduledEvent = {
 	cycleOffset?: number; // cycle-level offset (for 'at and 'repeat)
 	offsetMs?: number; // ms shift (positive = late, negative = early)
 	mono?: boolean; // if true, send set instead of new synth
-	type?: 'note' | 'fx'; // 'fx' for FX events
+	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
 	synthdef?: string; // FX synthdef name (only for type:'fx')
 	params?: Record<string, number>; // FX params (only for type:'fx')
 };
@@ -458,7 +458,14 @@ type CompiledSubsequence = {
 	weight: RunnerState;
 };
 
-type CompiledElement = CompiledScalar | CompiledSubsequence;
+/** A silent slot — occupies time but spawns no synth. */
+type CompiledRest = {
+	kind: 'rest';
+	/** Per-element weight for parent 'wran selection (default: 1). */
+	weight: RunnerState;
+};
+
+type CompiledElement = CompiledScalar | CompiledSubsequence | CompiledRest;
 
 /**
  * Read the `!n` inline-repetition count from a sequenceElement CST node.
@@ -479,6 +486,12 @@ function repeatCountFromElem(elem: CstNode): number {
  * @param inherited The EagerMode propagated from the containing list.
  */
 function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
+	// Check for a rest token (_)
+	const restToks = (elem.children.Rest as IToken[]) ?? [];
+	if (restToks.length > 0) {
+		return { kind: 'rest', weight: makeRunner(() => 1, { kind: 'lock' }) };
+	}
+
 	let accidentalOffset = 0;
 
 	// Check for degreeLiteral (integer with accidental suffix)
@@ -1315,6 +1328,17 @@ function expandSlot(
 	slotDuration: number,
 	p: SlotParams
 ): ScheduledEvent[] {
+	if (el.kind === 'rest') {
+		return [
+			{
+				note: -1,
+				beatOffset: slotStart,
+				duration: slotDuration,
+				type: 'rest',
+				...(p.cycleOff !== 0 ? { cycleOffset: p.cycleOff } : {})
+			}
+		];
+	}
 	if (el.kind === 'sequence') {
 		const ordered = orderedSubElements(el.elements, el.traversal, p.cycle);
 		if (ordered.length === 0) return [];
