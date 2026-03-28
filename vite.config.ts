@@ -1,3 +1,4 @@
+import path from 'path';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -7,7 +8,15 @@ const monacoEditorPlugin =
 	monacoEditorPluginModule;
 
 export default defineConfig({
-	plugins: [sveltekit(), monacoEditorPlugin({})],
+	plugins: [
+		sveltekit(),
+		monacoEditorPlugin({
+			customDistPath: (root, buildOutDir) => {
+				const outDir = path.isAbsolute(buildOutDir) ? buildOutDir : path.join(root, buildOutDir);
+				return path.join(outDir, 'monacoeditorwork');
+			}
+		})
+	],
 	optimizeDeps: {
 		include: ['chevrotain']
 	},
