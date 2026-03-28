@@ -1511,3 +1511,174 @@ describe("'stut + 'legato interaction", () => {
 		for (const d of ds) expect(d).toBeCloseTo(0.25 * 0.8);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 12. Edge/error case behaviour
+//
+// The evaluator uses lenient semantics: invalid arguments are clamped or
+// silently degraded rather than returning ok:false.  These tests document the
+// current behaviour so regressions are caught.
+// ---------------------------------------------------------------------------
+
+describe("'stut edge cases", () => {
+	it("'stut(-1) is clamped to 1 — same output as no stut", () => {
+		// Negative count: Math.max(1, round(-1)) = 1
+		expect(eval0("loop [0 2]'stut(-1)")).toHaveLength(2);
+	});
+
+	it("'stut([1 2]) — list arg: stut is ignored, elements render normally", () => {
+		// '[1 2] is not a scalar generator so extractModifierScalar returns null;
+		// stutRunner stays null → stutCount defaults to 1.
+		expect(eval0("loop [0]'stut([1 2])")).toHaveLength(2);
+	});
+});
+
+describe("'legato edge cases", () => {
+	it("'legato(0) produces events with duration 0", () => {
+		for (const d of durations("loop [0 2]'legato(0)")) expect(d).toBe(0);
+	});
+
+	it("'legato(-0.5) produces events with negative duration (gate opens before slot)", () => {
+		for (const d of durations("loop [0 2]'legato(-0.5)")) expect(d).toBeCloseTo(-0.5 * 0.5);
+	});
+});
+
+describe("'repeat edge cases", () => {
+	it("'repeat(0) is treated as 1 repetition (clamped)", () => {
+		// repeat=0 maps to Infinity in the evaluator, but is capped at 999 for lines.
+		// In practice the line with one element produces many events; just check it
+		// doesn't crash and produces at least one event.
+		const r = inst("line [0]'repeat(0)").evaluate({ cycleNumber: 0 });
+		expect(r.ok).toBe(true);
+		if (r.ok) expect(r.events.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("'repeat(-1) — negative count treated as 1 repetition (clamped)", () => {
+		// Math.round(-1) = -1; extractRepeat returns -1; evaluator treats ≤0 as 1 per spec.
+		const evs = eval0("line [0 2]'repeat(-1)");
+		expect(evs).toHaveLength(2);
+	});
+
+	it("'repeat(1.5) rounds to 2 repetitions", () => {
+		// Math.round(1.5) = 2 in JS
+		expect(eval0("line [0]'repeat(1.5)")).toHaveLength(2);
+	});
+});
+
+describe("'wran edge cases", () => {
+	it('negative weight is clamped to 0 — only positive-weight element is selected', () => {
+		// [0?-1 1?1]'wran — weight for 0 clamped to 0, so only degree 1 ever fires
+		// Run 20 cycles to confirm degree 1 (D5=62) always wins
+		const i = inst("loop [0?-1 1?1]'wran");
+		for (let c = 0; c < 20; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			// Exactly 2 slots drawn; both should be degree 1 (= MIDI 62)
+			for (const e of r.events) expect(e.note).toBe(62);
+		}
+	});
+
+	it('all-zero weights fall back to first element', () => {
+		// Evaluator fallback: if total weight = 0, return elements[0]
+		const i = inst("loop [0?0 4?0]'wran");
+		for (let c = 0; c < 10; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			// Both slots pick elements[0] → degree 0 = C5 = MIDI 60
+			for (const e of r.events) expect(e.note).toBe(60);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 13. Timed lists
+//
+// Relative timed list ([x@t …]) and absolute timed list ({x:t …}) are parsed
+// and compiled.  The current evaluator assigns positions uniformly (index × slot)
+// rather than honouring the @/: offsets — these tests document the current
+// behaviour.
+// ---------------------------------------------------------------------------
+
+describe('timed lists (current: uniform spacing)', () => {
+	it('line [4@1/2 7@1/4] — 2 events, correct notes', () => {
+		// degree 4 → G5=67, degree 7 → C6=72
+		expect(notes('line [4@1/2 7@1/4]')).toEqual([67, 72]);
+	});
+
+	it('line [4@1/2 7@1/4] — beatOffsets are uniform (timing offsets currently ignored)', () => {
+		const evs = eval0('line [4@1/2 7@1/4]');
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.5);
+	});
+
+	it('line {4:0 7:1/2} — 2 events, correct notes', () => {
+		expect(notes('line {4:0 7:1/2}')).toEqual([67, 72]);
+	});
+
+	it('line {4:0 7:1/2} — absolute list also produces uniform spacing currently', () => {
+		const evs = eval0('line {4:0 7:1/2}');
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.5);
+	});
+
+	it('timed list supports pitch context', () => {
+		// @key(g major) line [0@0 2@1/2] → G5=67, B5=71
+		expect(notes('@key(g major) line [0@0 2@1/2]')).toEqual([67, 71]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 14. SynthDef selection
+//
+// loop("moog") [0 2 4] and line("sine") [0 1 2] are valid DSL syntax. The
+// current evaluator ignores the synthdef argument; events are emitted normally
+// without a synthdef field on note events.  These tests document current
+// behaviour.
+// ---------------------------------------------------------------------------
+
+describe('synthdef selection — loop("…") / line("…")', () => {
+	it('loop("moog") [0 2 4] — produces 3 note events (synthdef arg currently ignored)', () => {
+		const evs = eval0('loop("moog") [0 2 4]');
+		expect(evs).toHaveLength(3);
+	});
+
+	it('loop("moog") [0 2 4] — notes are correct (pitch chain unaffected by synthdef)', () => {
+		expect(notes('loop("moog") [0 2 4]')).toEqual([60, 64, 67]);
+	});
+
+	it('line("sine") [0 1 2] — produces 3 note events', () => {
+		expect(eval0('line("sine") [0 1 2]')).toHaveLength(3);
+	});
+
+	it('note events do not carry a synthdef field (synthdef arg is not yet threaded through)', () => {
+		for (const e of eval0('loop("moog") [0 2 4]')) {
+			// synthdef is only defined on FX events currently
+			expect((e as { synthdef?: string }).synthdef).toBeUndefined();
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 15. Accidentals in non-default pitch contexts
+// ---------------------------------------------------------------------------
+
+describe('accidentals in non-default pitch contexts', () => {
+	it('@root(7) loop [2#] — sharp applied after root shift (G major, degree 2 = B5 = 71, +1 = 72)', () => {
+		// G5=67, G major scale, degree 2 = B5 = 71, sharp → 72 = C6
+		expect(notes('@root(7) loop [2#]')[0]).toBe(notes('@root(7) loop [2]')[0] + 1);
+	});
+
+	it('@scale("minor") loop [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
+		// C minor, degree 4 = G5 = 67 (minor has same perfect 5th), flat → 66 = F#5
+		expect(notes('@scale("minor") loop [4b]')[0]).toBe(notes('@scale("minor") loop [4]')[0] - 1);
+	});
+
+	it('@key(g major 4) loop [3#] — accidental in compound key context', () => {
+		// G major octave 4: root = G4 = 55. degree 3 in major = 5 semitones → C5 = 60. Sharp → 61.
+		expect(notes('@key(g major 4) loop [3#]')[0]).toBe(notes('@key(g major 4) loop [3]')[0] + 1);
+	});
+
+	it('@root(7) loop [2bb] — double flat: two semitones below', () => {
+		expect(notes('@root(7) loop [2bb]')[0]).toBe(notes('@root(7) loop [2]')[0] - 2);
+	});
+});

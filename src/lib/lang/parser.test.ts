@@ -386,7 +386,11 @@ describe('modifierSuffix — error cases', () => {
 		expect(parse("loop 'stut").parseErrors.length).toBeGreaterThan(0);
 	});
 
-	it.todo(
-		"errors on space between tick and modifier name: loop [0]' lock — spec §12 says this is a parse error, but Chevrotain error recovery currently accepts it; needs investigation"
-	);
+	it('space between tick and modifier name is currently accepted (spec §12 violation — known gap)', () => {
+		// Spec §12 says ' lock (with a space) should be a parse error.
+		// Chevrotain's error-recovery silently accepts it. This test documents the
+		// current behaviour so any future fix is detectable as a test change.
+		const { parseErrors } = parse("loop [0]' lock");
+		expect(parseErrors).toHaveLength(0);
+	});
 });
