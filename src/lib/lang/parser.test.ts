@@ -52,11 +52,6 @@ describe('lineStatement', () => {
 		const { parseErrors } = parse('line');
 		expect(parseErrors.length).toBeGreaterThan(0);
 	});
-
-	it('parses line with absolute timed list', () => {
-		const { parseErrors } = parse('line {4:1/2 7:3/2}');
-		expect(parseErrors).toHaveLength(0);
-	});
 });
 
 describe('loopStatement — synthdef and full form', () => {
@@ -204,13 +199,33 @@ describe('timed lists', () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses absolute timed list: line {4:1/2 7:3/2}', () => {
-		const { parseErrors } = parse('line {4:1/2 7:3/2}');
+	it('parses timed list with integer-only time: line [0@0 4@1]', () => {
+		const { parseErrors } = parse('line [0@0 4@1]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses timed list with integer-only time: line [0@0 4@1]', () => {
-		const { parseErrors } = parse('line [0@0 4@1]');
+	it('parses relative timed list where first element has no @: line [0 2@1]', () => {
+		const { parseErrors } = parse('line [0 2@1]');
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses relative timed list with @ on a later element: line [0 4 7@1/2]', () => {
+		const { parseErrors } = parse('line [0 4 7@1/2]');
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses relative timed list with accidental before @: line [0 2b@1/4]', () => {
+		const { parseErrors } = parse('line [0 2b@1/4]');
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses float time: line [0 2@1.5]', () => {
+		const { parseErrors } = parse('line [0 2@1.5]');
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses float time at cycle start: line [0@0.0 4@0.5]', () => {
+		const { parseErrors } = parse('line [0@0.0 4@0.5]');
 		expect(parseErrors).toHaveLength(0);
 	});
 });

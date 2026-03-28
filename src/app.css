@@ -110,6 +110,10 @@ button:disabled {
 	color: #e55;
 }
 
+a {
+	color: rgb(96, 133, 144);
+}
+
 /* Feedback log */
 .feedback-log {
 	flex: 1;

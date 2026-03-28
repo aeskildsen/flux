@@ -397,20 +397,6 @@ export const RParen = createToken({
 	// Monaco scope: 'delimiter.parenthesis'
 });
 
-/** `{` — open absolute-timed event list. */
-export const LBrace = createToken({
-	name: 'LBrace',
-	pattern: /\{/
-	// Monaco scope: 'delimiter.bracket'
-});
-
-/** `}` — close absolute-timed event list. */
-export const RBrace = createToken({
-	name: 'RBrace',
-	pattern: /\}/
-	// Monaco scope: 'delimiter.bracket'
-});
-
 /** `|` — pipe operator (insert FX). */
 export const Pipe = createToken({
 	name: 'Pipe',
@@ -467,7 +453,6 @@ export const Slash = createToken({
 	// Monaco scope: 'operator'
 });
 
-/** `:` — absolute time separator in `{4:1/2}` event lists. */
 export const Colon = createToken({
 	name: 'Colon',
 	pattern: /:/
@@ -585,8 +570,6 @@ export const allTokens = [
 	RBracket,
 	LParen,
 	RParen,
-	LBrace,
-	RBrace,
 	Pipe,
 	At,
 	Tilde,
@@ -595,7 +578,6 @@ export const allTokens = [
 	Plus,
 	Minus,
 	Slash,
-	Colon,
 	Bang,
 	// Literals — Float before Integer
 	Float,

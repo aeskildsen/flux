@@ -88,6 +88,7 @@
 			while (true) {
 				const result = inst.evaluate({ cycleNumber: cycleNumber++ });
 				if (!result.ok) return;
+				if (result.done) return;
 				const events = result.events;
 				for (let i = 0; i < events.length; i++) {
 					const ev = events[i];
@@ -120,7 +121,11 @@
 <div class="page">
 	<header class="page-header">
 		<h1>flux</h1>
-		<p>browser audio live coding &mdash; alpha</p>
+		<p>
+			live coding with stochastic generativity &mdash; alpha status &mdash; <a
+				href="https://github.com/aeskildsen/flux">github</a
+			>
+		</p>
 	</header>
 
 	<div class="editor-area">

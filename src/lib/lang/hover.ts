@@ -279,16 +279,6 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'```'
 	].join('\n'),
 
-	LBrace: [
-		'**`{...}`** — absolute-timed event list.',
-		'',
-		'Elements specify absolute time offsets from cycle start.',
-		'',
-		'```flux',
-		'line {0:0 4:1/4 7:5/8}',
-		'```'
-	].join('\n'),
-
 	Bang: [
 		'**`!n`** — inline repetition.',
 		'',
