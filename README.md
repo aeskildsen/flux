@@ -1,18 +1,26 @@
 # flux
 
-A SvelteKit app for audio live coding in the browser, built on [SuperSonic](https://github.com/samaaron/supersonic) — a WebAssembly port of the SuperCollider synthesis engine (scsynth).
+> **Alpha software.** Flux is in early development — the language syntax and API are unstable and will change. That said, playing around with it is very much encouraged.
 
-## What it does
+A browser-based audio live-coding environment built on [SuperSonic](https://github.com/samaaron/supersonic), a WebAssembly port of the SuperCollider synthesis engine (scsynth). Write music in the Flux DSL, evaluate it with Ctrl+Enter, and hear it immediately — no installs, no plugins.
 
-Flux boots the scsynth audio engine inside a Web Audio AudioWorklet and lets you trigger synths by sending OSC messages from the browser. No plugins, no native installs — just WebAssembly and the Web Audio API.
+## Try it
 
-The current state is a minimal working example: a boot button that initialises the engine and loads a synth definition, and a play button that triggers a note.
+[→ Live alpha](https://TODO) _(link coming soon)_
 
-`src/lib/shared/` contains the shared SuperSonic infrastructure (boot lifecycle, server node tree, OSC wrappers, reactive state). This is intended to become a standalone `svelte-supersonic` git submodule shared with a future sibling app.
+Boot the engine first (browser autoplay policy requires a user interaction), then write some code and hit **Ctrl+Enter** to evaluate. **Ctrl+.** stops playback.
+
+## What it is
+
+- A DSL for describing musical patterns and loops, interpreted in the browser
+- Sends OSC messages to scsynth running in a Web Audio AudioWorklet
+- Uses 127 Sonic Pi synth definitions bundled with SuperSonic
+- Language spec: [`docs/DSL-spec.md`](docs/DSL-spec.md) — subject to change
 
 ## Stack
 
 - [SvelteKit](https://kit.svelte.dev) + Svelte 5 (runes)
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/) with a custom Flux language mode
 - [SuperSonic](https://github.com/samaaron/supersonic) loaded from CDN at runtime
   - `supersonic-scsynth` — client API
   - `supersonic-scsynth-core` — WASM engine + AudioWorklet (GPL-3.0)
@@ -25,7 +33,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5173`. Click **boot engine**, then **play sound**. Open DevTools console to see the SuperSonic debug output (OSC messages, scsynth logs).
+Open `http://localhost:5173`. Click **boot engine**, write some Flux code, then hit **Ctrl+Enter**.
 
 > Browsers require a user interaction before audio can start — always boot from a button click.
 
@@ -43,7 +51,3 @@ pnpm test        # both
 pnpm build
 pnpm preview
 ```
-
-## Also included
-
-`example.html` — a standalone single-file version of the same demo with no build step, useful for isolating SuperSonic issues outside the framework. Open it directly in a browser or serve it with `npx serve .`.
