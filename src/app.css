@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300..900;1,300..900&display=swap');
+
 :root {
 	--color-bg: #111;
 	--color-bg-dark: #0d0d0d;
@@ -7,8 +9,8 @@
 	--color-border: #333;
 	--color-text: #eee;
 	--color-text-muted: #ccc;
-	--color-text-dim: #888;
-	--color-text-faint: #666;
+	--color-text-dim: #999;
+	--color-text-faint: #777;
 	--color-text-hint: #555;
 	--color-text-hint-dark: #444;
 	--color-status-ok: #5c5;
@@ -28,7 +30,7 @@ body {
 	height: 100%;
 	margin: 0;
 	padding: 0;
-	background: var(--color-bg);
+	background: var(--color-bg-dark);
 	color: var(--color-text);
 	font-family: monospace;
 }
@@ -46,22 +48,10 @@ body {
 	gap: 0 16px;
 }
 
-.page-header {
-	grid-column: 1 / 2;
+/* SiteHeader spans the full width in row 1 */
+.page > :global(header) {
+	grid-column: 1 / -1;
 	grid-row: 1;
-	padding-bottom: 12px;
-}
-
-.page-header h1 {
-	font-size: 1.1rem;
-	margin: 0 0 4px 0;
-	letter-spacing: 0.05em;
-}
-
-.page-header p {
-	font-size: 0.85rem;
-	color: var(--color-text-faint);
-	margin: 0;
 }
 
 .editor-area {
@@ -74,7 +64,7 @@ body {
 }
 
 .hint {
-	font-size: 0.72rem;
+	font-size: 0.9rem;
 	color: var(--color-text-hint-dark);
 	margin: 5px 0 0 0;
 }
@@ -158,4 +148,72 @@ a {
 
 .feedback-log .log-entry.info {
 	color: var(--color-log-info);
+}
+
+/* -------------------------------------------------------------------------
+   Docs prose
+   ------------------------------------------------------------------------- */
+
+.prose {
+	font-family: 'Source Sans 3', sans-serif;
+	font-size: 1.8rem;
+	line-height: 1.7;
+	color: var(--color-text);
+	max-width: 72ch;
+}
+
+.prose pre.flux-code {
+	background: var(--color-bg-dark);
+	border: 1px solid var(--color-bg-border);
+	border-radius: 4px;
+	padding: 12px 16px;
+	margin: 0 0 1.2em;
+	overflow-x: auto;
+	line-height: 1.5;
+}
+
+/* Pre blocks from non-flux fences */
+.prose pre:not(.flux-code) {
+	background: var(--color-bg-dark);
+	border: 1px solid var(--color-bg-border);
+	border-radius: 4px;
+	padding: 12px 16px;
+	margin: 0 0 1.2em;
+	overflow-x: auto;
+	font-size: 0.9rem;
+	line-height: 1.5;
+}
+
+/* Don't double-style inline code inside a pre */
+.prose pre code {
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: inherit;
+}
+/* -------------------------------------------------------------------------
+   Syntax token colours (used by highlighter.ts)
+   ------------------------------------------------------------------------- */
+
+.tok-keyword {
+	color: #d2c7da;
+}
+.tok-number {
+	color: #f78c6c;
+}
+.tok-string {
+	color: #c3e88d;
+}
+.tok-comment {
+	color: var(--color-text-hint);
+	font-style: italic;
+}
+.tok-variable {
+	color: #82aaff;
+}
+.tok-operator {
+	color: #89ddff;
+}
+.tok-delimiter {
+	color: #89ddff;
 }

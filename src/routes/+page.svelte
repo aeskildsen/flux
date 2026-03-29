@@ -3,6 +3,7 @@
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
 	import FluxEditor from '$lib/FluxEditor.svelte';
+	import SiteHeader from '$lib/SiteHeader.svelte';
 	const sc = $derived(getServer());
 
 	let handle = $state<SchedulerHandle | null>(null);
@@ -118,14 +119,7 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 <div class="page">
-	<header class="page-header">
-		<h1>flux</h1>
-		<p>
-			live coding with stochastic generativity &mdash; alpha status &mdash; <a
-				href="https://github.com/aeskildsen/flux">github</a
-			>
-		</p>
-	</header>
+	<SiteHeader />
 
 	<div class="editor-area">
 		<FluxEditor onEvaluate={handleEvaluate} />
