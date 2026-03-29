@@ -291,19 +291,26 @@ describe('handle.stop()', () => {
 
 describe('handle.setStopBeat()', () => {
 	it('halts emission when nextBeat >= stopBeat', () => {
-		// beatToAudioTime(beat): in-window for beat 0, out-of-window for beat 1+
-		vi.spyOn(clock, 'beatToAudioTime').mockImplementation((beat: number) =>
-			beat === 0 ? fakeCurrentTime : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
-		);
+		// First tick: all beats out-of-window → no events, loop just reschedules.
+		// Then set stopBeat=0 and move beats in-window.
+		// Second tick: while condition passes but nextBeat(0) >= stopBeat(0) → guard fires.
+		const spy = vi
+			.spyOn(clock, 'beatToAudioTime')
+			.mockReturnValue(fakeCurrentTime + LOOKAHEAD_SECONDS + 1); // first tick: nothing in window
 
 		const callback = vi.fn();
-		const handle = run(finiteGen([1, 2, 3, 4, 5]), callback, 1, 0);
-		handle.setStopBeat(1); // stop at beat 1 (after emitting beat 0)
+		const handle = run(finiteGen([1, 2, 3]), callback, 1, 0);
 
-		// Only beat 0 should have fired
-		expect(callback).toHaveBeenCalledTimes(1);
+		expect(callback).not.toHaveBeenCalled();
 
-		handle.stop();
+		// Now put beats in-window and set stopBeat=0 before the next tick
+		spy.mockReturnValue(fakeCurrentTime - 1);
+		handle.setStopBeat(0); // guard fires immediately at nextBeat=0
+
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		// Guard fires before any event is emitted
+		expect(callback).not.toHaveBeenCalled();
 	});
 });
 
