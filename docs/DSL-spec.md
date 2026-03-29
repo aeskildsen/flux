@@ -279,7 +279,7 @@ In `loop [0 1 2]`, 0, 1, and 2 are interpreted as scale degrees which specify mu
 
 To arrive at the final oscillator frequency, the degree passes through this chain:
 
-`degree → scale → root → octave → cent → mtranspose → frequency`
+`degree → scale → root → octave → cent → frequency`
 
 The variables in this chain can be overridden with the `set` command or `@` decorators.
 
@@ -287,7 +287,6 @@ The variables in this chain can be overridden with the `set` command or `@` deco
 - `root`: Distance from C, measured in semitones. Default: 0 (C).
 - `octave`: Octave on a piano. Default: 5.
 - `cent`: Pitch deviation from ideal frequency, measured in cents (100 per semitone step). Default: 0.
-- `mtranspose`: Modal transposition (scale steps). Default: 0.
 - Degrees are relative to root (0 is the root, 1 is the 2nd degree, etc.). No default — must be specified.
 
 Chromatic transposition (`ctranspose`) is not supported — it mixes degree-space and semitone-space incoherently. If genuinely needed, `'st(n)` is reserved as an escape-hatch modifier but is not implemented in the initial version.
@@ -307,7 +306,7 @@ The common case of setting root, scale, and octave together uses `@key`:
 set key(g# lydian)
 ```
 
-Individual `@mtranspose` and `@cent` decorators remain available but are not part of the common vocabulary.
+The `@cent` decorator remains available for fine-tuning but is not part of the common vocabulary.
 
 ### Modal transposition via `+` and `-`
 
@@ -349,7 +348,7 @@ set tempo(120)
 set key(g# lydian)
 ```
 
-Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `mtranspose`, `key`.
+Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`.
 
 ### Scoped context: `@` decorators
 
@@ -358,11 +357,11 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `mtranspose`, `key`.
 ```flux
 @scale(\minor) @root(7)
   loop [0 1 2]
-  @mtranspose(2)
+  @octave(4)
     line [0 2 4 5]
 ```
 
-Here `loop [0 1 2]` inherits `@scale(\minor)` and `@root(7)`. `line [0 2 4 5]` inherits all three, with `@mtranspose(2)` added at the nested level.
+Here `loop [0 1 2]` inherits `@scale(\minor)` and `@root(7)`. `line [0 2 4 5]` inherits all three, with `@octave(4)` added at the nested level.
 
 For single-expression use, decorators may appear inline on the same line:
 
@@ -374,7 +373,7 @@ For single-expression use, decorators may appear inline on the same line:
 
 **Indentation:** block scope uses fixed indentation (2 spaces). Variable indentation is not supported — indentation level is determined by the number of leading 2-space units. This keeps the parser simple and the code visually consistent.
 
-**Decorator vs. modifier boundary:** the distinction is functional, not syntactic. **Decorators (`@`) affect how the numbers inside `[]` are used to calculate the final pitch** — they are parameters in the degree-to-frequency chain: `degree → scale → root → octave → cent → mtranspose → frequency`. **Modifiers (`'`) are everything else** — operations on the event stream or synth parameters.
+**Decorator vs. modifier boundary:** the distinction is functional, not syntactic. **Decorators (`@`) affect how the numbers inside `[]` are used to calculate the final pitch** — they are parameters in the degree-to-frequency chain: `degree → scale → root → octave → cent → frequency`. **Modifiers (`'`) are everything else** — operations on the event stream or synth parameters.
 
 **Stochastic decorator arguments** follow the same `'lock`/`'eager(n)` semantics as everything else. `@root(3rand7)` with `'eager(4)` redraws every 4 cycles; with `'lock` the value is drawn once when the block is first entered and frozen thereafter. `'lock` is the sensible default for decorators — a randomly wandering root is an opt-in, not the default.
 

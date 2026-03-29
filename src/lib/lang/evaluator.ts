@@ -24,12 +24,13 @@
  *
  * ## Scale context (Phase 6c)
  *
- * A ScaleContext carries { scale, rootSemitone, octave, cent, mtranspose }.
+ * A ScaleContext carries { scale, rootSemitone, octave, cent }.
  * Decorator blocks push a child context; the evaluator threads the active
  * context through the CST walk. `set` writes to the global (bottom-of-stack)
  * context. Decorators override for their block scope.
  *
- * Pitch chain:  degree → (+mtranspose) → scale lookup → (+rootSemitone) → (+octave offset) → MIDI
+ * Pitch chain:  degree → scale lookup → (+rootSemitone) → (+octave offset) → MIDI
+ * Modal transposition is handled by the infix + / - operators on loop/line.
  *
  * rootMidi = C5_midi + rootSemitone + (octave - 5) * 12
  *          = 60      + rootSemitone + (octave - 5) * 12
@@ -109,15 +110,13 @@ type ScaleContext = {
 	rootSemitone: number; // semitone offset from C (0–11)
 	octave: number; // piano octave (default: 5)
 	cent: number; // pitch deviation in cents (default: 0)
-	mtranspose: number; // modal transposition in scale steps (default: 0)
 };
 
 const DEFAULT_SCALE_CONTEXT: ScaleContext = {
 	scale: DEFAULT_SCALE,
 	rootSemitone: 0,
 	octave: 5,
-	cent: 0,
-	mtranspose: 0
+	cent: 0
 };
 
 /** Compute the MIDI note number for the root (degree 0) from a ScaleContext. */
@@ -127,7 +126,7 @@ function contextRootMidi(ctx: ScaleContext): number {
 
 /** Apply context to resolve a degree to a MIDI note number. */
 function degreeToMidiCtx(degree: number, ctx: ScaleContext): number {
-	return degreeToMidi(degree + ctx.mtranspose, contextRootMidi(ctx), ctx.scale);
+	return degreeToMidi(degree, contextRootMidi(ctx), ctx.scale);
 }
 
 // ---------------------------------------------------------------------------
@@ -615,7 +614,6 @@ function compileDecoratorNumericArg(numGen: CstNode, mods: CstNode[]): CompiledD
  *   @root(n)             — semitone integer
  *   @octave(n)           — octave integer
  *   @cent(n)             — cent offset
- *   @mtranspose(n)       — modal transposition steps
  *   @key(pitchClass scaleName [octave])  — compound
  */
 function applyDecoratorToContext(
@@ -633,7 +631,7 @@ function applyDecoratorToContext(
 		return applyKeyDecorator(args, ctx, cycle);
 	}
 
-	// Single-argument decorators: @scale, @root, @octave, @cent, @mtranspose
+	// Single-argument decorators: @scale, @root, @octave, @cent
 	const arg = args[0];
 	if (!arg) return ctx;
 
@@ -663,8 +661,6 @@ function applyDecoratorToContext(
 		case 'cent':
 			// cent is not rounded — it's a float offset
 			return { ...ctx, cent: sampleRunner(compileDecoratorNumericArg(numGen, mods), cycle) };
-		case 'mtranspose':
-			return { ...ctx, mtranspose: value };
 		default:
 			return ctx;
 	}

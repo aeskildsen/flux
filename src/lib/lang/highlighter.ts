@@ -8,7 +8,7 @@
  * Token → class mapping mirrors the Monaco scope comments in lexer.ts.
  */
 
-import { FluxLexer } from './lexer.js';
+import { FluxLexer } from './lexer.ts';
 import type { IToken } from 'chevrotain';
 
 // ---------------------------------------------------------------------------

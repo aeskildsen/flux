@@ -148,7 +148,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'set key(g# lydian)',
 		'```',
 		'',
-		'Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `mtranspose`, `key`'
+		'Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`'
 	].join('\n'),
 
 	Fx: [
@@ -458,7 +458,6 @@ const DECORATOR_DOCS: Record<string, string> = {
 	root: '**`root`** — root note, semitones from C (0–11). Default: 0 (C).',
 	octave: '**`octave`** — octave number (piano convention). Default: 5.',
 	cent: '**`cent`** — pitch deviation in cents (100 per semitone step). Default: 0.',
-	mtranspose: '**`mtranspose`** — modal transposition in scale steps. Default: 0.',
 	key: '**`key(root scale [octave])`** — compound pitch context: sets root + scale + optional octave together.',
 	tempo: '**`tempo`** — global tempo in BPM.'
 };
