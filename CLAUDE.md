@@ -42,6 +42,11 @@ Two vitest projects are configured in `vite.config.ts`:
 - **client** — browser tests using `vitest-browser-svelte` + Playwright/Chromium. Files matching `src/**/*.svelte.{test,spec}.{js,ts}` (excluding `src/lib/server/**`). Use `render()` from `vitest-browser-svelte` and `page` from `vitest/browser`.
 - **server** — node environment. Files matching `src/**/*.{test,spec}.{js,ts}` excluding `.svelte.` tests.
 
+File naming convention:
+
+- `*.test.ts` — server/Node tests (no Svelte)
+- `*.svelte.spec.ts` — browser/component tests (Svelte + vitest-browser)
+
 E2e tests live in `e2e/` and use Playwright directly (builds the app before running).
 
 ## Code Conventions
