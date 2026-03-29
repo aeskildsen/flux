@@ -64,6 +64,8 @@ jobs:
           cache: pnpm
       
       - name: Setup sclang
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: sudo apt-get update && sudo apt-get install -y supercollider-language && sclang scripts/install_sclang_dependencies.scd
 
       - name: Install dependencies
@@ -73,6 +75,8 @@ jobs:
         run: pnpm --dir svelte-supersonic exec svelte-kit sync
       
       - name: Compile SynthDefs
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: sclang scripts/compile_synthdefs.scd
         
       - name: Build SvelteKit app
