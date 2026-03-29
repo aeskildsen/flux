@@ -6,7 +6,7 @@
  *   2. Cycle semantics — eager(1), 'lock, eager(n), modifier precedence
  *   3. Generators — degree-to-MIDI in default C major / C5 context
  *   4. rand / tilde — float bound semantics
- *   5. Pitch context — @root, @octave, @scale, @mtranspose, @cent, @key, set, scoping
+ *   5. Pitch context — @root, @octave, @scale, @cent, @key, set, scoping
  *   6. Generators × non-default pitch contexts
  *   7. List modifiers — 'stut, 'wran, 'pick, 'shuf, 'maybe, 'legato, 'offset, 'mono
  *   8. Pitch modifiers — accidentals, transposition
@@ -623,27 +623,6 @@ describe('@scale — changes the active scale', () => {
 	});
 });
 
-describe('@mtranspose — shifts all degrees by N scale steps', () => {
-	// C major, @mtranspose(2): degree 0 → effective degree 2 → E5 = 64
-	it('@mtranspose(2) shifts degree 0 → degree 2 in C major → E5 = MIDI 64', () => {
-		expect(notes('@mtranspose(2) loop [0]')[0]).toBe(64);
-	});
-
-	it('@mtranspose(0) is no-op: degree 0 = C5 = MIDI 60', () => {
-		expect(notes('@mtranspose(0) loop [0]')[0]).toBe(60);
-	});
-
-	// @mtranspose(7): degree 0 → degree 7 → one octave above → C6 = 72
-	it('@mtranspose(7) shifts degree 0 → degree 7 → C6 = MIDI 72', () => {
-		expect(notes('@mtranspose(7) loop [0]')[0]).toBe(72);
-	});
-
-	// Negative: @mtranspose(-2) degree 2 → degree 0 → C5 = 60
-	it('@mtranspose(-2) shifts degree 2 → degree 0 → C5 = MIDI 60', () => {
-		expect(notes('@mtranspose(-2) loop [2]')[0]).toBe(60);
-	});
-});
-
 describe('@cent — pitch deviation in cents', () => {
 	it('@cent(0) no deviation: note number is still 60 (cent offset is separate metadata)', () => {
 		expect(notes('@cent(0) loop [0]')[0]).toBe(60);
@@ -730,11 +709,6 @@ describe('set — writes to global context', () => {
 
 	it('set key(g lydian) applies compound decorator globally', () => {
 		expect(notes('set key(g lydian)\nloop [0]')[0]).toBe(67);
-	});
-
-	it('set mtranspose(2) applies modal transposition globally', () => {
-		// degree 0 + mtranspose 2 → effective degree 2 → E5 = 64
-		expect(notes('set mtranspose(2)\nloop [0]')[0]).toBe(64);
 	});
 
 	it('multiple set statements combine', () => {

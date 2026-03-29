@@ -290,13 +290,6 @@ const SET_PARAM_COMPLETIONS: CompletionItem[] = [
 		kind: 'snippet'
 	},
 	{
-		label: 'mtranspose(n)',
-		insertText: 'mtranspose(${1:0})',
-		isSnippet: true,
-		detail: 'Modal transposition in scale steps',
-		kind: 'snippet'
-	},
-	{
 		label: 'key(root scale)',
 		insertText: 'key(${1:g#} ${2:lydian})',
 		isSnippet: true,
