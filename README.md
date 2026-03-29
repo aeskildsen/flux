@@ -6,7 +6,7 @@ A browser-based audio live-coding environment built on [SuperSonic](https://gith
 
 ## Try it
 
-[→ Live alpha](https://TODO) _(link coming soon)_
+[→ Live alpha](https://aeskildsen.github.io/flux/)
 
 Boot the engine first (browser autoplay policy requires a user interaction), then write some code and hit **Ctrl+Enter** to evaluate. **Ctrl+.** stops playback.
 
