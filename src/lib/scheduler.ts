@@ -101,13 +101,17 @@ export function run<T>(
  * Lazy proxy over the live SuperCollider server.
  * Import `sc` at module load time; the server need not be booted yet.
  */
-export const sc: Pick<ReturnType<typeof getServer>, 'synth' | 'set' | 'free' | 'loadSynthDef'> & {
+export const sc: Pick<
+	NonNullable<ReturnType<typeof getServer>>,
+	'synth' | 'set' | 'free' | 'loadSynthDef'
+> & {
 	synthAt(ntpTime: number, name: string, group?: GroupName, params?: SynthParams): number;
 } = {
-	synth: (...args) => getServer()!.synth(...args),
-	set: (...args) => getServer()!.set(...args),
-	free: (...args) => getServer()!.free(...args),
-	loadSynthDef: (...args) => getServer()!.loadSynthDef(...args),
+	synth: (name: string, group?: GroupName, params?: SynthParams) =>
+		getServer()!.synth(name, group, params),
+	set: (nodeId: number, params: SynthParams) => getServer()!.set(nodeId, params),
+	free: (nodeId: number) => getServer()!.free(nodeId),
+	loadSynthDef: (name: string) => getServer()!.loadSynthDef(name),
 
 	/**
 	 * Spawn a synth as a timed OSC bundle with a precise NTP timestamp.
