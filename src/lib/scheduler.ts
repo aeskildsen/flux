@@ -18,7 +18,8 @@
  */
 
 import { clock } from '$lib/clock';
-import { getInstance } from 'svelte-supersonic';
+import { getInstance, getServer, getOsc, GROUPS } from 'svelte-supersonic';
+import type { SynthParams, GroupName } from 'svelte-supersonic';
 
 /** How often the scheduler wakes to top up the OSC queue (milliseconds). */
 export const TICK_INTERVAL_MS = 25;
@@ -91,3 +92,41 @@ export function run<T>(
 		}
 	};
 }
+
+// ---------------------------------------------------------------------------
+// SuperCollider proxy
+// ---------------------------------------------------------------------------
+
+/**
+ * Lazy proxy over the live SuperCollider server.
+ * Import `sc` at module load time; the server need not be booted yet.
+ */
+export const sc: Pick<ReturnType<typeof getServer>, 'synth' | 'set' | 'free' | 'loadSynthDef'> & {
+	synthAt(ntpTime: number, name: string, group?: GroupName, params?: SynthParams): number;
+} = {
+	synth: (...args) => getServer()!.synth(...args),
+	set: (...args) => getServer()!.set(...args),
+	free: (...args) => getServer()!.free(...args),
+	loadSynthDef: (...args) => getServer()!.loadSynthDef(...args),
+
+	/**
+	 * Spawn a synth as a timed OSC bundle with a precise NTP timestamp.
+	 * Use from scheduler callbacks where the second argument is an NTP time.
+	 */
+	synthAt(
+		ntpTime: number,
+		name: string,
+		group: GroupName = 'source',
+		params: SynthParams = {}
+	): number {
+		const sonic = getInstance()!;
+		const osc = getOsc()!;
+		const id = sonic.nextNodeId();
+		const flat = Object.entries(params).flat();
+		const bytes = osc.encodeSingleBundle(ntpTime, '/s_new', [name, id, 0, GROUPS[group], ...flat]);
+		sonic.sendOSC(bytes);
+		return id;
+	}
+};
+
+export { clock };

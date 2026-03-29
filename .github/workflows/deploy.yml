@@ -15,7 +15,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: latest
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Sync SvelteKit submodule
+        run: pnpm --dir svelte-supersonic exec svelte-kit sync
+
+      - name: Test with coverage
+        run: pnpm test:coverage
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (with submodules)

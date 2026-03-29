@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { boot, serverState, getServer } from 'svelte-supersonic';
-	import { run, type SchedulerHandle } from '$lib/scheduler';
-	import { sc as scProxy, clock } from '$lib/lab-context';
+	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	const sc = $derived(getServer());

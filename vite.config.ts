@@ -30,6 +30,19 @@ export default defineConfig({
 	},
 	test: {
 		expect: { requireAssertions: true },
+		coverage: {
+			provider: 'v8',
+			include: ['src/lib/**/*.ts'],
+			exclude: ['src/lib/**/*.{test,spec}.ts'],
+			reporter: ['text', 'json-summary'],
+			reportsDirectory: './coverage',
+			thresholds: {
+				statements: 80,
+				branches: 65,
+				functions: 85,
+				lines: 85
+			}
+		},
 		projects: [
 			{
 				extends: './vite.config.ts',

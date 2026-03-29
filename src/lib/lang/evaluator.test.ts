@@ -1871,3 +1871,56 @@ describe('rests (_) — structural slot count', () => {
 		expect(evs[2].duration).toBeCloseTo(0.25);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 12. Error message content — regression guard for user-facing error strings
+// ---------------------------------------------------------------------------
+
+describe('createInstance — error message content', () => {
+	it('parse error message starts with "Parse error:"', () => {
+		const result = createInstance('loop [0 1 2'); // unclosed bracket
+		if (result.ok) throw new Error('expected error');
+		expect(result.error).toMatch(/^Parse error:/);
+	});
+
+	it('lex error message starts with "Lex error:"', () => {
+		// Bare backslash is an unrecognised character → lex error
+		const result = createInstance('loop [0 \\1]');
+		if (result.ok) throw new Error('expected error');
+		expect(result.error).toMatch(/^(Lex error:|Parse error:)/);
+	});
+
+	it('"No loop statement found" when source has no loop or line', () => {
+		const result = createInstance('set root(7)');
+		if (result.ok) throw new Error('expected error');
+		expect(result.error).toBe('No loop statement found');
+	});
+
+	it('"No loop statement found" for empty source', () => {
+		const result = createInstance('');
+		if (result.ok) throw new Error('expected error');
+		expect(result.error).toBe('No loop statement found');
+	});
+
+	it('parse error message includes some description of the problem', () => {
+		const result = createInstance('loop [0 1 2');
+		if (result.ok) throw new Error('expected error');
+		// The error string must be non-trivially descriptive (not just "Parse error:")
+		expect(result.error.length).toBeGreaterThan('Parse error:'.length + 2);
+	});
+
+	it('ok:false for a completely invalid token ("@@@")', () => {
+		const result = createInstance('@@@');
+		expect(result.ok).toBe(false);
+	});
+
+	it('ok:false when source is only whitespace', () => {
+		const result = createInstance('   \n\t  ');
+		expect(result.ok).toBe(false);
+	});
+});
+
+// Note: the evaluate()-level error 'No loop found in evaluate' (evaluator.ts:1632)
+// is dead code — compileLoop() rejects empty sequences at compile time, so
+// loopEntries always has at least one non-empty loop by the time evaluate() runs.
+// The path is unreachable through the public API and intentionally has no test.
