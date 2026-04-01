@@ -27,3 +27,4 @@ coverage/
 
 dev-references
 scripts/sync.sh
+static/compiled_synthdefs
