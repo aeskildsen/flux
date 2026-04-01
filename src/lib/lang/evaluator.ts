@@ -86,7 +86,7 @@ export type ScheduledEvent = {
 	offsetMs?: number; // ms shift (positive = late, negative = early)
 	mono?: boolean; // if true, send set instead of new synth
 	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
-	synthdef?: string; // FX synthdef name (only for type:'fx')
+	synthdef?: string; // SynthDef name: set on note events by loop(\name)/line(\name), and on FX events
 	params?: Record<string, number>; // FX params (only for type:'fx')
 };
 
@@ -985,6 +985,7 @@ type CompiledLoop = {
 	repeat: number | null; // null = no repeat, 0 = infinite, n = count
 	transposition: CompiledTransposition;
 	fx: CompiledFx | null; // compiled FX (stateful runners; null = no FX)
+	synthdef: string | null; // SynthDef name from loop(\name) / line(\name); null = use default
 };
 
 /** Collect all modifiers from the loop/line node itself plus continuation block.
@@ -1081,6 +1082,13 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
 	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
 
+	// SynthDef selection: loop(\name)
+	const synthdefArgNode = ((loopNode.children.synthdefArg as CstNode[]) ?? [])[0];
+	const synthdefTok = synthdefArgNode
+		? ((synthdefArgNode.children.Symbol as IToken[]) ?? [])[0]
+		: null;
+	const synthdef = synthdefTok ? synthdefTok.image.slice(1) : null;
+
 	return {
 		elements: compiled,
 		listMode,
@@ -1093,7 +1101,8 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 		atOffset,
 		repeat,
 		transposition,
-		fx
+		fx,
+		synthdef
 	};
 }
 
@@ -1166,6 +1175,13 @@ function compileLine(lineNode: CstNode): CompiledLoop | string {
 	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
 	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
 
+	// SynthDef selection: line(\name)
+	const synthdefArgNode = ((lineNode.children.synthdefArg as CstNode[]) ?? [])[0];
+	const synthdefTok = synthdefArgNode
+		? ((synthdefArgNode.children.Symbol as IToken[]) ?? [])[0]
+		: null;
+	const synthdef = synthdefTok ? synthdefTok.image.slice(1) : null;
+
 	return {
 		elements: compiled,
 		listMode,
@@ -1178,7 +1194,8 @@ function compileLine(lineNode: CstNode): CompiledLoop | string {
 		atOffset,
 		repeat,
 		transposition,
-		fx
+		fx,
+		synthdef
 	};
 }
 
@@ -1312,6 +1329,7 @@ type SlotParams = {
 	mono: boolean;
 	offsetMs: number | undefined;
 	cycleOff: number;
+	synthdef: string | null;
 };
 
 /**
@@ -1358,6 +1376,7 @@ function expandSlot(
 	if (p.offsetMs !== undefined && p.offsetMs !== 0) event.offsetMs = p.offsetMs;
 	if (p.mono) event.mono = true;
 	if (p.cycleOff !== 0) event.cycleOffset = p.cycleOff;
+	if (p.synthdef !== null) event.synthdef = p.synthdef;
 	return [event];
 }
 
@@ -1433,7 +1452,8 @@ function evaluateCompiledLoop(
 					transposeDelta,
 					mono,
 					offsetMs,
-					cycleOff
+					cycleOff,
+					synthdef: compiled.synthdef
 				})
 			);
 		}
@@ -1602,7 +1622,11 @@ export function createInstance(source: string): EvalInstance {
 				globalCtx = applySetStatement(setNode, globalCtx, cycleNumber);
 			}
 
-			// Find the first loop to evaluate
+			// Evaluate all loops and collect their events
+			const allEvents: ScheduledEvent[] = [];
+			let anyDone = false;
+			let evaluated = false;
+
 			for (const entry of loopEntries) {
 				let compiled: CompiledLoop;
 				let scaleCtx: ScaleContext;
@@ -1622,10 +1646,15 @@ export function createInstance(source: string): EvalInstance {
 				if (elements.length === 0) continue;
 
 				const { events, done } = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber, isLine);
-				return { ok: true, events, done };
+				allEvents.push(...events);
+				if (done) anyDone = true;
+				evaluated = true;
 			}
 
-			return { ok: false, error: 'No loop found in evaluate' };
+			if (!evaluated) {
+				return { ok: false, error: 'No loop found in evaluate' };
+			}
+			return { ok: true, events: allEvents, done: anyDone };
 		}
 	};
 }

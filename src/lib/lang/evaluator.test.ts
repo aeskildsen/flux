@@ -1683,30 +1683,39 @@ describe('timed lists — @ and : are absolute beat offsets from cycle start', (
 // ---------------------------------------------------------------------------
 // 14. SynthDef selection
 //
-// loop(\moog) [0 2 4] and line(\sine) [0 1 2] are valid DSL syntax. The
-// current evaluator ignores the synthdef argument; events are emitted normally
-// without a synthdef field on note events.  These tests document current
-// behaviour.
+// loop(\moog) [0 2 4] and line(\sine) [0 1 2] select a named SynthDef.
+// The evaluator threads the name through to every note event as synthdef.
+// loops/lines with no synthdef arg produce events with no synthdef field.
 // ---------------------------------------------------------------------------
 
 describe('synthdef selection — loop(\\moog) / line(\\sine)', () => {
-	it('loop(\\moog) [0 2 4] — produces 3 note events (synthdef arg currently ignored)', () => {
-		const evs = eval0('loop(\\moog) [0 2 4]');
-		expect(evs).toHaveLength(3);
+	it('loop(\\moog) [0 2 4] — produces 3 note events', () => {
+		expect(eval0('loop(\\moog) [0 2 4]')).toHaveLength(3);
 	});
 
 	it('loop(\\moog) [0 2 4] — notes are correct (pitch chain unaffected by synthdef)', () => {
 		expect(notes('loop(\\moog) [0 2 4]')).toEqual([60, 64, 67]);
 	});
 
+	it('loop(\\moog) — every note event carries synthdef: "moog"', () => {
+		for (const e of eval0('loop(\\moog) [0 2 4]')) {
+			expect(e.synthdef).toBe('moog');
+		}
+	});
+
 	it('line(\\sine) [0 1 2] — produces 3 note events', () => {
 		expect(eval0('line(\\sine) [0 1 2]')).toHaveLength(3);
 	});
 
-	it('note events do not carry a synthdef field (synthdef arg is not yet threaded through)', () => {
-		for (const e of eval0('loop(\\moog) [0 2 4]')) {
-			// synthdef is only defined on FX events currently
-			expect((e as { synthdef?: string }).synthdef).toBeUndefined();
+	it('line(\\sine) — every note event carries synthdef: "sine"', () => {
+		for (const e of eval0('line(\\sine) [0 1 2]')) {
+			expect(e.synthdef).toBe('sine');
+		}
+	});
+
+	it('loop without synthdef arg — events have no synthdef field', () => {
+		for (const e of eval0('loop [0 2 4]')) {
+			expect(e.synthdef).toBeUndefined();
 		}
 	});
 });
@@ -1898,3 +1907,40 @@ describe('createInstance — error message content', () => {
 // is dead code — compileLoop() rejects empty sequences at compile time, so
 // loopEntries always has at least one non-empty loop by the time evaluate() runs.
 // The path is unreachable through the public API and intentionally has no test.
+
+// ---------------------------------------------------------------------------
+// Multiple loops — all loops must emit events
+// ---------------------------------------------------------------------------
+
+describe('multiple loops — all loops produce events', () => {
+	it('two plain loops both emit events in the same cycle', () => {
+		// loop(\kick) [0 1 2 3 5] has 5 elements; loop [-2 0 2] has 3 elements.
+		// All 8 events should be present.
+		const events = eval0('loop(\\kick) [0 1 2 3 5]\n\nloop [-2 0 2]');
+		expect(events).toHaveLength(8);
+	});
+
+	it('first loop events use the given synthdef', () => {
+		const events = eval0('loop(\\kick) [0 1 2 3 5]\n\nloop [-2 0 2]');
+		const kickEvents = events.filter((e) => e.synthdef === 'kick');
+		expect(kickEvents).toHaveLength(5);
+	});
+
+	it('second loop events have no synthdef', () => {
+		const events = eval0('loop(\\kick) [0 1 2 3 5]\n\nloop [-2 0 2]');
+		const plainEvents = events.filter((e) => e.synthdef === undefined);
+		expect(plainEvents).toHaveLength(3);
+	});
+
+	it('commenting out the first loop leaves only the second', () => {
+		const events = eval0('// loop(\\kick) [0 1 2 3 5]\n\nloop [-2 0 2]');
+		expect(events).toHaveLength(3);
+	});
+
+	it('second loop is independent when first is absent', () => {
+		const eventsSecondOnly = eval0('loop [-2 0 2]');
+		const eventsBoth = eval0('loop(\\kick) [0 1 2 3 5]\n\nloop [-2 0 2]');
+		const secondInBoth = eventsBoth.filter((e) => e.synthdef === undefined);
+		expect(secondInBoth.map((e) => e.note)).toEqual(eventsSecondOnly.map((e) => e.note));
+	});
+});

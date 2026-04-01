@@ -4,6 +4,11 @@
 	import { createInstance } from '$lib/lang/evaluator';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
+	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
+	import type { PageData } from './$types';
+
+	const { data }: { data: PageData } = $props();
+
 	const sc = $derived(getServer());
 
 	let handle = $state<SchedulerHandle | null>(null);
@@ -34,7 +39,21 @@
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
 		await boot({ debug: true });
-		if (sc) await sc.loadSynthDef('sonic-pi-prophet');
+		if (!sc) return;
+
+		// Load compiled synthdefs — metadata already available via page load
+		try {
+			await Promise.all(
+				Object.keys(data.synthdefs).map((name) =>
+					sc!.loadSynthDef(`/compiled_synthdefs/${name}.scsyndef`)
+				)
+			);
+		} catch (e) {
+			console.warn('Could not load local compiled synthdefs:', e);
+		}
+
+		// Load the CDN synthdef used for playback
+		await sc.loadSynthDef('sonic-pi-prophet');
 	}
 
 	function handleStop() {
@@ -89,13 +108,16 @@
 				const result = inst.evaluate({ cycleNumber: cycleNumber++ });
 				if (!result.ok) return;
 				if (result.done) return;
-				const events = result.events;
+				// Sort by beatOffset so events from multiple loops are interleaved
+				// correctly — without this, a negative gap causes all remaining events
+				// to collapse to the same NTP time.
+				const events = result.events.slice().sort((a, b) => a.beatOffset - b.beatOffset);
 				for (let i = 0; i < events.length; i++) {
 					const ev = events[i];
 					const nextBeatOffset = i + 1 < events.length ? events[i + 1].beatOffset : 1; // 1 = end of cycle
 					const gap = (nextBeatOffset - ev.beatOffset) * CYCLE_BEATS;
 					const release = clock.beatsToSeconds(ev.duration * CYCLE_BEATS) * 0.9;
-					yield { note: ev.note, duration: gap, release };
+					yield { note: ev.note, duration: gap, release, synthdef: ev.synthdef };
 				}
 			}
 		}
@@ -103,7 +125,7 @@
 		handle = run(
 			gen(),
 			(event, ntpTime) =>
-				scProxy.synthAt(ntpTime, 'sonic-pi-prophet', 'source', {
+				scProxy.synthAt(ntpTime, event.synthdef ?? 'sonic-pi-prophet', 'source', {
 					note: event.note,
 					release: event.release,
 					cutoff: 90
@@ -141,6 +163,8 @@
 		>
 			{serverState.status}
 		</div>
+
+		<SynthDefPanel synthdefs={data.synthdefs} />
 
 		<div class="feedback-log" bind:this={logEl}>
 			{#each log as entry, i (i)}
