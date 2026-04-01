@@ -26,12 +26,42 @@
 				fontFamily: "'Source Code Pro', monospace",
 				lineNumbers: 'on',
 				scrollBeyondLastLine: false,
-				automaticLayout: true
+				automaticLayout: true,
+				// Flux completions are trigger-character-driven (' [ ( |); suppress
+				// automatic and word-based suggestions which would produce noise.
+				quickSuggestions: false,
+				wordBasedSuggestions: 'off'
 			});
 
 			// Keep value in sync on every edit
 			editor.onDidChangeModelContent(() => {
 				value = editor!.getValue();
+			});
+
+			// Workaround for a Monaco bug: when the selection is reversed (cursor at
+			// the left/start end, anchor at the right) and a printable character key is
+			// pressed, Monaco's hidden-textarea deduceInput logic computes
+			// replacePrevCharCnt=0 and replaceNextCharCnt=0 — so it inserts the
+			// character without deleting the selected text.  Normalising the selection
+			// (flip cursor to the end) before the key reaches the textarea fixes it.
+			editor.onKeyDown((e) => {
+				const sel = editor!.getSelection();
+				if (!sel || sel.isEmpty()) return;
+				// Only act on reversed selections (cursor at the left/start end)
+				if (sel.getDirection() !== monaco.SelectionDirection.RTL) return;
+				// `key` is a single character for printable keys, a word otherwise
+				// ("ArrowLeft", "Shift", "Enter", …) — no modifier check needed.
+				if (e.browserEvent.key.length !== 1) return;
+				// Flip to LTR: anchor at range start, cursor at range end.
+				// Monaco.Selection(anchorLine, anchorCol, cursorLine, cursorCol)
+				editor!.setSelection(
+					new monaco.Selection(
+						sel.startLineNumber,
+						sel.startColumn,
+						sel.endLineNumber,
+						sel.endColumn
+					)
+				);
 			});
 
 			// Ctrl+Enter / Cmd+Enter — evaluate
