@@ -1,5 +1,7 @@
 # Flux DSL
 
+_This is the authoritative design document. For a compact, implementer-ready semantics reference structured for TDD, see [DSL-truthtables.md](DSL-truthtables.md). The two documents must remain consistent — any behavioural change requires updates to both._
+
 ## Comments
 
 Line comments begin with `//` and run to end of line. Block comments are delimited by `/*` and `*/` and may span multiple lines. Both are invisible to the parser.
@@ -23,11 +25,15 @@ Unlike SuperCollider patterns/streams, all generators yield indefinitely. They a
 
 ### Whitespace rules
 
+> _See truth tables [12 (Whitespace)](DSL-truthtables.md#12-whitespace-truth-table)._
+
 Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `loop` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gau`, `exp`, `bro`, `step`, `mul`, `lin`, `geo`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
 
 Inside `[...]` sequence generators, elements are separated by spaces. Commas are not valid separators.
 
 ### Sequence generators
+
+> _See truth tables [4 (Weighted random / `'wran`)](DSL-truthtables.md#4-weighted-random-wran-truth-table)._
 
 `[...]` is the fundamental generator type. By default it yields its elements in order, cycling back to the start. Modifiers change the traversal strategy:
 
@@ -53,6 +59,8 @@ loop [_ 2 4]      // rest on the 1st slot
 `_` cannot carry accidentals, `?` weights, or generator suffixes — it is purely syntactic and carries no pitch information.
 
 ### Random number generators
+
+> _See truth table [5 (Generator polling / nesting)](DSL-truthtables.md#5-generator-polling--nesting-truth-table)._
 
 ```flux
 0rand4   // Pwhite(min = 0, max = 4) => 4, 1, 0, 4, 3, 0, 2, 1  (canonical form)
@@ -113,6 +121,8 @@ A number of generators work by filtering events that come from upstream generato
 
 #### Stuttering (`'stut`)
 
+> _See truth table [3 (Stutter)](DSL-truthtables.md#3-stutter-stut-truth-table)._
+
 The `'stut(n)` modifier repeats every element n times. Default: n = 2. The bare form `'stut` is valid and equivalent to `'stut(2)`.
 
 ```flux
@@ -147,6 +157,8 @@ The `'maybe(p)` modifier passes each element through with probability `p` (0.0�
 
 ## Cyclic mode: `loop`
 
+> _See truth tables [6 (Loop freezing)](DSL-truthtables.md#6-loop-freezing-semantics)._
+
 A `loop` consists of a number of elements defined within a set of brackets and delineated by spaces. A space is required between `loop` and `[`.
 
 ```flux
@@ -171,7 +183,7 @@ loop [0 1 2 3 4 5]
 loop [0 1 [2 3] 4]
 ```
 
-The `'offset` modifier on a loop or line schedules all events a number of milliseconds early (negative value) or late (positive value) relative to their normal trigger time. Equivalent to the `\lag` key in SC.
+The `'offset` modifier on a loop or line schedules all events a number of milliseconds early (negative value) or late (positive value) relative to their normal trigger time. Equivalent to the `\lag` key in SC. See truth table [14 (`'offset`)](DSL-truthtables.md#14-offset-truth-table).
 
 ```flux
 loop [0 1 2]'offset(20)    // all events 20 ms late
@@ -179,6 +191,8 @@ loop [0 1 2]'offset(-10)   // all events 10 ms early
 ```
 
 ### Durations
+
+> _See truth table [13 (`'legato`)](DSL-truthtables.md#13-legato-truth-table)._
 
 `loop` spawns new self-releasing synth instances per event (not persistent nodes). Gate is closed via a scheduled `set` message after each event's time slot, scaled by a legato factor. This conforms to standard SC synthdef conventions (gate input + ADSR).
 
@@ -201,6 +215,8 @@ Structural length is frozen at the cycle boundary. All generators inside a `loop
 ---
 
 ## Linear mode: `line`
+
+> _See truth table [7 (Line timing)](DSL-truthtables.md#7-line-timing-truth-table)._
 
 Linear mode is activated by the keyword `line`. A space is required between `line` and `[`.
 
@@ -264,6 +280,8 @@ line [0 2@1]       // 0 at 0 (natural), 2 at 1 (one full cycle in)
 
 ## Monophonic mode: `'mono`
 
+> _See truth table [16 (`'mono`)](DSL-truthtables.md#16-mono-modifier-truth-table)._
+
 `'mono` is a modifier applied to `loop` or `line`. It instantiates a single synth node and sends `set` messages to the server instead of instantiating new synths on each event. Rough equivalent of SC's Pmono.
 
 ```flux
@@ -310,6 +328,8 @@ The `@cent` decorator remains available for fine-tuning but is not part of the c
 
 ### Modal transposition via `+` and `-`
 
+> _See truth table [10 (Arithmetic transposition)](DSL-truthtables.md#10-arithmetic-transposition-truth-table)._
+
 Modal transposition uses infix `+` and `-` operators on a `loop` or `line` expression:
 
 ```flux
@@ -321,6 +341,8 @@ loop [0 2 4] + 0rand3   // stochastic transposition, eager(1) by default
 The right-hand side must be a non-negative scalar value or scalar generator. List generators (`[...]`) are not permitted as operands — two list generators combined arithmetically creates unresolvable stream-combination ambiguity. A double-negative such as `loop [0] - -4` is a syntax error; use `loop [0] + 4` instead.
 
 ### Accidentals
+
+> _See truth table [15 (Accidentals)](DSL-truthtables.md#15-accidentals-truth-table)._
 
 Accidentals modify a scale degree by one semitone. They are written as a suffix directly on the degree integer, with no space:
 
@@ -351,6 +373,8 @@ set key(g# lydian)
 Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`.
 
 ### Scoped context: `@` decorators
+
+> _See truth tables [8 (Decorator scoping)](DSL-truthtables.md#8-decorator-scoping-truth-table) and [11 (Indentation)](DSL-truthtables.md#11-indentation-truth-table)._
 
 `@` decorators apply session parameters to a scoped block of expressions, overriding global `set` values within that scope. They use a parenthesised argument list — the same syntax supports single arguments (`@root(7)`), compound arguments (`@key(g# lydian 4)`), and stochastic arguments (`@root(3rand7)`).
 
@@ -407,6 +431,8 @@ line(\moog) [0 1 2 3]'lfoRate(1/4)
 
 ## FX
 
+> _See truth table [9 (FX pipe)](DSL-truthtables.md#9-fx-pipe-truth-table)._
+
 FX nodes are plain scsynth nodes and receive `.set` messages like any other synth. There is no architectural distinction between source and effect at the server level — the source/effect distinction is entirely a DSL/routing concern. FX parameters are therefore patternisable using the same `'lock`/`'eager` model as everything else.
 
 FX parameters use the same `'key(value)` modifier syntax as everything else. Values can be literals, generators, or stochastic expressions.
@@ -448,6 +474,8 @@ loop [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(4)  // release after 4s silence
 
 ## Modifier syntax
 
+> _See truth tables [1 (Modifier attachment)](DSL-truthtables.md#1-modifier-attachment-truth-table) and [2 (Modifier precedence)](DSL-truthtables.md#2-modifier-precedence-truth-table)._
+
 The sign `'` in an expression like `x'y` indicates a **modifier**, i.e. that `y` modifies the behaviour of `x`.
 
 Modifiers are methods that return `this`, so chaining is supported:
@@ -464,7 +492,7 @@ Modifiers attach to the **immediately preceding token**, not to the whole expres
 
 Modifiers are generally written **after** the list they modify. Evaluation order is left-to-right.
 
-> **Implementation note:** The spec requires no whitespace between `'` and the modifier name (`[0]'lock`, not `[0]' lock`). The current JS parser does not enforce this — it accepts a space because the lexer tokenises `'` and the identifier separately and Chevrotain ignores inter-token whitespace. This is a known deviation; enforcing it would require a compound lexer token or a contextual lexer mode. For now, treat `[0]' lock` as valid input with a style warning.
+> **Implementation note:** No whitespace is permitted between `'` and the modifier name (`[0]'lock`, not `[0]' lock`). The current JS parser has a known deviation — it accepts a space because the lexer tokenises `'` and the identifier separately and Chevrotain ignores inter-token whitespace. Enforcing this would require a compound lexer token or a contextual lexer mode. Until fixed, the parser should emit a parse error for `[0]' lock` rather than silently accepting it. See truth table 12.
 
 ### `'lock` and `'eager(n)`
 

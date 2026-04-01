@@ -1,6 +1,6 @@
 # Flux DSL — Core Truth Tables
 
-_A compact, implementer-ready semantics document._
+_A compact, implementer-ready semantics document. For the authoritative narrative spec, see [DSL-spec.md](DSL-spec.md). The two documents must remain consistent — any behavioural change requires updates to both._
 
 Each table follows the pattern:
 
@@ -187,10 +187,10 @@ Decorators apply lexically like indentation-based blocks.
 
 Piped FX attaches to preceding expression.
 
-| Code                                 | Interpretation | Evaluation                              | Result                   |
-| ------------------------------------ | -------------- | --------------------------------------- | ------------------------ |
-| `loop [0] \| fx("lpf")`              | Insert FX.     | Create FX node for duration of pattern. | Loop audio → lpf.        |
-| `loop [0] \| fx("lpf")'cutoff(1200)` | Parameter mod. | cutoff sampled per eager/lock.          | Fixed or dynamic cutoff. |
+| Code                                | Interpretation | Evaluation                              | Result                   |
+| ----------------------------------- | -------------- | --------------------------------------- | ------------------------ |
+| `loop [0] \| fx(\lpf)`              | Insert FX.     | Create FX node for duration of pattern. | Loop audio → lpf.        |
+| `loop [0] \| fx(\lpf)'cutoff(1200)` | Parameter mod. | cutoff sampled per eager/lock.          | Fixed or dynamic cutoff. |
 
 **Error cases**
 
