@@ -17,8 +17,11 @@ import type { IToken } from 'chevrotain';
 
 const TOKEN_CLASS: Record<string, string> = {
 	// Keywords
-	Loop: 'tok-keyword',
-	Line: 'tok-keyword',
+	Note: 'tok-keyword',
+	Mono: 'tok-keyword',
+	Sample: 'tok-keyword',
+	Slice: 'tok-keyword',
+	Cloud: 'tok-keyword',
 	Fx: 'tok-keyword',
 	SendFx: 'tok-keyword',
 	MasterFx: 'tok-keyword',

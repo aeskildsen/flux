@@ -16,7 +16,7 @@
  * Chevrotain resolves ambiguity by "longest match wins", breaking ties by
  * order in allTokens. Two consequences:
  *
- * - Keywords (Loop, Line, Fx, …) must appear BEFORE Identifier in allTokens,
+ * - Keywords (Note, Mono, Sample, Slice, Cloud, Fx, …) must appear BEFORE Identifier in allTokens,
  *   and must declare `longer_alt: Identifier` so the lexer knows to prefer
  *   the identifier when both could match (e.g. `loopCount` → Identifier, not
  *   Loop + Count).
@@ -90,18 +90,42 @@ export const LineComment = createToken({
 // Each keyword declares `longer_alt: Identifier` so that e.g. `loopCount`
 // tokenises as a single Identifier rather than Loop + Identifier("Count").
 
-/** `loop` — cyclic pattern mode. */
-export const Loop = createToken({
-	name: 'Loop',
-	pattern: /loop/,
+/** `note` — polyphonic pitched events. Default content type. */
+export const Note = createToken({
+	name: 'Note',
+	pattern: /note/,
 	longer_alt: Identifier
 	// Monaco scope: 'keyword'
 });
 
-/** `line` — one-shot linear mode. */
-export const Line = createToken({
-	name: 'Line',
-	pattern: /line/,
+/** `mono` — monophonic pitched events; single persistent synth node. */
+export const Mono = createToken({
+	name: 'Mono',
+	pattern: /mono/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `sample` — buffer playback. */
+export const Sample = createToken({
+	name: 'Sample',
+	pattern: /sample/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `slice` — beat-sliced buffer playback. */
+export const Slice = createToken({
+	name: 'Slice',
+	pattern: /slice/,
+	longer_alt: Identifier
+	// Monaco scope: 'keyword'
+});
+
+/** `cloud` — granular synthesis. */
+export const Cloud = createToken({
+	name: 'Cloud',
+	pattern: /cloud/,
 	longer_alt: Identifier
 	// Monaco scope: 'keyword'
 });
@@ -566,8 +590,11 @@ export const allTokens = [
 	// Statement keywords (longer ones first where prefixes overlap)
 	SendFx, // 'send_fx' before 'set' and 'fx'
 	MasterFx, // 'master_fx' before 'fx'
-	Loop,
-	Line,
+	Sample, // 'sample' before shorter keywords
+	Slice,
+	Cloud,
+	Note,
+	Mono,
 	Fx,
 	Set,
 	// Generator keywords (longer ones first where prefixes overlap)

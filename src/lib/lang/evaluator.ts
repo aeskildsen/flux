@@ -30,7 +30,7 @@
  * context. Decorators override for their block scope.
  *
  * Pitch chain:  degree → scale lookup → (+rootSemitone) → (+octave offset) → MIDI
- * Modal transposition is handled by the infix + / - operators on loop/line.
+ * Modal transposition is handled by the infix + / - operators on pattern statements.
  *
  * rootMidi = C5_midi + rootSemitone + (octave - 5) * 12
  *          = 60      + rootSemitone + (octave - 5) * 12
@@ -50,11 +50,11 @@
  * - 'wran: weighted random selection (uses ? weight syntax per element)
  * - 'legato(n): gate-close time = n × slot
  * - 'offset(ms): shift all event times by ms
- * - 'mono: single synth node; events carry mono:true
- * - transposition: loop [0 2] + 3  adds scalar to each degree before pitch chain
+ * - 'mono (via `mono` content type keyword): single synth node; events carry mono:true
+ * - transposition: note [0 2] + 3  adds scalar to each degree before pitch chain
  * - accidentals: 2b, 4# — semitone offset added before scale lookup
- * - line statement: evaluated once, produces fixed event array; 'at sets cycleOffset
- * - FX pipe: loop [0] | fx("lpf") emits FxEvent alongside note events
+ * - finite patterns ('n): evaluated once, produces fixed event array; 'at sets cycleOffset
+ * - FX pipe: note [0] | fx("lpf") emits FxEvent alongside note events
  *
  * ## Legacy compatibility
  *
@@ -880,19 +880,19 @@ function extractAtOffset(mods: CstNode[]): number {
 }
 
 /**
- * Extract 'repeat(n) value. Returns:
- *   null   — no 'repeat modifier
- *   0      — bare 'repeat (indefinite)
- *   n      — explicit count
+ * Extract 'n(count) value. Returns:
+ *   null   — no 'n modifier (loop indefinitely)
+ *   1      — bare 'n (play once)
+ *   n      — explicit positive integer count
  */
 function extractRepeat(mods: CstNode[]): number | null {
 	for (const mod of mods) {
 		const nameTok = ((mod.children.Identifier as IToken[]) ?? [])[0];
-		if (nameTok?.image !== 'repeat') continue;
+		if (nameTok?.image !== 'n') continue;
 		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
-		if (!genExpr) return 0; // bare 'repeat = indefinite
+		if (!genExpr) return 1; // bare 'n = play once
 		const n = extractConstantNumber(genExpr);
-		return n !== null ? Math.max(1, Math.round(n)) : 0;
+		return n !== null ? Math.max(1, Math.round(n)) : 1;
 	}
 	return null;
 }
@@ -1015,10 +1015,13 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	const seqNode = (
 		(loopNode.children.sequenceExpr ?? loopNode.children.sequenceGenerator) as CstNode[] | undefined
 	)?.[0];
-	if (!seqNode) return 'loop has no sequence body';
+	const relNode = ((loopNode.children.relTimedList as CstNode[]) ?? [])[0];
+
+	const bodyNode = seqNode ?? relNode;
+	if (!bodyNode) return 'pattern has no sequence body';
 
 	// List-level modifiers (on the [...] itself)
-	const listMods = (seqNode.children.modifierSuffix as CstNode[]) ?? [];
+	const listMods = (bodyNode.children.modifierSuffix as CstNode[]) ?? [];
 	const listMode = extractEagerMode(listMods) ?? DEFAULT_MODE;
 
 	// Traversal mode
@@ -1027,18 +1030,27 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
 	else if (hasModifier(listMods, 'wran')) traversal = 'wran';
 
-	const elements = (seqNode.children.sequenceElement as CstNode[]) ?? [];
 	const compiled: CompiledElement[] = [];
-	for (const elem of elements) {
-		const ce = compileElement(elem, listMode);
-		if (!ce) continue;
-		const n = repeatCountFromElem(elem);
-		for (let k = 0; k < n; k++) compiled.push(ce);
+
+	if (seqNode) {
+		const elements = (seqNode.children.sequenceElement as CstNode[]) ?? [];
+		for (const elem of elements) {
+			const ce = compileElement(elem, listMode);
+			if (!ce) continue;
+			const n = repeatCountFromElem(elem);
+			for (let k = 0; k < n; k++) compiled.push(ce);
+		}
+	} else if (relNode) {
+		const elems = (relNode.children.timedElement as CstNode[]) ?? [];
+		for (const elem of elems) {
+			const ce = compileTimedElement(elem, listMode);
+			if (ce) compiled.push(ce);
+		}
 	}
 
-	if (compiled.length === 0) return 'loop sequence is empty';
+	if (compiled.length === 0) return 'pattern sequence is empty';
 
-	// Loop-level modifiers (direct + continuation)
+	// Pattern-level modifiers (direct + continuation)
 	const allLoopMods = collectLoopModifiers(loopNode);
 
 	// 'stut
@@ -1065,13 +1077,14 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 		offsetRunner = extractModifierScalar(allLoopMods, 'offset', 0, 0);
 	}
 
-	// 'mono
-	const mono = hasModifier(allLoopMods, 'mono');
+	// mono: detected from content type keyword token on the patternStatement node
+	const monoTok = ((loopNode.children.Mono as IToken[]) ?? [])[0];
+	const mono = monoTok !== undefined;
 
 	// 'at
 	const atOffset = extractAtOffset(allLoopMods);
 
-	// 'repeat
+	// 'n (finite playback)
 	const repeat = extractRepeat(allLoopMods);
 
 	// Transposition
@@ -1082,101 +1095,8 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
 	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
 
-	// SynthDef selection: loop(\name)
+	// SynthDef selection: note(\name) / mono(\name) / etc.
 	const synthdefArgNode = ((loopNode.children.synthdefArg as CstNode[]) ?? [])[0];
-	const synthdefTok = synthdefArgNode
-		? ((synthdefArgNode.children.Symbol as IToken[]) ?? [])[0]
-		: null;
-	const synthdef = synthdefTok ? synthdefTok.image.slice(1) : null;
-
-	return {
-		elements: compiled,
-		listMode,
-		traversal,
-		stutRunner,
-		maybeRunner,
-		legatoRunner,
-		offsetRunner,
-		mono,
-		atOffset,
-		repeat,
-		transposition,
-		fx,
-		synthdef
-	};
-}
-
-// ---------------------------------------------------------------------------
-// Line compilation (mirrors loop but also handles relTimedList)
-// ---------------------------------------------------------------------------
-
-function compileLine(lineNode: CstNode): CompiledLoop | string {
-	// lineStatement may use sequenceExpr or relTimedList (timedList with optional @ per element)
-	const seqNode = ((lineNode.children.sequenceExpr as CstNode[]) ?? [])[0];
-	const relNode = ((lineNode.children.relTimedList as CstNode[]) ?? [])[0];
-
-	const bodyNode = seqNode ?? relNode;
-	if (!bodyNode) return 'line has no body';
-
-	// List-level modifiers
-	const listMods = (bodyNode.children.modifierSuffix as CstNode[]) ?? [];
-	const listMode = extractEagerMode(listMods) ?? DEFAULT_MODE;
-
-	let traversal: TraversalMode = 'seq';
-	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
-	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
-	else if (hasModifier(listMods, 'wran')) traversal = 'wran';
-
-	const compiled: CompiledElement[] = [];
-
-	if (seqNode) {
-		const elems = (seqNode.children.sequenceElement as CstNode[]) ?? [];
-		for (const elem of elems) {
-			const ce = compileElement(elem, listMode);
-			if (!ce) continue;
-			const n = repeatCountFromElem(elem);
-			for (let k = 0; k < n; k++) compiled.push(ce);
-		}
-	} else if (relNode) {
-		const elems = (relNode.children.timedElement as CstNode[]) ?? [];
-		for (const elem of elems) {
-			const ce = compileTimedElement(elem, listMode);
-			if (ce) compiled.push(ce);
-		}
-	}
-
-	if (compiled.length === 0) return 'line sequence is empty';
-
-	const allLoopMods = collectLoopModifiers(lineNode);
-
-	let stutRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'stut')) {
-		stutRunner = extractModifierScalar(allLoopMods, 'stut', 2, 0);
-	}
-	let maybeRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'maybe')) {
-		maybeRunner = extractModifierScalar(allLoopMods, 'maybe', 0.5, 0);
-	}
-	let legatoRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'legato')) {
-		legatoRunner = extractModifierScalar(allLoopMods, 'legato', 1.0, 0);
-	}
-	let offsetRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'offset')) {
-		offsetRunner = extractModifierScalar(allLoopMods, 'offset', 0, 0);
-	}
-
-	const mono = hasModifier(allLoopMods, 'mono');
-	const atOffset = extractAtOffset(allLoopMods);
-	const repeat = extractRepeat(allLoopMods);
-	const transposition = compileTransposition(lineNode);
-
-	const pipeNode = ((lineNode.children.pipeExpr as CstNode[]) ?? [])[0];
-	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
-	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
-
-	// SynthDef selection: line(\name)
-	const synthdefArgNode = ((lineNode.children.synthdefArg as CstNode[]) ?? [])[0];
 	const synthdefTok = synthdefArgNode
 		? ((synthdefArgNode.children.Symbol as IToken[]) ?? [])[0]
 		: null;
@@ -1387,8 +1307,7 @@ function expandSlot(
 function evaluateCompiledLoop(
 	compiled: CompiledLoop,
 	scaleCtx: ScaleContext,
-	cycle: number,
-	isLine: boolean
+	cycle: number
 ): { events: ScheduledEvent[]; done: boolean } {
 	const { elements, stutRunner, maybeRunner, legatoRunner, offsetRunner, mono, atOffset, repeat } =
 		compiled;
@@ -1427,17 +1346,22 @@ function evaluateCompiledLoop(
 	const slotDuration = 1 / n;
 	const events: ScheduledEvent[] = [];
 
-	// Determine repeat count for cycleOffset calculation
-	const repeatCount = repeat === null ? 1 : repeat === 0 ? Infinity : repeat;
+	// isFinite: true when 'n modifier is present (pattern plays n times then stops).
+	// Looping patterns (no 'n) run indefinitely, re-evaluated each cycle.
+	const isFinite = repeat !== null;
 
-	// For a line, check if this cycle is past the last scheduled cycle.
-	// A line occupies cycles [atOffset, atOffset + repeatCount). If cycle >= atOffset + repeatCount
-	// the line is done and should produce no events.
-	if (isLine && cycle >= atOffset + (repeatCount === Infinity ? Infinity : repeatCount)) {
+	// Determine repeat count for cycleOffset calculation.
+	// isFinite: repeat = n (positive integer), so repeatCount = n.
+	// Looping: repeatCount = 1 (only current cycle matters).
+	const repeatCount = isFinite ? repeat! : 1;
+
+	// For a finite pattern, check if this cycle is past the last scheduled cycle.
+	// A finite pattern occupies cycles [atOffset, atOffset + repeatCount).
+	if (isFinite && cycle >= atOffset + repeatCount) {
 		return { events: [], done: true };
 	}
 
-	for (let rep = 0; rep < (isLine ? Math.min(repeatCount, 999) : 1); rep++) {
+	for (let rep = 0; rep < (isFinite ? Math.min(repeatCount, 999) : 1); rep++) {
 		const cycleOff = atOffset + rep;
 		for (let i = 0; i < n; i++) {
 			// Apply 'maybe filter
@@ -1484,7 +1408,6 @@ function evaluateCompiledLoop(
  */
 type CompiledDecoratedLoop = {
 	compiled: CompiledLoop;
-	isLine: boolean;
 	/** Ordered list of decorator node arrays, outer → inner, to apply at evaluate time. */
 	decoratorLayers: CstNode[][];
 };
@@ -1497,19 +1420,11 @@ function compileDecoratorBlock(
 	const layers = [...outerLayers, decorators];
 	const results: CompiledDecoratedLoop[] = [];
 
-	const loopNodes = (blockNode.children.loopStatement as CstNode[]) ?? [];
-	for (const ln of loopNodes) {
-		const compiled = compileLoop(ln);
+	const patternNodes = (blockNode.children.patternStatement as CstNode[]) ?? [];
+	for (const pn of patternNodes) {
+		const compiled = compileLoop(pn);
 		if (typeof compiled !== 'string') {
-			results.push({ compiled, isLine: false, decoratorLayers: layers });
-		}
-	}
-
-	const lineNodes = (blockNode.children.lineStatement as CstNode[]) ?? [];
-	for (const ln of lineNodes) {
-		const compiled = compileLine(ln);
-		if (typeof compiled !== 'string') {
-			results.push({ compiled, isLine: true, decoratorLayers: layers });
+			results.push({ compiled, decoratorLayers: layers });
 		}
 	}
 
@@ -1564,27 +1479,18 @@ export function createInstance(source: string): EvalInstance {
 	const statements = (cst.children.statement ?? []) as CstNode[];
 
 	type LoopEntry =
-		| { kind: 'plain'; compiled: CompiledLoop; isLine: boolean }
-		| { kind: 'decorated'; compiled: CompiledLoop; isLine: boolean; decoratorLayers: CstNode[][] };
+		| { kind: 'plain'; compiled: CompiledLoop }
+		| { kind: 'decorated'; compiled: CompiledLoop; decoratorLayers: CstNode[][] };
 
 	const setNodes: CstNode[] = [];
 	const loopEntries: LoopEntry[] = [];
 
 	for (const stmt of statements) {
-		const loopNodes = stmt.children.loopStatement as CstNode[] | undefined;
-		if (loopNodes?.length) {
-			const compiled = compileLoop(loopNodes[0]);
+		const patternNodes = stmt.children.patternStatement as CstNode[] | undefined;
+		if (patternNodes?.length) {
+			const compiled = compileLoop(patternNodes[0]);
 			if (typeof compiled !== 'string') {
-				loopEntries.push({ kind: 'plain', compiled, isLine: false });
-			}
-			continue;
-		}
-
-		const lineNodes = stmt.children.lineStatement as CstNode[] | undefined;
-		if (lineNodes?.length) {
-			const compiled = compileLine(lineNodes[0]);
-			if (typeof compiled !== 'string') {
-				loopEntries.push({ kind: 'plain', compiled, isLine: true });
+				loopEntries.push({ kind: 'plain', compiled });
 			}
 			continue;
 		}
@@ -1600,8 +1506,8 @@ export function createInstance(source: string): EvalInstance {
 			// Compile loops eagerly (runners keep state across cycles).
 			// Decorator context is resolved lazily per cycle.
 			const compiled = compileDecoratorBlock(decBlockNodes[0], []);
-			for (const { compiled: cl, isLine, decoratorLayers } of compiled) {
-				loopEntries.push({ kind: 'decorated', compiled: cl, isLine, decoratorLayers });
+			for (const { compiled: cl, decoratorLayers } of compiled) {
+				loopEntries.push({ kind: 'decorated', compiled: cl, decoratorLayers });
 			}
 			continue;
 		}
@@ -1628,24 +1534,16 @@ export function createInstance(source: string): EvalInstance {
 			let evaluated = false;
 
 			for (const entry of loopEntries) {
-				let compiled: CompiledLoop;
-				let scaleCtx: ScaleContext;
-				let isLine: boolean;
-
-				if (entry.kind === 'plain') {
-					compiled = entry.compiled;
-					scaleCtx = globalCtx;
-					isLine = entry.isLine;
-				} else {
-					compiled = entry.compiled;
-					scaleCtx = resolveDecoratorContext(entry.decoratorLayers, globalCtx, cycleNumber);
-					isLine = entry.isLine;
-				}
+				const compiled = entry.compiled;
+				const scaleCtx =
+					entry.kind === 'decorated'
+						? resolveDecoratorContext(entry.decoratorLayers, globalCtx, cycleNumber)
+						: globalCtx;
 
 				const { elements } = compiled;
 				if (elements.length === 0) continue;
 
-				const { events, done } = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber, isLine);
+				const { events, done } = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber);
 				allEvents.push(...events);
 				if (done) anyDone = true;
 				evaluated = true;
