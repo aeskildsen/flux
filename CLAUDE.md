@@ -62,9 +62,9 @@ The Flux DSL is documented in `docs/DSL-spec.md` — this is the single source o
 
 **Keeping the documents in sync:** any change to the spec that affects observable behaviour must be reflected in the corresponding truth table section, and vice versa. The two files must never contradict each other.
 
-When fixing a DSL bug or implementing a DSL feature, invoke the `/tdd` skill. Language design is full of ambiguity — use `AskUserQuestion` to confirm intent before assuming.
+When fixing a bug or implementing a feature, invoke the `/tdd` skill. Language design is full of ambiguity, so use `AskUserQuestion` liberally to confirm intent.
 
-`docs/` is git-tracked. `dev-notes/` is not tracked yet — it contains work-in-progress design notes, open questions, and the roadmap.
+`docs/` is git-tracked. `dev-notes/` is not tracked yet — it contains design notes and open questions which have not been formalised into issues yet.
 
 ## Svelte MCP Tools
 
