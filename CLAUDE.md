@@ -62,7 +62,7 @@ The Flux DSL is documented in `docs/DSL-spec.md` — this is the single source o
 
 **Keeping the documents in sync:** any change to the spec that affects observable behaviour must be reflected in the corresponding truth table section, and vice versa. The two files must never contradict each other.
 
-When fixing a DSL bug or implementing a DSL feature, write the tests first. Language design is full of ambiguity — use `AskUserQuestion` to confirm intent before assuming.
+When fixing a bug or implementing a feature, write the tests first. Language design is full of ambiguity, so use `AskUserQuestion` liberally to confirm intent.
 
 ## Svelte MCP Tools
 
