@@ -375,7 +375,7 @@ class FluxParser extends CstParser {
 
 	decoratorBlock = this.RULE('decoratorBlock', () => {
 		// One or more decorators, followed by either:
-		//   - an inline body on the same line (loopStatement or lineStatement), OR
+		//   - an inline body on the same line (patternStatement), OR
 		//   - an INDENT-indented body on subsequent lines.
 		this.AT_LEAST_ONE(() => {
 			this.SUBRULE(this.decorator);
@@ -492,7 +492,7 @@ class FluxParser extends CstParser {
 
 	continuationModifier = this.RULE('continuationModifier', () => {
 		// `'modName` or `'modName(args)` — one modifier on an indented line.
-		// INDENT/DEDENT are consumed by the enclosing loopStatement/lineStatement block.
+		// INDENT/DEDENT are consumed by the enclosing patternStatement block.
 		this.CONSUME(Tick);
 		this.CONSUME(Identifier);
 		this.OPTION(() => {
@@ -525,10 +525,10 @@ class FluxParser extends CstParser {
 	// -------------------------------------------------------------------------
 	// Sequence expressions
 	//
-	// sequenceExpr  — the top-level list directly after loop/line
+	// sequenceExpr  — the top-level list directly after a content type keyword
 	// sequenceGenerator — same body, but used inside a generatorExpr (nested)
 	// They are separate rules so the CST clearly labels which context a list
-	// appeared in, and so the parser can enforce that loop/line always take a list.
+	// appeared in.
 	// -------------------------------------------------------------------------
 
 	sequenceExpr = this.RULE('sequenceExpr', () => {
@@ -605,7 +605,7 @@ class FluxParser extends CstParser {
 	});
 
 	// -------------------------------------------------------------------------
-	// Timed lists (line only)
+	// Timed lists (relTimedList — used by all content types)
 	// -------------------------------------------------------------------------
 
 	relTimedList = this.RULE('relTimedList', () => {
@@ -704,7 +704,7 @@ class FluxParser extends CstParser {
 	});
 
 	atModifier = this.RULE('atModifier', () => {
-		// 'at(timeExpr) — start offset for loop/line.
+		// 'at(timeExpr) — start offset for all content types.
 		// timeExpr is integer or integer/integer (e.g. 0, 1, 3/4, -1/8).
 		// The leading minus on a negative offset is consumed as part of timeExpr.
 		this.CONSUME(Tick);

@@ -56,9 +56,7 @@
  * - finite patterns ('n): evaluated once, produces fixed event array; 'at sets cycleOffset
  * - FX pipe: note [0] | fx("lpf") emits FxEvent alongside note events
  *
- * ## Legacy compatibility
- *
- * The original `evaluate(source)` function is preserved unchanged — it wraps
+ * The original `evaluate(source)` function is preserved — it wraps
  * createInstance + evaluate in a cyclic JS generator so existing call sites
  * keep working.
  */
@@ -82,7 +80,7 @@ export type ScheduledEvent = {
 	beatOffset: number; // position within the cycle in beats (0 = cycle start)
 	duration: number; // gate-close time in beats (legato × slot)
 	cent?: number; // pitch deviation in cents (0 = none)
-	cycleOffset?: number; // cycle-level offset (for 'at and 'repeat)
+	cycleOffset?: number; // cycle-level offset (for 'at)
 	offsetMs?: number; // ms shift (positive = late, negative = early)
 	mono?: boolean; // if true, send set instead of new synth
 	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
@@ -258,7 +256,7 @@ function extractConstantNumber(genExpr: CstNode): number | null {
 }
 
 // ---------------------------------------------------------------------------
-// Step-generator series helpers (stateful, shared with legacy code below)
+// Step-generator series helpers
 // ---------------------------------------------------------------------------
 
 function stepSeries(start: number, step: number, length: number): number[] {
@@ -906,8 +904,8 @@ type CompiledTransposition = {
 	runner: RunnerState;
 } | null;
 
-function compileTransposition(loopOrLineNode: CstNode): CompiledTransposition {
-	const transpNode = ((loopOrLineNode.children.transposition as CstNode[]) ?? [])[0];
+function compileTransposition(patternNode: CstNode): CompiledTransposition {
+	const transpNode = ((patternNode.children.transposition as CstNode[]) ?? [])[0];
 	if (!transpNode) return null;
 
 	const plusToks = (transpNode.children.Plus as IToken[]) ?? [];
@@ -972,7 +970,7 @@ function compileTransposition(loopOrLineNode: CstNode): CompiledTransposition {
 /** List-level traversal modifier. */
 type TraversalMode = 'seq' | 'shuf' | 'pick' | 'wran';
 
-type CompiledLoop = {
+type CompiledPattern = {
 	elements: CompiledElement[];
 	listMode: EagerMode; // mode from list-level modifiers (inherited by elements)
 	traversal: TraversalMode;
@@ -982,40 +980,42 @@ type CompiledLoop = {
 	offsetRunner: RunnerState | null; // null = no offset
 	mono: boolean;
 	atOffset: number; // cycle offset from 'at modifier
-	repeat: number | null; // null = no repeat, 0 = infinite, n = count
+	repeat: number | null; // null = loop indefinitely, n = finite play count
 	transposition: CompiledTransposition;
 	fx: CompiledFx | null; // compiled FX (stateful runners; null = no FX)
-	synthdef: string | null; // SynthDef name from loop(\name) / line(\name); null = use default
+	synthdef: string | null; // SynthDef name from synthdefArg; null = use default
 };
 
-/** Collect all modifiers from the loop/line node itself plus continuation block.
+/** Collect all modifiers from the patternStatement node plus continuation block.
  *
  * Parser structure: modifiers written after [...] are consumed by sequenceExpr's
- * MANY2, not by loopStatement's MANY. So we must look in sequenceExpr or
- * relTimedList as well as on the loop node itself.
- * Continuation modifiers are found as continuationModifier children on the loop node.
+ * MANY2, not by patternStatement's MANY. So we must look in sequenceExpr or
+ * relTimedList as well as on the pattern node itself.
+ * Continuation modifiers are found as continuationModifier children on the pattern node.
  */
-function collectLoopModifiers(loopNode: CstNode): CstNode[] {
+function collectPatternModifiers(patternNode: CstNode): CstNode[] {
 	// Modifiers on the sequenceExpr (written directly after [...])
 	const seqNode =
-		((loopNode.children.sequenceExpr as CstNode[]) ?? [])[0] ??
-		((loopNode.children.relTimedList as CstNode[]) ?? [])[0];
+		((patternNode.children.sequenceExpr as CstNode[]) ?? [])[0] ??
+		((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
 	const seqMods = seqNode ? ((seqNode.children.modifierSuffix as CstNode[]) ?? []) : [];
 
-	// Any modifier suffixes directly on the loop statement (rare — after transposition etc.)
-	const directMods = (loopNode.children.modifierSuffix as CstNode[]) ?? [];
+	// Any modifier suffixes directly on the pattern statement (rare — after transposition etc.)
+	const directMods = (patternNode.children.modifierSuffix as CstNode[]) ?? [];
 
 	// Continuation modifiers (from INDENT block)
-	const contMods = (loopNode.children.continuationModifier as CstNode[]) ?? [];
+	const contMods = (patternNode.children.continuationModifier as CstNode[]) ?? [];
 
 	return [...seqMods, ...directMods, ...contMods];
 }
 
-function compileLoop(loopNode: CstNode): CompiledLoop | string {
+function compilePattern(patternNode: CstNode): CompiledPattern | string {
 	const seqNode = (
-		(loopNode.children.sequenceExpr ?? loopNode.children.sequenceGenerator) as CstNode[] | undefined
+		(patternNode.children.sequenceExpr ?? patternNode.children.sequenceGenerator) as
+			| CstNode[]
+			| undefined
 	)?.[0];
-	const relNode = ((loopNode.children.relTimedList as CstNode[]) ?? [])[0];
+	const relNode = ((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
 
 	const bodyNode = seqNode ?? relNode;
 	if (!bodyNode) return 'pattern has no sequence body';
@@ -1051,52 +1051,52 @@ function compileLoop(loopNode: CstNode): CompiledLoop | string {
 	if (compiled.length === 0) return 'pattern sequence is empty';
 
 	// Pattern-level modifiers (direct + continuation)
-	const allLoopMods = collectLoopModifiers(loopNode);
+	const allMods = collectPatternModifiers(patternNode);
 
 	// 'stut
 	let stutRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'stut')) {
-		stutRunner = extractModifierScalar(allLoopMods, 'stut', 2, 0);
+	if (hasModifier(allMods, 'stut')) {
+		stutRunner = extractModifierScalar(allMods, 'stut', 2, 0);
 	}
 
 	// 'maybe
 	let maybeRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'maybe')) {
-		maybeRunner = extractModifierScalar(allLoopMods, 'maybe', 0.5, 0);
+	if (hasModifier(allMods, 'maybe')) {
+		maybeRunner = extractModifierScalar(allMods, 'maybe', 0.5, 0);
 	}
 
 	// 'legato
 	let legatoRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'legato')) {
-		legatoRunner = extractModifierScalar(allLoopMods, 'legato', 1.0, 0);
+	if (hasModifier(allMods, 'legato')) {
+		legatoRunner = extractModifierScalar(allMods, 'legato', 1.0, 0);
 	}
 
 	// 'offset
 	let offsetRunner: RunnerState | null = null;
-	if (hasModifier(allLoopMods, 'offset')) {
-		offsetRunner = extractModifierScalar(allLoopMods, 'offset', 0, 0);
+	if (hasModifier(allMods, 'offset')) {
+		offsetRunner = extractModifierScalar(allMods, 'offset', 0, 0);
 	}
 
 	// mono: detected from content type keyword token on the patternStatement node
-	const monoTok = ((loopNode.children.Mono as IToken[]) ?? [])[0];
+	const monoTok = ((patternNode.children.Mono as IToken[]) ?? [])[0];
 	const mono = monoTok !== undefined;
 
 	// 'at
-	const atOffset = extractAtOffset(allLoopMods);
+	const atOffset = extractAtOffset(allMods);
 
 	// 'n (finite playback)
-	const repeat = extractRepeat(allLoopMods);
+	const repeat = extractRepeat(allMods);
 
 	// Transposition
-	const transposition = compileTransposition(loopNode);
+	const transposition = compileTransposition(patternNode);
 
 	// FX pipe
-	const pipeNode = ((loopNode.children.pipeExpr as CstNode[]) ?? [])[0];
+	const pipeNode = ((patternNode.children.pipeExpr as CstNode[]) ?? [])[0];
 	const rawFxNode = pipeNode ? (((pipeNode.children.fxExpr as CstNode[]) ?? [])[0] ?? null) : null;
 	const fx = rawFxNode ? compileFxNode(rawFxNode) : null;
 
 	// SynthDef selection: note(\name) / mono(\name) / etc.
-	const synthdefArgNode = ((loopNode.children.synthdefArg as CstNode[]) ?? [])[0];
+	const synthdefArgNode = ((patternNode.children.synthdefArg as CstNode[]) ?? [])[0];
 	const synthdefTok = synthdefArgNode
 		? ((synthdefArgNode.children.Symbol as IToken[]) ?? [])[0]
 		: null;
@@ -1301,11 +1301,11 @@ function expandSlot(
 }
 
 /**
- * Produce ScheduledEvent[] from a compiled loop for a given cycle.
+ * Produce ScheduledEvent[] from a compiled pattern for a given cycle.
  * Handles 'stut, 'maybe, traversal, 'legato, 'offset, 'mono, transposition, accidentals, FX.
  */
-function evaluateCompiledLoop(
-	compiled: CompiledLoop,
+function evaluateCompiledPattern(
+	compiled: CompiledPattern,
 	scaleCtx: ScaleContext,
 	cycle: number
 ): { events: ScheduledEvent[]; done: boolean } {
@@ -1347,12 +1347,11 @@ function evaluateCompiledLoop(
 	const events: ScheduledEvent[] = [];
 
 	// isFinite: true when 'n modifier is present (pattern plays n times then stops).
-	// Looping patterns (no 'n) run indefinitely, re-evaluated each cycle.
+	// Patterns without 'n loop indefinitely, re-evaluated each cycle.
 	const isFinite = repeat !== null;
 
-	// Determine repeat count for cycleOffset calculation.
-	// isFinite: repeat = n (positive integer), so repeatCount = n.
-	// Looping: repeatCount = 1 (only current cycle matters).
+	// Determine play count for cycleOffset calculation.
+	// Finite: repeat = n (positive integer). Looping: treat as 1 (only current cycle matters).
 	const repeatCount = isFinite ? repeat! : 1;
 
 	// For a finite pattern, check if this cycle is past the last scheduled cycle.
@@ -1402,12 +1401,12 @@ function evaluateCompiledLoop(
 
 /**
  * Walk a decoratorBlock CST node once at compile time, returning pre-compiled
- * loops paired with the decorator CST nodes needed to build the ScaleContext
- * at evaluate time. Runner state is owned by the compiled loops and persists
+ * patterns paired with the decorator CST nodes needed to build the ScaleContext
+ * at evaluate time. Runner state is owned by the compiled patterns and persists
  * across cycles; only the ScaleContext is rebuilt per cycle.
  */
-type CompiledDecoratedLoop = {
-	compiled: CompiledLoop;
+type CompiledDecoratedPattern = {
+	compiled: CompiledPattern;
 	/** Ordered list of decorator node arrays, outer → inner, to apply at evaluate time. */
 	decoratorLayers: CstNode[][];
 };
@@ -1415,14 +1414,14 @@ type CompiledDecoratedLoop = {
 function compileDecoratorBlock(
 	blockNode: CstNode,
 	outerLayers: CstNode[][]
-): CompiledDecoratedLoop[] {
+): CompiledDecoratedPattern[] {
 	const decorators = (blockNode.children.decorator as CstNode[]) ?? [];
 	const layers = [...outerLayers, decorators];
-	const results: CompiledDecoratedLoop[] = [];
+	const results: CompiledDecoratedPattern[] = [];
 
 	const patternNodes = (blockNode.children.patternStatement as CstNode[]) ?? [];
 	for (const pn of patternNodes) {
-		const compiled = compileLoop(pn);
+		const compiled = compilePattern(pn);
 		if (typeof compiled !== 'string') {
 			results.push({ compiled, decoratorLayers: layers });
 		}
@@ -1471,26 +1470,26 @@ export function createInstance(source: string): EvalInstance {
 	}
 
 	// ---------------------------------------------------------------------------
-	// Compile phase: find all statements, partition into sets and loops.
+	// Compile phase: find all statements, partition into sets and patterns.
 	// The scale context is built lazily at evaluate() time from set nodes and
 	// decorator blocks so that stochastic decorator args respect cycle semantics.
 	// ---------------------------------------------------------------------------
 
 	const statements = (cst.children.statement ?? []) as CstNode[];
 
-	type LoopEntry =
-		| { kind: 'plain'; compiled: CompiledLoop }
-		| { kind: 'decorated'; compiled: CompiledLoop; decoratorLayers: CstNode[][] };
+	type PatternEntry =
+		| { kind: 'plain'; compiled: CompiledPattern }
+		| { kind: 'decorated'; compiled: CompiledPattern; decoratorLayers: CstNode[][] };
 
 	const setNodes: CstNode[] = [];
-	const loopEntries: LoopEntry[] = [];
+	const patternEntries: PatternEntry[] = [];
 
 	for (const stmt of statements) {
 		const patternNodes = stmt.children.patternStatement as CstNode[] | undefined;
 		if (patternNodes?.length) {
-			const compiled = compileLoop(patternNodes[0]);
+			const compiled = compilePattern(patternNodes[0]);
 			if (typeof compiled !== 'string') {
-				loopEntries.push({ kind: 'plain', compiled });
+				patternEntries.push({ kind: 'plain', compiled });
 			}
 			continue;
 		}
@@ -1503,18 +1502,18 @@ export function createInstance(source: string): EvalInstance {
 
 		const decBlockNodes = stmt.children.decoratorBlock as CstNode[] | undefined;
 		if (decBlockNodes?.length) {
-			// Compile loops eagerly (runners keep state across cycles).
+			// Compile patterns eagerly (runners keep state across cycles).
 			// Decorator context is resolved lazily per cycle.
 			const compiled = compileDecoratorBlock(decBlockNodes[0], []);
 			for (const { compiled: cl, decoratorLayers } of compiled) {
-				loopEntries.push({ kind: 'decorated', compiled: cl, decoratorLayers });
+				patternEntries.push({ kind: 'decorated', compiled: cl, decoratorLayers });
 			}
 			continue;
 		}
 	}
 
-	if (loopEntries.length === 0) {
-		return { ok: false, error: 'No loop statement found' };
+	if (patternEntries.length === 0) {
+		return { ok: false, error: 'No pattern statement found' };
 	}
 
 	return {
@@ -1528,12 +1527,12 @@ export function createInstance(source: string): EvalInstance {
 				globalCtx = applySetStatement(setNode, globalCtx, cycleNumber);
 			}
 
-			// Evaluate all loops and collect their events
+			// Evaluate all patterns and collect their events
 			const allEvents: ScheduledEvent[] = [];
 			let anyDone = false;
 			let evaluated = false;
 
-			for (const entry of loopEntries) {
+			for (const entry of patternEntries) {
 				const compiled = entry.compiled;
 				const scaleCtx =
 					entry.kind === 'decorated'
@@ -1543,14 +1542,14 @@ export function createInstance(source: string): EvalInstance {
 				const { elements } = compiled;
 				if (elements.length === 0) continue;
 
-				const { events, done } = evaluateCompiledLoop(compiled, scaleCtx, cycleNumber);
+				const { events, done } = evaluateCompiledPattern(compiled, scaleCtx, cycleNumber);
 				allEvents.push(...events);
 				if (done) anyDone = true;
 				evaluated = true;
 			}
 
 			if (!evaluated) {
-				return { ok: false, error: 'No loop found in evaluate' };
+				return { ok: false, error: 'No pattern found in evaluate' };
 			}
 			return { ok: true, events: allEvents, done: anyDone };
 		}

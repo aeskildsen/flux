@@ -83,7 +83,7 @@ function collectFirst(source: string, numCycles: number): number[] {
 // ---------------------------------------------------------------------------
 
 describe('createInstance — basic interface', () => {
-	it('returns ok:true for a valid loop', () => {
+	it('returns ok:true for a valid pattern', () => {
 		expect(createInstance('note [0 2 4]').ok).toBe(true);
 	});
 
@@ -749,7 +749,7 @@ describe('decorator scoping (truth table 8)', () => {
 	});
 
 	it('decorator scope is lexical — does not affect undecorated siblings', () => {
-		// Two loops: one under @scale(minor), one bare. At minimum parses successfully.
+		// Two patterns: one under @scale(minor), one bare. At minimum parses successfully.
 		expect(createInstance('@scale(minor)\n  note [2]\nnote [2]').ok).toBe(true);
 	});
 });
@@ -778,7 +778,7 @@ describe('stochastic decorator arguments', () => {
 	});
 });
 
-describe('multiple inline decorators on same loop', () => {
+describe('multiple inline decorators on same pattern', () => {
 	it('@scale(minor) @root(7) note [0]: G minor, degree 0 = G5 = 67', () => {
 		expect(notes('@scale(minor) @root(7) note [0]')[0]).toBe(67);
 	});
@@ -1441,11 +1441,11 @@ describe("note'n statement (truth table 7)", () => {
 });
 
 describe('modifier continuation lines (truth table 1)', () => {
-	it("continuation 'stut attaches to loop", () => {
+	it("continuation 'stut attaches to pattern", () => {
 		expect(eval0("note [0 2]\n  'stut(2)")).toHaveLength(4);
 	});
 
-	it("continuation 'legato attaches to loop", () => {
+	it("continuation 'legato attaches to pattern", () => {
 		for (const d of durations("note [0 2 4]\n  'legato(0.8)")) expect(d).toBeCloseTo((1 / 3) * 0.8);
 	});
 
@@ -1747,7 +1747,7 @@ describe('inline repetition — !n', () => {
 		expect(notes('note [1!1]')).toEqual(notes('note [1]'));
 	});
 
-	it('events are evenly spaced within a 1!4 loop', () => {
+	it('events are evenly spaced within a 1!4 pattern', () => {
 		const offs = offsets('note [1!4]');
 		expect(offs).toHaveLength(4);
 		// Each slot is 1/4 of a cycle in beats (cycle = 1 beat in the evaluator model)
@@ -1871,16 +1871,16 @@ describe('createInstance — error message content', () => {
 		expect(result.error).toMatch(/^(Lex error:|Parse error:)/);
 	});
 
-	it('"No loop statement found" when source has no loop or line', () => {
+	it('"No pattern statement found" when source has no pattern', () => {
 		const result = createInstance('set root(7)');
 		if (result.ok) throw new Error('expected error');
-		expect(result.error).toBe('No loop statement found');
+		expect(result.error).toBe('No pattern statement found');
 	});
 
-	it('"No loop statement found" for empty source', () => {
+	it('"No pattern statement found" for empty source', () => {
 		const result = createInstance('');
 		if (result.ok) throw new Error('expected error');
-		expect(result.error).toBe('No loop statement found');
+		expect(result.error).toBe('No pattern statement found');
 	});
 
 	it('parse error message includes some description of the problem', () => {
@@ -1901,41 +1901,41 @@ describe('createInstance — error message content', () => {
 	});
 });
 
-// Note: the evaluate()-level error 'No loop found in evaluate' (evaluator.ts)
-// is dead code — compileLoop() rejects empty sequences at compile time, so
-// loopEntries always has at least one non-empty pattern by the time evaluate() runs.
+// Note: the evaluate()-level error 'No pattern found in evaluate' (evaluator.ts)
+// is dead code — compilePattern() rejects empty sequences at compile time, so
+// patternEntries always has at least one non-empty pattern by the time evaluate() runs.
 // The path is unreachable through the public API and intentionally has no test.
 
 // ---------------------------------------------------------------------------
-// Multiple loops — all loops must emit events
+// Multiple patterns — all must emit events
 // ---------------------------------------------------------------------------
 
-describe('multiple loops — all loops produce events', () => {
-	it('two plain loops both emit events in the same cycle', () => {
+describe('multiple patterns — all patterns produce events', () => {
+	it('two plain patterns both emit events in the same cycle', () => {
 		// note(\kick) [0 1 2 3 5] has 5 elements; note [-2 0 2] has 3 elements.
 		// All 8 events should be present.
 		const events = eval0('note(\\kick) [0 1 2 3 5]\n\nnote [-2 0 2]');
 		expect(events).toHaveLength(8);
 	});
 
-	it('first loop events use the given synthdef', () => {
+	it('first pattern events use the given synthdef', () => {
 		const events = eval0('note(\\kick) [0 1 2 3 5]\n\nnote [-2 0 2]');
 		const kickEvents = events.filter((e) => e.synthdef === 'kick');
 		expect(kickEvents).toHaveLength(5);
 	});
 
-	it('second loop events have no synthdef', () => {
+	it('second pattern events have no synthdef', () => {
 		const events = eval0('note(\\kick) [0 1 2 3 5]\n\nnote [-2 0 2]');
 		const plainEvents = events.filter((e) => e.synthdef === undefined);
 		expect(plainEvents).toHaveLength(3);
 	});
 
-	it('commenting out the first loop leaves only the second', () => {
+	it('commenting out the first pattern leaves only the second', () => {
 		const events = eval0('// note(\\kick) [0 1 2 3 5]\n\nnote [-2 0 2]');
 		expect(events).toHaveLength(3);
 	});
 
-	it('second loop is independent when first is absent', () => {
+	it('second pattern is independent when first is absent', () => {
 		const eventsSecondOnly = eval0('note [-2 0 2]');
 		const eventsBoth = eval0('note(\\kick) [0 1 2 3 5]\n\nnote [-2 0 2]');
 		const secondInBoth = eventsBoth.filter((e) => e.synthdef === undefined);
