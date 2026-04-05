@@ -346,7 +346,7 @@ Accidentals are interpreted as literals at parse time — `2b` is a single token
 `set` is a top-level statement for setting ambient session parameters that apply globally unless overridden. This avoids modifier sprawl and prevents the DSL from reinventing Pbind-style key-value pairs piecemeal.
 
 ```flux
-set scale(\minor)
+set scale(minor)
 set root(7)
 set tempo(120)
 set key(g# lydian)
@@ -361,21 +361,21 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`.
 `@` decorators apply session parameters to a scoped block of expressions, overriding global `set` values within that scope. They use a parenthesised argument list — the same syntax supports single arguments (`@root(7)`), compound arguments (`@key(g# lydian 4)`), and stochastic arguments (`@root(3rand7)`).
 
 ```flux
-@scale(\minor) @root(7)
+@scale(minor) @root(7)
   note lead [0 1 2]
   @octave(4)
     note lead [0 2 4 5]
 ```
 
-Here `note lead [0 1 2]` inherits `@scale(\minor)` and `@root(7)`. `note lead [0 2 4 5]` inherits all three, with `@octave(4)` added at the nested level.
+Here `note lead [0 1 2]` inherits `@scale(minor)` and `@root(7)`. `note lead [0 2 4 5]` inherits all three, with `@octave(4)` added at the nested level.
 
 For single-expression use, decorators may appear inline on the same line:
 
 ```flux
-@scale(\minor) note lead [0 1 2]
+@scale(minor) note lead [0 1 2]
 ```
 
-**`set` is `@` at global scope.** `set scale(\minor)` is sugar for a top-level `@scale(\minor)` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
+**`set` is `@` at global scope.** `set scale(minor)` is sugar for a top-level `@scale(minor)` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
 
 **Indentation:** block scope uses fixed indentation (2 spaces). Variable indentation is not supported — indentation level is determined by the number of leading 2-space units. This keeps the parser simple and the code visually consistent.
 
@@ -385,19 +385,35 @@ For single-expression use, decorators may appear inline on the same line:
 
 ---
 
-## Symbols
+## Name conventions
 
-Names in Flux — SynthDef names, FX names, and scale names passed as arguments — are written as **symbols**: a backslash immediately followed by an identifier, with no space.
+Flux uses two conventions for naming things, depending on whether the name refers to a runtime artefact or built-in language vocabulary.
+
+### `\symbol` — runtime artefacts
+
+SynthDef names, FX names, and buffer names are written as **symbols**: a backslash immediately followed by an identifier, with no space.
 
 ```flux
-\moog     // symbol whose name is "moog"
-\lpf      // symbol whose name is "lpf"
-\minor    // symbol whose name is "minor"
+\moog     // SynthDef name
+\lpf      // FX name
+\kit      // buffer name
 ```
 
-This is borrowed from SuperCollider. The backslash+identifier is a single token; whitespace between `\` and the name is not permitted.
+This is borrowed from SuperCollider. The backslash+identifier is a single token; whitespace between `\` and the name is not permitted. String literals (`"moog"`) are not valid in Flux — use symbols instead.
 
-String literals (`"moog"`) are not valid in Flux — use symbols instead.
+`\symbol` means "look this up in a runtime registry" — the set of valid names is open and user-extensible.
+
+### Bare identifiers — built-in vocabulary
+
+Scale names, key names, and root names are written as **bare identifiers** — no backslash.
+
+```flux
+set scale(minor)       // scale name — bare identifier
+set key(g# lydian)     // key name — bare identifier
+@scale(dorian) note lead [0 2 4]
+```
+
+Bare identifiers in these positions mean "this is a fixed, language-defined name" — the set of valid values is closed and defined by the language.
 
 ---
 

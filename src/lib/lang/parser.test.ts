@@ -85,8 +85,8 @@ describe('patternStatement — synthdef and full form', () => {
 });
 
 describe('setStatement', () => {
-	it('parses set scale(\\minor) with symbol', () => {
-		const { parseErrors } = parse('set scale(\\minor)');
+	it('parses set scale(minor) with bare identifier', () => {
+		const { parseErrors } = parse('set scale(minor)');
 		expect(parseErrors).toHaveLength(0);
 	});
 
@@ -98,6 +98,52 @@ describe('setStatement', () => {
 	it('parses set tempo(120)', () => {
 		const { parseErrors } = parse('set tempo(120)');
 		expect(parseErrors).toHaveLength(0);
+	});
+});
+
+describe('name conventions — \\symbol vs bare identifier', () => {
+	// Scale/key positions take bare identifiers only (closed, built-in vocabulary).
+	// \\symbol is reserved for SynthDef/FX names (open, runtime registry).
+
+	it('set scale(minor) — bare identifier is accepted', () => {
+		expect(parse('set scale(minor)').parseErrors).toHaveLength(0);
+	});
+
+	it('set scale(\\minor) — symbol is a parse error in scale position', () => {
+		expect(parse('set scale(\\minor)').parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('@scale(minor) — bare identifier is accepted inline', () => {
+		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
+	});
+
+	it('@scale(\\minor) — symbol is a parse error in @scale position', () => {
+		expect(parse('@scale(\\minor) note lead [0 1 2]').parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('@scale(dorian) — other scale names work as bare identifiers', () => {
+		expect(parse('@scale(dorian) note lead [0 2 4]').parseErrors).toHaveLength(0);
+	});
+
+	it('set key(g# lydian) — bare identifiers accepted in key position', () => {
+		expect(parse('set key(g# lydian)').parseErrors).toHaveLength(0);
+	});
+
+	// SynthDef positions still require \\symbol (not bare identifier).
+	it('note(\\moog) lead [...] — symbol is required for SynthDef', () => {
+		expect(parse('note(\\moog) lead [0 1 2]').parseErrors).toHaveLength(0);
+	});
+
+	it('note(moog) lead [...] — bare identifier is rejected in SynthDef position', () => {
+		expect(parse('note(moog) lead [0 1 2]').parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('fx(\\lpf) — symbol is required for FX name', () => {
+		expect(parse('note lead [0 2 4] | fx(\\lpf)').parseErrors).toHaveLength(0);
+	});
+
+	it('fx(lpf) — bare identifier is rejected in FX position', () => {
+		expect(parse('note lead [0 2 4] | fx(lpf)').parseErrors.length).toBeGreaterThan(0);
 	});
 });
 
@@ -194,13 +240,13 @@ describe('continuation modifiers', () => {
 });
 
 describe('decorators', () => {
-	it('parses an inline decorator with symbol: @scale(\\minor) note lead [0 1 2]', () => {
-		const { parseErrors } = parse('@scale(\\minor) note lead [0 1 2]');
+	it('parses an inline decorator: @scale(minor) note lead [0 1 2]', () => {
+		const { parseErrors } = parse('@scale(minor) note lead [0 1 2]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses a block decorator with symbol', () => {
-		const { parseErrors } = parse('@scale(\\minor)\n  note lead [0 1 2]');
+	it('parses a block decorator with bare identifier', () => {
+		const { parseErrors } = parse('@scale(minor)\n  note lead [0 1 2]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
@@ -209,8 +255,8 @@ describe('decorators', () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses nested decorator blocks with symbol', () => {
-		const src = '@root(7)\n  @scale(\\minor)\n    note lead [0 1 2]';
+	it('parses nested decorator blocks', () => {
+		const src = '@root(7)\n  @scale(minor)\n    note lead [0 1 2]';
 		const { parseErrors } = parse(src);
 		expect(parseErrors).toHaveLength(0);
 	});
@@ -272,7 +318,7 @@ describe('pipe / FX', () => {
 
 describe('multiple statements', () => {
 	it('parses multiple named statements on separate lines', () => {
-		const src = 'note lead [0 2 4]\nmono bass [0 1 2]\nset scale(\\minor)';
+		const src = 'note lead [0 2 4]\nmono bass [0 1 2]\nset scale(minor)';
 		const { parseErrors } = parse(src);
 		expect(parseErrors).toHaveLength(0);
 	});
@@ -537,12 +583,12 @@ describe('generator naming — valid forms', () => {
 		expect(parse('note lead [0 2 4] | fx(\\lpf)').parseErrors).toHaveLength(0);
 	});
 
-	it('parses inline decorator with named generator: @scale(\\minor) note lead [0 1 2]', () => {
-		expect(parse('@scale(\\minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
+	it('parses inline decorator with named generator: @scale(minor) note lead [0 1 2]', () => {
+		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
 	});
 
 	it('parses block decorator with named generator', () => {
-		expect(parse('@scale(\\minor)\n  note lead [0 1 2]').parseErrors).toHaveLength(0);
+		expect(parse('@scale(minor)\n  note lead [0 1 2]').parseErrors).toHaveLength(0);
 	});
 
 	it('parses multiple named generators on separate lines', () => {
