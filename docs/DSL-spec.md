@@ -8,13 +8,13 @@ Line comments begin with `//` and run to end of line. Block comments are delimit
 
 ```flux
 // this is a line comment
-loop [0 2 4]  // inline comment
+note [0 2 4]  // inline comment
 
 /*
   This is a
   multi-line comment
 */
-loop [0 1 2 3]
+note [0 1 2 3]
 ```
 
 ## Generators
@@ -27,7 +27,7 @@ Unlike SuperCollider patterns/streams, all generators yield indefinitely. They a
 
 > _See truth tables [12 (Whitespace)](DSL-truthtables.md#12-whitespace-truth-table)._
 
-Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `loop` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gau`, `exp`, `bro`, `step`, `mul`, `lin`, `geo`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
+Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `note` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gau`, `exp`, `bro`, `step`, `mul`, `lin`, `geo`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
 
 Inside `[...]` sequence generators, elements are separated by spaces. Commas are not valid separators.
 
@@ -51,8 +51,8 @@ Specifically for `'wran`: weight for each element is 1 by default. The weight ca
 `_` marks an event slot as silence. It occupies the same time as any other element but no synth is spawned. The evaluator emits a `ScheduledEvent` with `type: 'rest'` so the scheduler knows the slot was intentionally silent (useful for `'mono` legato handling and visualisation).
 
 ```flux
-loop [0 2 _ 4]    // rest on the 3rd slot — 4 elements, each gets 1/4 cycle
-loop [_ 2 4]      // rest on the 1st slot
+note [0 2 _ 4]    // rest on the 3rd slot — 4 elements, each gets 1/4 cycle
+note [_ 2 4]      // rest on the 1st slot
 [0 _ 2]'stut      // rest is repeated alongside notes
 ```
 
@@ -126,24 +126,24 @@ A number of generators work by filtering events that come from upstream generato
 The `'stut(n)` modifier repeats every element n times. Default: n = 2. The bare form `'stut` is valid and equivalent to `'stut(2)`.
 
 ```flux
-loop [0'stut]                              // 0 yielded 2 times
+note [0'stut]                              // 0 yielded 2 times
 
 // play each generated value two times instead of one
-loop [0rand7 4rand6]'stut
+note [0rand7 4rand6]'stut
 
 // repeat each generated value 4 times
-loop [0rand7 4rand6]'stut(4)
+note [0rand7 4rand6]'stut(4)
 
 // repeat each value 2-4 times, count drawn once per cycle (default eager(1))
-loop [0rand7 4rand6]'stut(2rand4)
+note [0rand7 4rand6]'stut(2rand4)
 
 // count redrawn every 4 cycles
-loop [0rand7 4rand6]'stut(2rand4'eager(4))
+note [0rand7 4rand6]'stut(2rand4'eager(4))
 ```
 
 How `'eager` and `'lock` apply to `'stut`:
 
-- Default (`'eager(1)`): stutter count is drawn once per cycle — `loop [0rand7 4rand6]'stut(2rand4)`.
+- Default (`'eager(1)`): stutter count is drawn once per cycle — `note [0rand7 4rand6]'stut(2rand4)`.
 - `'stut(2rand4'eager(4))`: count is redrawn every 4 cycles.
 - `'stut(2rand4'lock)`: stutter count is chosen once and frozen forever.
 
@@ -155,53 +155,60 @@ The `'maybe(p)` modifier passes each element through with probability `p` (0.0�
 
 ---
 
-## Cyclic mode: `loop`
+## Content types
 
-> _See truth tables [6 (Loop freezing)](DSL-truthtables.md#6-loop-freezing-semantics)._
+The primary keyword specifies the _content type_ — what kind of events are generated. All content types loop indefinitely by default. The `'n` modifier opts into finite playback.
 
-A `loop` consists of a number of elements defined within a set of brackets and delineated by spaces. A space is required between `loop` and `[`.
+| Keyword  | Description                                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `note`   | Polyphonic pitched events. New synth instance per event.                                                                                               |
+| `mono`   | Monophonic pitched events. Single persistent synth node; events send `set` messages instead of spawning new instances. Rough equivalent of SC's Pmono. |
+| `sample` | Buffer playback. (Behaviour defined in issue #14.)                                                                                                     |
+| `slice`  | Beat-sliced buffer playback. (Behaviour defined in issue #14.)                                                                                         |
+| `cloud`  | Granular synthesis. (Behaviour defined in issue #14.)                                                                                                  |
+
+A space is required between the content type keyword and `[`.
 
 ```flux
-loop [0 1 2 3]
+note [0 1 2 3]       // polyphonic pitched events, loops indefinitely
+mono [0 1 2 3]       // monophonic pitched events, loops indefinitely
 ```
 
-The elements are repeated indefinitely.
+### Timing
 
-### Timing in loops
-
-The duration of one iteration of the loop is always equal to the duration of one `cycle`, as in TidalCycles. Each element is triggered with a temporal interval of exactly 1/n cycles, distributing elements evenly in time across the cycle.
+The duration of one cycle is always one `cycle`, as in TidalCycles. Each element is triggered with a temporal interval of exactly 1/n cycles, distributing elements evenly in time.
 
 ```flux
 // n = 4, each element gets 1/4 cycle
-loop [0 1 2 3]
+note [0 1 2 3]
 
 // n = 6, each element gets 1/6 cycle
-loop [0 1 2 3 4 5]
+note [0 1 2 3 4 5]
 
 // elements in sublists get slices of the parent's time slot
 // 0, 1 and 4 get 1/4 cycle; 2 and 3 each get 1/8 cycle (i.e. (1/4)/2)
-loop [0 1 [2 3] 4]
+note [0 1 [2 3] 4]
 ```
 
-The `'offset` modifier on a loop or line schedules all events a number of milliseconds early (negative value) or late (positive value) relative to their normal trigger time. Equivalent to the `\lag` key in SC. See truth table [14 (`'offset`)](DSL-truthtables.md#14-offset-truth-table).
+The `'offset` modifier schedules all events a number of milliseconds early (negative value) or late (positive value) relative to their normal trigger time. Equivalent to the `\lag` key in SC. Applies to all content types. See truth table [14 (`'offset`)](DSL-truthtables.md#14-offset-truth-table).
 
 ```flux
-loop [0 1 2]'offset(20)    // all events 20 ms late
-loop [0 1 2]'offset(-10)   // all events 10 ms early
+note [0 1 2]'offset(20)    // all events 20 ms late
+note [0 1 2]'offset(-10)   // all events 10 ms early
 ```
 
-### Durations
+### Durations (`'legato`)
 
 > _See truth table [13 (`'legato`)](DSL-truthtables.md#13-legato-truth-table)._
 
-`loop` spawns new self-releasing synth instances per event (not persistent nodes). Gate is closed via a scheduled `set` message after each event's time slot, scaled by a legato factor. This conforms to standard SC synthdef conventions (gate input + ADSR).
+`note` spawns new self-releasing synth instances per event (not persistent nodes). Gate is closed via a scheduled `set` message after each event's time slot, scaled by a legato factor. This conforms to standard SC synthdef conventions (gate input + ADSR).
 
 Legato is a modifier, patternisable like any other stochastic argument:
 
 ```flux
-loop [0 2 4 7]'legato(0.8)                  // fixed legato
-loop [0 2 4 7]'legato(0.5rand1.2)            // stochastic legato, eager(1) by default
-loop [0 2 4 7]'legato(0.5rand1.2'eager(4))  // new legato value every 4 cycles
+note [0 2 4 7]'legato(0.8)                  // fixed legato
+note [0 2 4 7]'legato(0.5rand1.2)            // stochastic legato, eager(1) by default
+note [0 2 4 7]'legato(0.5rand1.2'eager(4))  // new legato value every 4 cycles
 ```
 
 Legato values > 1.0 produce overlap (useful for pads/drones).
@@ -210,90 +217,65 @@ The scheduler must therefore track two times per event: note-on time and gate-cl
 
 ### Determination of length
 
-Structural length is frozen at the cycle boundary. All generators inside a `loop` list are evaluated for length once when the cycle begins; the resulting event array is pre-calculated and handed off to the scheduler.
+Structural length is frozen at the cycle boundary. All generators inside the list are evaluated for length once when the cycle begins; the resulting event array is pre-calculated and handed off to the scheduler.
 
----
+### Finite playback: `'n`
 
-## Linear mode: `line`
+> _See truth table [7 (Content type timing)](DSL-truthtables.md#7-content-type-timing-truth-table)._
 
-> _See truth table [7 (Line timing)](DSL-truthtables.md#7-line-timing-truth-table)._
-
-Linear mode is activated by the keyword `line`. A space is required between `line` and `[`.
-
-By default, `line`:
-
-- Gets scheduled to begin when the next cycle starts.
-- Runs once, then stops.
-- Uses the same concept of time relative to cycle as loop mode.
+By default all content types loop indefinitely. The `'n` modifier opts into finite playback:
 
 ```flux
-line [0 1 2 3]
+note [0 2 4]          // loop indefinitely (default)
+note [0 2 4]'n        // play once (equivalent to 'n(1))
+note [0 2 4]'n(1)     // play once
+note [0 2 4]'n(4)     // play 4 times
 ```
 
-### Start time
+The count must be a positive integer ≥ 1. Zero, negative, or non-integer counts are semantic errors.
 
-Start time is specified with the `'at` modifier. (Note: This also applies to loops.)
+### Start time: `'at`
+
+> _See truth table [7 (Content type timing)](DSL-truthtables.md#7-content-type-timing-truth-table)._
+
+`'at` applies to all content types and specifies the phase offset at which the pattern begins within the cycle. Useful for establishing phase relationships between patterns, and for scheduling finite runs at a specific point in time.
 
 ```flux
-line [0 1 2 3]'at(0)    // default: begins on the start of the next cycle
-line [0 1 2 3]'at(1)    // begin 1 cycle after the beginning of the next cycle
-line [0 1 2 3]'at(3/4)  // begin 3/4 cycle after the beginning of the next cycle
-line [0 1 2 3]'at(-1/8) // begin 1/8 cycle before the beginning of next cycle
+note [0 2 4]'at(0)    // default: begins on the start of the next cycle
+note [0 2 4]'at(1)    // begin 1 cycle after the beginning of the next cycle
+note [0 2 4]'at(3/4)  // begin 3/4 cycle after the beginning of the next cycle
+note [0 2 4]'at(-1/8) // begin 1/8 cycle before the beginning of next cycle
+note [0 2 4]'at(1/2)  // loop, phase-shifted half a cycle
+note [0 2 4]'n'at(1/4) // play once, starting 1/4 cycle in
 ```
 
-If a line would be scheduled to start in the past, its start is postponed to the next cycle.
+If a pattern would be scheduled to start in the past, its start is postponed to the next cycle.
 
-### Repetitions
+**`'at` vs `'offset` distinction:**
 
-Repetitions are specified with the `'repeat` modifier. The bare form `'repeat` is valid and means repeat indefinitely.
-
-```flux
-// repeat indefinitely
-line [0 1 2 3]'repeat
-
-// play 4 times
-line [0 1 2 3]'repeat(4)
-```
-
-The repetition count must be a positive integer ≥ 1. Zero, negative, or non-integer counts are semantic errors.
-
-### Determination of length
-
-Like `loop`, structural length for a `line` is frozen at evaluation time — all generators inside the list are evaluated for length once when the line is first scheduled, and the resulting event array is pre-calculated for the entire duration of the line before any events are sent to the scheduler.
+- `'at(n)` — where in the cycle the pattern begins (cycle-relative, fractional cycles; affects the whole pattern).
+- `'offset(n)` — millisecond nudge per event for timing feel (sub-rhythmic; affects individual event placement within the grid).
 
 ### Custom event timing
 
 The `@` operator schedules an element at an absolute position within the cycle (0 = cycle start, 1 = one full cycle). Positions are fractions, written the same way as everywhere else in the DSL:
 
 ```flux
-line [0@0 4@1/4 7@5/8]   // 0 at 0, 4 at 1/4 cycle, 7 at 5/8 cycle
+note [0@0 4@1/4 7@5/8]   // 0 at 0, 4 at 1/4 cycle, 7 at 5/8 cycle
 ```
 
 `@` is optional on individual elements. A bare degree keeps its natural uniform-spacing slot; only elements with `@` have their position overridden:
 
 ```flux
-line [0 4 7@1/2]   // 0 at 0, 4 at 1/3 (natural slot), 7 at 1/2 (override)
-line [0 2@1]       // 0 at 0 (natural), 2 at 1 (one full cycle in)
-```
-
----
-
-## Monophonic mode: `'mono`
-
-> _See truth table [16 (`'mono`)](DSL-truthtables.md#16-mono-modifier-truth-table)._
-
-`'mono` is a modifier applied to `loop` or `line`. It instantiates a single synth node and sends `set` messages to the server instead of instantiating new synths on each event. Rough equivalent of SC's Pmono.
-
-```flux
-loop [0 1 2 3]'mono
-line [4@1/2 7@1/4]'mono
+note [0 4 7@1/2]   // 0 at 0, 4 at 1/3 (natural slot), 7 at 1/2 (override)
+note [0 2@1]       // 0 at 0 (natural), 2 at 1 (one full cycle in)
 ```
 
 ---
 
 ## Musical pitch
 
-In `loop [0 1 2]`, 0, 1, and 2 are interpreted as scale degrees which specify musical pitch.
+In `note [0 1 2]`, 0, 1, and 2 are interpreted as scale degrees which specify musical pitch.
 
 To arrive at the final oscillator frequency, the degree passes through this chain:
 
@@ -330,15 +312,15 @@ The `@cent` decorator remains available for fine-tuning but is not part of the c
 
 > _See truth table [10 (Arithmetic transposition)](DSL-truthtables.md#10-arithmetic-transposition-truth-table)._
 
-Modal transposition uses infix `+` and `-` operators on a `loop` or `line` expression:
+Modal transposition uses infix `+` and `-` operators on a content type expression:
 
 ```flux
-loop [0 2 4] + 2        // shift all degrees up 2 scale steps
-loop [0 2 4] - 1        // shift down 1 scale step
-loop [0 2 4] + 0rand3   // stochastic transposition, eager(1) by default
+note [0 2 4] + 2        // shift all degrees up 2 scale steps
+note [0 2 4] - 1        // shift down 1 scale step
+note [0 2 4] + 0rand3   // stochastic transposition, eager(1) by default
 ```
 
-The right-hand side must be a non-negative scalar value or scalar generator. List generators (`[...]`) are not permitted as operands — two list generators combined arithmetically creates unresolvable stream-combination ambiguity. A double-negative such as `loop [0] - -4` is a syntax error; use `loop [0] + 4` instead.
+The right-hand side must be a non-negative scalar value or scalar generator. List generators (`[...]`) are not permitted as operands — two list generators combined arithmetically creates unresolvable stream-combination ambiguity. A double-negative such as `note [0] - -4` is a syntax error; use `note [0] + 4` instead.
 
 ### Accidentals
 
@@ -380,17 +362,17 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`.
 
 ```flux
 @scale(\minor) @root(7)
-  loop [0 1 2]
+  note [0 1 2]
   @octave(4)
-    line [0 2 4 5]
+    note [0 2 4 5]
 ```
 
-Here `loop [0 1 2]` inherits `@scale(\minor)` and `@root(7)`. `line [0 2 4 5]` inherits all three, with `@octave(4)` added at the nested level.
+Here `note [0 1 2]` inherits `@scale(\minor)` and `@root(7)`. `note [0 2 4 5]` inherits all three, with `@octave(4)` added at the nested level.
 
 For single-expression use, decorators may appear inline on the same line:
 
 ```flux
-@scale(\minor) loop [0 1 2]
+@scale(\minor) note [0 1 2]
 ```
 
 **`set` is `@` at global scope.** `set scale(\minor)` is sugar for a top-level `@scale(\minor)` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
@@ -421,10 +403,11 @@ String literals (`"moog"`) are not valid in Flux — use symbols instead.
 
 ## SynthDef selection
 
-`loop` and `line` take exactly one optional argument to choose a SynthDef.
+All content type keywords take exactly one optional `\symbol` argument to choose a SynthDef. The `\symbol` notation is required (not a bare identifier) to avoid name collisions with named generators.
 
 ```flux
-line(\moog) [0 1 2 3]'lfoRate(1/4)
+note(\moog) [0 1 2 3]'lfoRate(1/4)
+sample(\oneshot) [bd sn bd sn]
 ```
 
 ---
@@ -459,7 +442,7 @@ master_fx(\limiter)
 Scoped to a source pattern via the `|` pipe operator. Created when the source starts, released after a configurable silence tail when the source stops.
 
 ```flux
-loop [0 2 4 7] | fx(\lpf)'cutoff([800 1200 2000 400]'eager)
+note [0 2 4 7] | fx(\lpf)'cutoff([800 1200 2000 400]'eager)
 ```
 
 The pipe operator implicitly passes the source as the audio input to the FX node — no explicit lambda required.
@@ -467,7 +450,7 @@ The pipe operator implicitly passes the source as the audio input to the FX node
 Silence tail duration for anonymous inserts is controlled via `'tail` on the `fx(...)` call (default TBD):
 
 ```flux
-loop [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(4)  // release after 4s silence
+note [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(4)  // release after 4s silence
 ```
 
 ---
@@ -481,13 +464,13 @@ The sign `'` in an expression like `x'y` indicates a **modifier**, i.e. that `y`
 Modifiers are methods that return `this`, so chaining is supported:
 
 ```flux
-loop [0rand7 4rand6]'eager'stut(2)
+note [0rand7 4rand6]'eager'stut(2)
 ```
 
 Modifiers attach to the **immediately preceding token**, not to the whole expression. This is the core rule governing modifier placement throughout the language.
 
 ```flux
-[0rand7 4rand6]'stut(2)'lock   // 'lock attaches to the generator, not to loop
+[0rand7 4rand6]'stut(2)'lock   // 'lock attaches to the generator, not to the content type keyword
 ```
 
 Modifiers are generally written **after** the list they modify. Evaluation order is left-to-right.
@@ -508,26 +491,26 @@ Each generator is an independent stateful object. `'eager(n)` on a list propagat
 
 ```flux
 // draw new values on every cycle (explicit, same as default)
-loop [0rand7 4]'eager(1)
+note [0rand7 4]'eager(1)
 // redraw every 4 cycles
-loop [0 4rand6]'eager(4)
+note [0 4rand6]'eager(4)
 // frozen after first evaluation — each element locks at its own first-drawn value
-loop [0rand7 4rand6]'lock
+note [0rand7 4rand6]'lock
 ```
 
 `'lock` and `'eager` can be used at whatever level of granularity is needed (list-level, element-level, modifier argument-level).
 
 ```flux
-loop [0rand7 4rand6]'lock       // both elements lock at their own first-drawn values
-loop [0rand7'lock 4rand6]       // first element locked, second draws every cycle (inner overrides outer)
+note [0rand7 4rand6]'lock       // both elements lock at their own first-drawn values
+note [0rand7'lock 4rand6]       // first element locked, second draws every cycle (inner overrides outer)
 ```
 
 ### Modifier continuation lines
 
-Because modifiers attach to the immediately preceding token, modifiers intended to apply to a whole `loop`/`line` expression (including its transposition operand) are written on an indented continuation line:
+Because modifiers attach to the immediately preceding token, modifiers intended to apply to a whole content type expression (including its transposition operand) are written on an indented continuation line:
 
 ```flux
-loop [0 2 4] + 0rand3
+note [0 2 4] + 0rand3
   'stut(2)
   'legato(0.8)
 ```
@@ -538,15 +521,15 @@ The parser distinguishes modifier continuations from decorator block bodies by t
 
 ## Evaluation process
 
-Redefinition of a running `loop` takes effect at the next cycle boundary. This is the musically correct behaviour — consistent with TidalCycles and with how performers think about metric structure.
+Redefinition of a running pattern takes effect at the next cycle boundary. This is the musically correct behaviour — consistent with TidalCycles and with how performers think about metric structure.
 
-### Eager evaluation at cycle/line boundary
+### Eager evaluation at cycle boundary
 
-All generators are evaluated eagerly at the cycle or line boundary — never lazily mid-cycle. This is a fundamental design constraint:
+All generators are evaluated eagerly at the cycle boundary — never lazily mid-cycle. This is a fundamental design constraint:
 
-- For `loop`: all generators inside the list are fully evaluated at the start of each cycle. The resulting event array is handed off to the scheduler as a concrete sequence. No generator polling happens during playback.
-- For `line`: all generators are evaluated once when the line is first scheduled, producing a fixed event array for the entire duration of the line (including all repetitions of a `'repeat`ed line).
+- For looping patterns (default): all generators inside the list are fully evaluated at the start of each cycle. The resulting event array is handed off to the scheduler as a concrete sequence. No generator polling happens during playback.
+- For finite patterns (`'n`): all generators are evaluated once when the pattern is first scheduled, producing a fixed event array for the entire duration (including all repetitions).
 
 This guarantee is what makes `'stut` and other count-modifying modifiers tractable: the scheduler receives a complete, fixed-length event array per cycle and can calculate durations, gate times, and subdivisions without needing to consult generators again during playback.
 
-Generators have no access to external runtime state (e.g. MIDI input, sensor values, another loop's current position) at the moment of playback. Values are committed at cycle/line start. This is intentional: Flux is a live coding tool, not a DAW. If a value should change, the performer re-evaluates the expression, which takes effect at the next cycle boundary.
+Generators have no access to external runtime state (e.g. MIDI input, sensor values, another pattern's current position) at the moment of playback. Values are committed at cycle start. This is intentional: Flux is a live coding tool, not a DAW. If a value should change, the performer re-evaluates the expression, which takes effect at the next cycle boundary.

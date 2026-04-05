@@ -24,7 +24,7 @@ A modifier always attaches to the _immediately preceding syntactic token_, even 
 | `[1 2]'shuf`                    | Modifier attaches to list.                       | List token is atomic.                        | Entire list shuffle behavior.          |
 | `0rand4'lock`                   | Modifier attaches to generator.                  | Apply `'lock` to generator.                  | Fixed random value.                    |
 | `(0rand4)'lock`                 | Modifier attaches to parenthesized expression.   | Group first, then modify.                    | Parent grouping respected.             |
-| `loop [0] + 2rand4` ↵ `  'lock` | Continuation-line modifier attaches to _2rand4_. | Continuation rule sees `'` at INDENT.        | **Only** RHS scalar frozen.            |
+| `note [0] + 2rand4` ↵ `  'lock` | Continuation-line modifier attaches to _2rand4_. | Continuation rule sees `'` at INDENT.        | **Only** RHS scalar frozen.            |
 | `[0rand4'lock 1]`               | `'lock` applies only to first element.           | Element-level modifier overrides outer ones. | First element frozen; second is eager. |
 
 **Error cases**
@@ -32,7 +32,7 @@ A modifier always attaches to the _immediately preceding syntactic token_, even 
 | Code             | Failure Type | Why                                                                              |
 | ---------------- | ------------ | -------------------------------------------------------------------------------- |
 | `'stut` alone    | Parse error  | Modifier has no preceding token to attach to.                                    |
-| `loop` ↵ `'stut` | Parse error  | Continuation line requires a generator on the previous line, not a bare keyword. |
+| `note` ↵ `'stut` | Parse error  | Continuation line requires a generator on the previous line, not a bare keyword. |
 
 ---
 
@@ -53,7 +53,7 @@ Inner overrides outer. `'lock` beats `'eager(n)`.
 
 # 3. **Stutter `'stut` Truth Table**
 
-How stutter counts are sampled.
+How stutter counts are sampled. Applies to all content types.
 
 | Code                        | Interpretation                | Evaluation                         | Result                        |
 | --------------------------- | ----------------------------- | ---------------------------------- | ----------------------------- |
@@ -118,45 +118,48 @@ Defines how often nested generators are sampled.
 
 ---
 
-# 6. **Loop Freezing Semantics**
+# 6. **Pattern Freezing Semantics**
 
-Loop structure is frozen at cycle start.
+Pattern structure is frozen at cycle start. Applies to all content types.
 
 | Code                     | Interpretation            | Evaluation                                | Result                                   |
 | ------------------------ | ------------------------- | ----------------------------------------- | ---------------------------------------- |
-| `loop [0rand4]`          | Single-element generator. | Sample once at cycle start.               | Same value entire cycle; new next cycle. |
-| `loop [0rand4'eager(4)]` | Resample every 4 cycles.  | Sample held for 4 cycles, then redrawn.   | Slowly shifting value.                   |
-| `loop [a b]'lock`        | Lock list values.         | Each element samples once at first cycle. | Pattern repeats identically forever.     |
+| `note [0rand4]`          | Single-element generator. | Sample once at cycle start.               | Same value entire cycle; new next cycle. |
+| `note [0rand4'eager(4)]` | Resample every 4 cycles.  | Sample held for 4 cycles, then redrawn.   | Slowly shifting value.                   |
+| `note [a b]'lock`        | Lock list values.         | Each element samples once at first cycle. | Pattern repeats identically forever.     |
 
 **Error cases**
 
-| Code                | Failure Type | Why                                    |
-| ------------------- | ------------ | -------------------------------------- |
-| `loop`              | Parse error  | `loop` requires a list argument.       |
-| `loop [0 1 2`       | Parse error  | Unclosed `[`; missing `]`.             |
-| `loop [@root(5) 0]` | Parse error  | Decorators are not valid inside lists. |
+| Code                | Failure Type | Why                                            |
+| ------------------- | ------------ | ---------------------------------------------- |
+| `note`              | Parse error  | Content type keyword requires a list argument. |
+| `note [0 1 2`       | Parse error  | Unclosed `[`; missing `]`.                     |
+| `note [@root(5) 0]` | Parse error  | Decorators are not valid inside lists.         |
 
 ---
 
-# 7. **Line Timing Truth Table**
+# 7. **Content Type Timing Truth Table**
 
-Line runs once (or repeats), with predictable timing.
+All content types loop indefinitely by default. `'n` opts into finite playback; `'at` sets the phase offset.
 
-| Code                 | Interpretation     | Evaluation                       | Result                         |
-| -------------------- | ------------------ | -------------------------------- | ------------------------------ |
-| `line [0 1 2]`       | Linear sequence.   | All sampling done at line start. | Events scheduled once.         |
-| `line [0 1]'at(1/4)` | Start offset.      | Shift entire line by ¼ cycle.    | Events occur later.            |
-| `line [0]'at(-1/4)`  | Negative offset.   | Adjust to next cycle.            | Starts at next cycle boundary. |
-| `line [0]'repeat(4)` | Finite repetition. | Full event list duplicated 4×.   | Line lasts 4 cycles.           |
-| `line [0]'repeat`    | Indefinite repeat. | Line re-evaluates each cycle.    | Runs until stopped.            |
+| Code                 | Interpretation                    | Evaluation                           | Result                         |
+| -------------------- | --------------------------------- | ------------------------------------ | ------------------------------ |
+| `note [0 1 2]`       | Loops indefinitely (default).     | All sampling done fresh each cycle.  | Runs until stopped.            |
+| `note [0 1 2]'n`     | Play once. Equivalent to `'n(1)`. | All sampling done at pattern start.  | Events scheduled once.         |
+| `note [0 1 2]'n(1)`  | Play once (explicit).             | Same as bare `'n`.                   | Events scheduled once.         |
+| `note [0 1 2]'n(4)`  | Finite repetition.                | Full event list produced 4×.         | Pattern lasts 4 cycles.        |
+| `note [0 1]'at(1/4)` | Phase offset.                     | Shift pattern start by ¼ cycle.      | Events occur ¼ cycle later.    |
+| `note [0]'at(-1/4)`  | Negative phase offset.            | Adjust to next cycle if past.        | Starts at next cycle boundary. |
+| `note [0]'n'at(1/4)` | Play once, with phase offset.     | Scheduled once, starting ¼ cycle in. | Single run, offset start.      |
+| `note [0]'at(1/2)`   | Loop with phase shift.            | All cycles begin ½ cycle in.         | Phase-shifted indefinite loop. |
 
 **Error cases**
 
-| Code                   | Failure Type   | Why                                          |
-| ---------------------- | -------------- | -------------------------------------------- |
-| `line [0]'repeat(0)`   | Semantic error | Zero repetitions means the line never plays. |
-| `line [0]'repeat(-1)`  | Semantic error | Negative repetition count is not meaningful. |
-| `line [0]'repeat(1.5)` | Semantic error | Repetition count must be a whole number.     |
+| Code              | Failure Type   | Why                                             |
+| ----------------- | -------------- | ----------------------------------------------- |
+| `note [0]'n(0)`   | Semantic error | Zero repetitions means the pattern never plays. |
+| `note [0]'n(-1)`  | Semantic error | Negative repetition count is not meaningful.    |
+| `note [0]'n(1.5)` | Semantic error | Repetition count must be a positive integer.    |
 
 ---
 
@@ -164,21 +167,21 @@ Line runs once (or repeats), with predictable timing.
 
 Decorators apply lexically like indentation-based blocks.
 
-| Code                                            | Interpretation        | Evaluation                  | Result                                |
-| ----------------------------------------------- | --------------------- | --------------------------- | ------------------------------------- |
-| `@scale(minor)` ↵ `  loop [0]`                  | Scope covering loop.  | scale=minor in block.       | Degree resolved under minor scale.    |
-| `@root(7)` ↵ `  @scale(minor)` ↵ `    loop [0]` | Nested decorators.    | Inner overrides outer.      | root=7, scale=minor.                  |
-| `loop [0]` with no decorators                   | Global defaults.      | Use global scale/root.      | Normal behavior.                      |
-| `@scale(minor) loop [0]`                        | Inline decorator.     | Single-expression scope.    | scale=minor for that loop only.       |
-| `@key(g# lydian) loop [0]`                      | Compound decorator.   | Sets root=g#, scale=lydian. | Multi-arg decorator, no special case. |
-| `@key(g# lydian 4) loop [0]`                    | With explicit octave. | Sets root, scale, octave=4. | Three-arg form.                       |
+| Code                                            | Interpretation          | Evaluation                  | Result                                |
+| ----------------------------------------------- | ----------------------- | --------------------------- | ------------------------------------- |
+| `@scale(minor)` ↵ `  note [0]`                  | Scope covering pattern. | scale=minor in block.       | Degree resolved under minor scale.    |
+| `@root(7)` ↵ `  @scale(minor)` ↵ `    note [0]` | Nested decorators.      | Inner overrides outer.      | root=7, scale=minor.                  |
+| `note [0]` with no decorators                   | Global defaults.        | Use global scale/root.      | Normal behavior.                      |
+| `@scale(minor) note [0]`                        | Inline decorator.       | Single-expression scope.    | scale=minor for that note only.       |
+| `@key(g# lydian) note [0]`                      | Compound decorator.     | Sets root=g#, scale=lydian. | Multi-arg decorator, no special case. |
+| `@key(g# lydian 4) note [0]`                    | With explicit octave.   | Sets root, scale, octave=4. | Three-arg form.                       |
 
 **Error cases**
 
 | Code                    | Failure Type   | Why                                                    |
 | ----------------------- | -------------- | ------------------------------------------------------ |
-| `loop [0] + @root(5)`   | Semantic error | Decorator cannot appear as an arithmetic operand.      |
-| `loop [@root(5) 0]`     | Parse error    | Decorators are not valid inside list brackets.         |
+| `note [0] + @root(5)`   | Semantic error | Decorator cannot appear as an arithmetic operand.      |
+| `note [@root(5) 0]`     | Parse error    | Decorators are not valid inside list brackets.         |
 | `@root(7)` with no body | Semantic error | Decorator with no following expression is meaningless. |
 
 ---
@@ -189,15 +192,15 @@ Piped FX attaches to preceding expression.
 
 | Code                                | Interpretation | Evaluation                              | Result                   |
 | ----------------------------------- | -------------- | --------------------------------------- | ------------------------ |
-| `loop [0] \| fx(\lpf)`              | Insert FX.     | Create FX node for duration of pattern. | Loop audio → lpf.        |
-| `loop [0] \| fx(\lpf)'cutoff(1200)` | Parameter mod. | cutoff sampled per eager/lock.          | Fixed or dynamic cutoff. |
+| `note [0] \| fx(\lpf)`              | Insert FX.     | Create FX node for duration of pattern. | Pattern audio → lpf.     |
+| `note [0] \| fx(\lpf)'cutoff(1200)` | Parameter mod. | cutoff sampled per eager/lock.          | Fixed or dynamic cutoff. |
 
 **Error cases**
 
 | Code                   | Failure Type   | Why                                                   |
 | ---------------------- | -------------- | ----------------------------------------------------- |
 | `\| fx("lpf")`         | Parse error    | Pipe operator requires a LHS expression.              |
-| `loop [0] \| loop [1]` | Semantic error | RHS of pipe must be an `fx(...)` call, not a pattern. |
+| `note [0] \| note [1]` | Semantic error | RHS of pipe must be an `fx(...)` call, not a pattern. |
 
 ---
 
@@ -207,17 +210,17 @@ Rules for `+` / `-` on loops and lines.
 
 | Code                | Interpretation        | Evaluation                                    | Result                        |
 | ------------------- | --------------------- | --------------------------------------------- | ----------------------------- |
-| `loop [0 2] + 3`    | Add scalar transpose. | Apply after generator sampling.               | [3, 5].                       |
-| `loop [0] + 0rand3` | Random transpose.     | Transpose sampled at correct eager/lock rate. | Per-cycle or per-event shift. |
+| `note [0 2] + 3`    | Add scalar transpose. | Apply after generator sampling.               | [3, 5].                       |
+| `note [0] + 0rand3` | Random transpose.     | Transpose sampled at correct eager/lock rate. | Per-cycle or per-event shift. |
 
 **Error cases**
 
-| Code                  | Failure Type   | Why                                                             |
-| --------------------- | -------------- | --------------------------------------------------------------- |
-| `[0 1] + [2 3]`       | Semantic error | Both operands are list generators; no valid stream combination. |
-| `loop [0] + @root(5)` | Semantic error | Decorator cannot appear as arithmetic operand.                  |
-| `3 + loop [0]`        | Semantic error | Transposition operator requires a `loop`/`line` on the LHS.     |
-| `loop [0 2] - -4`     | Parse error    | Double-negative in transposition; use `+ 4` instead.            |
+| Code                  | Failure Type   | Why                                                                |
+| --------------------- | -------------- | ------------------------------------------------------------------ |
+| `[0 1] + [2 3]`       | Semantic error | Both operands are list generators; no valid stream combination.    |
+| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as arithmetic operand.                     |
+| `3 + note [0]`        | Semantic error | Transposition operator requires a content type keyword on the LHS. |
+| `note [0 2] - -4`     | Parse error    | Double-negative in transposition; use `+ 4` instead.               |
 
 ---
 
@@ -238,9 +241,9 @@ Defines what indentation _does_ and _does not_ mean.
 
 | Code                        | Failure Type | Why                                                           |
 | --------------------------- | ------------ | ------------------------------------------------------------- |
-| `@root(7)` ↵ `    loop [0]` | Parse error  | Indent of 4 spaces when no outer block establishes level 2.   |
-| `  loop [0]` (top-level)    | Parse error  | Indented expression at top level with no enclosing decorator. |
-| `@root(7)` ↵ `\tloop [0]`   | Parse error  | Tab character in indentation; only spaces are permitted.      |
+| `@root(7)` ↵ `    note [0]` | Parse error  | Indent of 4 spaces when no outer block establishes level 2.   |
+| `  note [0]` (top-level)    | Parse error  | Indented expression at top level with no enclosing decorator. |
+| `@root(7)` ↵ `\tnote [0]`   | Parse error  | Tab character in indentation; only spaces are permitted.      |
 
 ---
 
@@ -248,16 +251,16 @@ Defines what indentation _does_ and _does not_ mean.
 
 Defines where whitespace is required, forbidden, or irrelevant.
 
-| Context                             | Rule                   | Example     | Result       |
-| ----------------------------------- | ---------------------- | ----------- | ------------ |
-| Between `loop`/`line` and `[`       | Required.              | `loop [0]`  | OK.          |
-| Between `loop`/`line` and `[`       | Absent.                | `loop[0]`   | Parse error. |
-| Inside a numeric generator          | Forbidden.             | `0rand4`    | OK.          |
-| Inside a numeric generator with gap | Forbidden.             | `0 rand 4`  | Parse error. |
-| Between elements inside `[...]`     | Required (space only). | `[0 1 2]`   | OK.          |
-| Comma as element separator          | Invalid.               | `[0, 1, 2]` | Parse error. |
-| Between modifier `'` and name       | Forbidden.             | `[0]'lock`  | OK.          |
-| Between modifier `'` and name       | Absent (gap).          | `[0]' lock` | Parse error. |
+| Context                              | Rule                   | Example     | Result       |
+| ------------------------------------ | ---------------------- | ----------- | ------------ |
+| Between content type keyword and `[` | Required.              | `note [0]`  | OK.          |
+| Between content type keyword and `[` | Absent.                | `note[0]`   | Parse error. |
+| Inside a numeric generator           | Forbidden.             | `0rand4`    | OK.          |
+| Inside a numeric generator with gap  | Forbidden.             | `0 rand 4`  | Parse error. |
+| Between elements inside `[...]`      | Required (space only). | `[0 1 2]`   | OK.          |
+| Comma as element separator           | Invalid.               | `[0, 1, 2]` | Parse error. |
+| Between modifier `'` and name        | Forbidden.             | `[0]'lock`  | OK.          |
+| Between modifier `'` and name        | Absent (gap).          | `[0]' lock` | Parse error. |
 
 ---
 
@@ -267,19 +270,19 @@ How legato values control note duration.
 
 | Code                                       | Interpretation         | Evaluation                         | Result                               |
 | ------------------------------------------ | ---------------------- | ---------------------------------- | ------------------------------------ |
-| `loop [0 2 4]'legato(0.8)`                 | Fixed legato.          | Gate closed at 0.8 × event slot.   | Slightly detached notes.             |
-| `loop [0 2 4]'legato(1.0)`                 | Full legato.           | Gate closed exactly at next event. | Notes touch without overlap.         |
-| `loop [0 2 4]'legato(1.5)`                 | Overlapping legato.    | Gate held past next event onset.   | Notes overlap (pad/drone effect).    |
-| `loop [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1).  | Value drawn once per cycle.        | Consistent legato within a cycle.    |
-| `loop [0 2 4]'legato(0.5rand1.2'eager(2))` | Redraw every 2 cycles. | New value drawn every 2 cycles.    | Slowly varying articulation.         |
-| `loop [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.         | Value drawn once, frozen forever.  | Same articulation for whole session. |
+| `note [0 2 4]'legato(0.8)`                 | Fixed legato.          | Gate closed at 0.8 × event slot.   | Slightly detached notes.             |
+| `note [0 2 4]'legato(1.0)`                 | Full legato.           | Gate closed exactly at next event. | Notes touch without overlap.         |
+| `note [0 2 4]'legato(1.5)`                 | Overlapping legato.    | Gate held past next event onset.   | Notes overlap (pad/drone effect).    |
+| `note [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1).  | Value drawn once per cycle.        | Consistent legato within a cycle.    |
+| `note [0 2 4]'legato(0.5rand1.2'eager(2))` | Redraw every 2 cycles. | New value drawn every 2 cycles.    | Slowly varying articulation.         |
+| `note [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.         | Value drawn once, frozen forever.  | Same articulation for whole session. |
 
 **Error cases**
 
 | Code                    | Failure Type   | Why                                            |
 | ----------------------- | -------------- | ---------------------------------------------- |
-| `loop [0]'legato(0)`    | Semantic error | Zero legato means zero-duration gate; invalid. |
-| `loop [0]'legato(-0.5)` | Semantic error | Negative legato is not meaningful.             |
+| `note [0]'legato(0)`    | Semantic error | Zero legato means zero-duration gate; invalid. |
+| `note [0]'legato(-0.5)` | Semantic error | Negative legato is not meaningful.             |
 
 ---
 
@@ -289,16 +292,16 @@ How `'offset` shifts event timing relative to the grid.
 
 | Code                         | Interpretation          | Evaluation                                      | Result                                  |
 | ---------------------------- | ----------------------- | ----------------------------------------------- | --------------------------------------- |
-| `loop [0 1 2]'offset(20)`    | All events 20 ms late.  | Scheduler adds 20 ms to each event time.        | Pattern plays slightly behind the grid. |
-| `loop [0 1 2]'offset(-10)`   | All events 10 ms early. | Scheduler subtracts 10 ms from each event time. | Pattern plays slightly ahead of grid.   |
-| `loop [0 1 2]'offset(0)`     | No offset.              | No change to event times.                       | Equivalent to no `'offset`.             |
-| `loop [0 1]'offset(0rand20)` | Stochastic offset.      | Offset value drawn per eager/lock rate.         | Humanised timing.                       |
+| `note [0 1 2]'offset(20)`    | All events 20 ms late.  | Scheduler adds 20 ms to each event time.        | Pattern plays slightly behind the grid. |
+| `note [0 1 2]'offset(-10)`   | All events 10 ms early. | Scheduler subtracts 10 ms from each event time. | Pattern plays slightly ahead of grid.   |
+| `note [0 1 2]'offset(0)`     | No offset.              | No change to event times.                       | Equivalent to no `'offset`.             |
+| `note [0 1]'offset(0rand20)` | Stochastic offset.      | Offset value drawn per eager/lock rate.         | Humanised timing.                       |
 
 **Error cases**
 
 | Code                     | Failure Type   | Why                                              |
 | ------------------------ | -------------- | ------------------------------------------------ |
-| `loop [0]'offset([1 2])` | Semantic error | Offset must be a scalar; list generator invalid. |
+| `note [0]'offset([1 2])` | Semantic error | Offset must be a scalar; list generator invalid. |
 
 ---
 
@@ -323,38 +326,35 @@ How accidentals modify degree literals.
 
 ---
 
-# 16. **`'mono` Modifier Truth Table**
+# 16. **`mono` Content Type Truth Table**
 
-Monophonic mode via the `'mono` modifier.
+Monophonic mode via the `mono` content type keyword.
 
-| Code                | Interpretation      | Evaluation                                 | Result                                     |
-| ------------------- | ------------------- | ------------------------------------------ | ------------------------------------------ |
-| `loop [0 1 2]'mono` | Monophonic loop.    | Single synth node; events send `set` msgs. | Legato pitch changes, no re-instantiation. |
-| `line [0 2 4]'mono` | Monophonic line.    | Same single-node behaviour for `line`.     | Pitch glides through the line.             |
-| `loop [0 1 2]`      | Default polyphonic. | New synth per event.                       | Each note is a fresh synth instance.       |
-
-**Error cases**
-
-| Code                 | Failure Type   | Why                                              |
-| -------------------- | -------------- | ------------------------------------------------ |
-| `loop [0]'mono'mono` | Semantic error | Duplicate `'mono` modifier is redundant/invalid. |
+| Code             | Interpretation      | Evaluation                                 | Result                                     |
+| ---------------- | ------------------- | ------------------------------------------ | ------------------------------------------ |
+| `mono [0 1 2]`   | Monophonic pattern. | Single synth node; events send `set` msgs. | Legato pitch changes, no re-instantiation. |
+| `mono [0 2 4]'n` | Monophonic, once.   | Same single-node behaviour, plays once.    | Pitch sequence plays through once.         |
+| `note [0 1 2]`   | Default polyphonic. | New synth per event.                       | Each note is a fresh synth instance.       |
 
 ---
 
 # 17. **Error Condition Summary**
 
-| Code                  | Failure Type   | Why                                           |
-| --------------------- | -------------- | --------------------------------------------- |
-| `[0 1 2`              | Parse error    | Missing `]`.                                  |
-| `loop [0] + @root(5)` | Semantic error | Decorator cannot appear as operand.           |
-| `0rand4rand7`         | Semantic error | Ambiguous construction; parentheses required. |
-| `loop [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.              |
-| `'stut` alone         | Parse error    | No preceding target.                          |
-| `loop` ↵ `  'stut`    | Parse error    | No generator on previous line.                |
-| `[a?invalid]`         | Parse error    | Weight must be literal or generator.          |
-| `loop [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.     |
-| `loop[0]`             | Parse error    | Missing space between `loop` and `[`.         |
-| `0 rand 4`            | Parse error    | Whitespace inside generator expression.       |
-| `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.       |
-| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.  |
-| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.      |
+| Code                  | Failure Type   | Why                                                 |
+| --------------------- | -------------- | --------------------------------------------------- |
+| `[0 1 2`              | Parse error    | Missing `]`.                                        |
+| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as operand.                 |
+| `0rand4rand7`         | Semantic error | Ambiguous construction; parentheses required.       |
+| `note [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.                    |
+| `'stut` alone         | Parse error    | No preceding target.                                |
+| `note` ↵ `  'stut`    | Parse error    | No generator on previous line.                      |
+| `[a?invalid]`         | Parse error    | Weight must be literal or generator.                |
+| `note [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.           |
+| `note[0]`             | Parse error    | Missing space between content type keyword and `[`. |
+| `0 rand 4`            | Parse error    | Whitespace inside generator expression.             |
+| `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.             |
+| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.        |
+| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.            |
+| `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.     |
+| `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.        |
+| `note [0]'n(1.5)`     | Semantic error | Repetition count must be a positive integer.        |

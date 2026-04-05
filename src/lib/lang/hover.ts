@@ -17,26 +17,50 @@ export interface HoverResult {
 // ---------------------------------------------------------------------------
 
 const TOKEN_TYPE_DOCS: Record<string, string> = {
-	Loop: [
-		'**`loop [...]`** — cyclic pattern.',
+	Note: [
+		'**`note [...]`** — polyphonic pitched events.',
 		'',
-		'Repeats indefinitely. Each cycle has the same duration as the tempo beat.',
+		'Loops indefinitely by default. Each cycle has the same duration as the tempo beat.',
+		"Use `'n` to play once, or `'n(4)` to play 4 times.",
 		'',
 		'```flux',
-		'loop [0 2 4 7]',
-		"loop [0rand7 4rand6]'stut(2)",
+		'note [0 2 4 7]',
+		"note [0rand7 4rand6]'stut(2)",
+		"note [0 2 4]'n(4)",
 		'```'
 	].join('\n'),
 
-	Line: [
-		'**`line [...]`** — one-shot pattern.',
+	Mono: [
+		'**`mono [...]`** — monophonic pitched events.',
 		'',
-		"Runs once then stops. Use `'repeat(n)` to play n times, or bare `'repeat` for indefinite looping.",
+		'Single persistent synth node; events send `set` messages instead of spawning new instances.',
+		'Loops indefinitely by default.',
 		'',
 		'```flux',
-		'line [0 1 2 3]',
-		"line [0 1 2 3]'repeat(4)",
+		'mono [0 1 2 3]',
+		"mono [0 2 4]'n",
 		'```'
+	].join('\n'),
+
+	Sample: [
+		'**`sample [...]`** — buffer playback.',
+		'',
+		'(Full behaviour defined in issue #14.)',
+		'```flux',
+		'sample(\\oneshot) [bd sn bd sn]',
+		'```'
+	].join('\n'),
+
+	Slice: [
+		'**`slice [...]`** — beat-sliced buffer playback.',
+		'',
+		'(Full behaviour defined in issue #14.)'
+	].join('\n'),
+
+	Cloud: [
+		'**`cloud [...]`** — granular synthesis.',
+		'',
+		'(Full behaviour defined in issue #14.)'
 	].join('\n'),
 
 	Rand: [
@@ -157,7 +181,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'Scoped to a source pattern via the `|` pipe operator.',
 		'',
 		'```flux',
-		'loop [0 2 4 7] | fx("lpf")\'cutoff(1200)',
+		'note [0 2 4 7] | fx("lpf")\'cutoff(1200)',
 		'```'
 	].join('\n'),
 
@@ -186,7 +210,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'',
 		'Attaches a modifier to the immediately preceding token.',
 		'',
-		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `repeat`, `mono`, `shuf`, `pick`, `wran`'
+		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `wran`'
 	].join('\n'),
 
 	At: [
@@ -196,7 +220,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'',
 		'```flux',
 		'@scale("minor") @root(7)',
-		'  loop [0 1 2]',
+		'  note [0 1 2]',
 		'```'
 	].join('\n'),
 
@@ -243,7 +267,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'Routes source pattern audio into an anonymous insert FX.',
 		'',
 		'```flux',
-		'loop [0 2 4 7] | fx("lpf")\'cutoff(1200)',
+		'note [0 2 4 7] | fx("lpf")\'cutoff(1200)',
 		'```'
 	].join('\n'),
 
@@ -253,8 +277,8 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'Shifts all degrees up by the given number of scale steps.',
 		'',
 		'```flux',
-		'loop [0 2 4] + 2      // shift up 2 scale steps',
-		'loop [0 2 4] + 0rand3 // stochastic shift',
+		'note [0 2 4] + 2      // shift up 2 scale steps',
+		'note [0 2 4] + 0rand3 // stochastic shift',
 		'```'
 	].join('\n'),
 
@@ -262,7 +286,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'**`-`** — modal transposition down.',
 		'',
 		'```flux',
-		'loop [0 2 4] - 1  // shift down 1 scale step',
+		'note [0 2 4] - 1  // shift down 1 scale step',
 		'```'
 	].join('\n'),
 
@@ -285,9 +309,9 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'Expands the preceding element n times in-place inside a sequence list.',
 		'',
 		'```flux',
-		'loop [1!4]        // same as loop [1 1 1 1]',
-		'loop [1!2 3!3]    // same as loop [1 1 3 3 3]',
-		'loop [0rand7!4]   // one random degree, played four times per cycle',
+		'note [1!4]        // same as note [1 1 1 1]',
+		'note [1!2 3!3]    // same as note [1 1 3 3 3]',
+		'note [0rand7!4]   // one random degree, played four times per cycle',
 		'```'
 	].join('\n')
 };
@@ -300,8 +324,8 @@ const MODIFIER_DOCS: Record<string, string> = {
 		'The generator is evaluated once at the first cycle and never redrawn.',
 		'',
 		'```flux',
-		"loop [0rand7 4rand6]'lock     // both elements frozen after first cycle",
-		"loop [0rand7'lock 4rand6]     // first element frozen, second draws every cycle",
+		"note [0rand7 4rand6]'lock     // both elements frozen after first cycle",
+		"note [0rand7'lock 4rand6]     // first element frozen, second draws every cycle",
 		'```'
 	].join('\n'),
 
@@ -311,7 +335,7 @@ const MODIFIER_DOCS: Record<string, string> = {
 		"Default: `'eager(1)` (once per cycle). Bare `'eager` = `'eager(1)`.",
 		'',
 		'```flux',
-		"loop [0 4rand6]'eager(4)  // redraw every 4 cycles",
+		"note [0 4rand6]'eager(4)  // redraw every 4 cycles",
 		'```'
 	].join('\n'),
 
@@ -321,9 +345,9 @@ const MODIFIER_DOCS: Record<string, string> = {
 		'Default n = 2. The count can be a generator.',
 		'',
 		'```flux',
-		"loop [0rand7 4rand6]'stut          // repeat each event twice",
-		"loop [0rand7 4rand6]'stut(4)       // repeat 4 times",
-		"loop [0rand7 4rand6]'stut(2rand4)  // random count per cycle",
+		"note [0rand7 4rand6]'stut          // repeat each event twice",
+		"note [0rand7 4rand6]'stut(4)       // repeat 4 times",
+		"note [0rand7 4rand6]'stut(2rand4)  // random count per cycle",
 		'```'
 	].join('\n'),
 
@@ -333,8 +357,8 @@ const MODIFIER_DOCS: Record<string, string> = {
 		"p is in [0.0, 1.0]. Default p = 0.5. Bare `'maybe` = `'maybe(0.5)`.",
 		'',
 		'```flux',
-		"loop [0 2 4 7]'maybe       // 50% chance each event fires",
-		"loop [0 2 4 7]'maybe(0.3)  // 30% chance",
+		"note [0 2 4 7]'maybe       // 50% chance each event fires",
+		"note [0 2 4 7]'maybe(0.3)  // 30% chance",
 		'```'
 	].join('\n'),
 
@@ -344,9 +368,9 @@ const MODIFIER_DOCS: Record<string, string> = {
 		'Controls note sustain relative to its time slot. `1.0` = no gap. `>1.0` = overlap (pad effect).',
 		'',
 		'```flux',
-		"loop [0 2 4]'legato(0.8)        // slightly detached",
-		"loop [0 2 4]'legato(1.5)        // overlapping",
-		"loop [0 2 4]'legato(0.5rand1.2) // stochastic legato",
+		"note [0 2 4]'legato(0.8)        // slightly detached",
+		"note [0 2 4]'legato(1.5)        // overlapping",
+		"note [0 2 4]'legato(0.5rand1.2) // stochastic legato",
 		'```'
 	].join('\n'),
 
@@ -356,41 +380,33 @@ const MODIFIER_DOCS: Record<string, string> = {
 		'Positive = late, negative = early.',
 		'',
 		'```flux',
-		"loop [0 1 2]'offset(20)   // 20 ms late",
-		"loop [0 1 2]'offset(-10)  // 10 ms early",
+		"note [0 1 2]'offset(20)   // 20 ms late",
+		"note [0 1 2]'offset(-10)  // 10 ms early",
 		'```'
 	].join('\n'),
 
 	at: [
-		"**`'at(n)`** — start time offset for `line`.",
+		"**`'at(n)`** — phase offset for any content type.",
 		'',
 		'Offset in cycles from the start of the next cycle. Fractions are allowed.',
+		"Combined with `'n` to start a finite pattern at a specific point.",
 		'',
 		'```flux',
-		"line [0 1 2 3]'at(0)    // next cycle start (default)",
-		"line [0 1 2 3]'at(1/4)  // 1/4 cycle later",
-		"line [0 1 2 3]'at(-1/8) // 1/8 cycle earlier",
+		"note [0 1 2 3]'at(0)    // next cycle start (default)",
+		"note [0 1 2 3]'at(1/4)  // 1/4 cycle later",
+		"note [0 1 2 3]'at(-1/8) // 1/8 cycle earlier",
+		"note [0 2 4]'n'at(1/4)  // play once, start 1/4 cycle in",
 		'```'
 	].join('\n'),
 
-	repeat: [
-		"**`'repeat(n)`** — repeat n times (or indefinitely).",
+	n: [
+		"**`'n(count)`** — finite playback.",
 		'',
-		"Bare `'repeat` repeats forever.",
-		'',
-		'```flux',
-		"line [0 1 2 3]'repeat     // indefinite",
-		"line [0 1 2 3]'repeat(4)  // play 4 times",
-		'```'
-	].join('\n'),
-
-	mono: [
-		"**`'mono`** — monophonic mode.",
-		'',
-		'Instantiates a single synth node and sends `set` messages for each event instead of creating new instances.',
+		"Bare `'n` plays once. `'n(4)` plays 4 times. Without `'n`, patterns loop indefinitely.",
 		'',
 		'```flux',
-		"loop [0 1 2 3]'mono",
+		"note [0 1 2 3]'n      // play once",
+		"note [0 1 2 3]'n(4)   // play 4 times",
 		'```'
 	].join('\n'),
 
@@ -429,7 +445,7 @@ const MODIFIER_DOCS: Record<string, string> = {
 		"**`'tail(seconds)`** — release anonymous FX after n seconds of silence.",
 		'',
 		'```flux',
-		'loop [0 2 4 7] | fx("lpf")\'cutoff(1200)\'tail(4)',
+		'note [0 2 4 7] | fx("lpf")\'cutoff(1200)\'tail(4)',
 		'```'
 	].join('\n')
 };
