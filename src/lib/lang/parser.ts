@@ -447,17 +447,16 @@ class FluxParser extends CstParser {
 	});
 
 	decoratorArg = this.RULE('decoratorArg', () => {
-		// pitchClass (e.g. g#, Ab) or generatorExpr (e.g. 3rand7, 120) or symbol (e.g. \minor)
+		// pitchClass (e.g. g#, Ab), bare identifier (e.g. minor, lydian), or numeric generator.
+		// \symbol is intentionally NOT accepted here — scale/key names are closed, built-in vocabulary.
 		this.OR([
 			// pitchClass: a single-char identifier [a-gA-G] optionally followed by Sharp/Flat
 			{
 				GATE: () => this.isPitchClass(),
 				ALT: () => this.SUBRULE(this.pitchClass)
 			},
-			// Scale names and other identifiers (e.g. lydian, minor)
+			// Scale names and other bare identifiers (e.g. lydian, minor, dorian)
 			{ ALT: () => this.CONSUME(Identifier) },
-			// Symbol literals for names: set scale(\minor), @scale(\minor)
-			{ ALT: () => this.CONSUME(Symbol) },
 			// Numeric generator expressions: @root(3rand7), set tempo(120)
 			{ ALT: () => this.SUBRULE(this.numericGenerator) }
 		]);

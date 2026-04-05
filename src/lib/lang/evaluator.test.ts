@@ -1788,11 +1788,9 @@ describe('accidentals in non-default pitch contexts', () => {
 		expect(notes('@root(7) note x [2#]')[0]).toBe(notes('@root(7) note x [2]')[0] + 1);
 	});
 
-	it('@scale(\\minor) note x [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
+	it('@scale(minor) note x [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
 		// C minor, degree 4 = G5 = 67 (minor has same perfect 5th), flat → 66 = F#5
-		expect(notes('@scale(\\minor) note x [4b]')[0]).toBe(
-			notes('@scale(\\minor) note x [4]')[0] - 1
-		);
+		expect(notes('@scale(minor) note x [4b]')[0]).toBe(notes('@scale(minor) note x [4]')[0] - 1);
 	});
 
 	it('@key(g major 4) note x [3#] — accidental in compound key context', () => {
