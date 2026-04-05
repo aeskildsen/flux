@@ -30,7 +30,7 @@ gh issue view <N>
 
 ## Step 3: Confirm with the user
 
-Show the issue number and title, then ask:
+Show the issue number and title, then use AskUserQuestion to ge t confirmation:
 
 > "Ready to work on #N — [title]?"
 
@@ -61,7 +61,7 @@ Do not proceed to step 6 if either fails.
 
 ## Step 6: Ask before committing
 
-Ask the user:
+Ask the user using AskUserQuestion:
 
 > "Implementation done and tests passing. Ready to commit and open a PR?"
 
