@@ -46,8 +46,6 @@ import {
 	Slice,
 	Cloud,
 	Fx,
-	SendFx,
-	MasterFx,
 	Set as SetKw,
 	Tick,
 	Identifier,
@@ -74,13 +72,13 @@ import {
 	Lin,
 	Geo,
 	LenSep,
-	Equals,
 	Question,
 	Sharp,
 	Flat,
 	Bang,
 	Rest,
 	Colon,
+	Percent,
 	INDENT,
 	DEDENT
 } from './lexer.js';
@@ -246,8 +244,6 @@ class FluxParser extends CstParser {
 			{ ALT: () => this.SUBRULE(this.decoratorBlock) },
 			{ ALT: () => this.SUBRULE(this.patternStatement) },
 			{ ALT: () => this.SUBRULE(this.setStatement) },
-			{ ALT: () => this.SUBRULE(this.fxAssignment) },
-			{ ALT: () => this.SUBRULE(this.masterFxStatement) },
 			{ ALT: () => this.CONSUME(LineComment) }
 		]);
 	});
@@ -379,29 +375,9 @@ class FluxParser extends CstParser {
 		this.CONSUME(RParen);
 	});
 
-	fxAssignment = this.RULE('fxAssignment', () => {
-		// reverb = send_fx("reverb")'room(0.5)
-		this.CONSUME(Identifier);
-		this.CONSUME(Equals);
-		this.CONSUME(SendFx);
-		this.CONSUME(LParen);
-		this.CONSUME(Symbol);
-		this.CONSUME(RParen);
-		this.MANY(() => {
-			this.SUBRULE(this.modifierSuffix);
-		});
-	});
-
-	masterFxStatement = this.RULE('masterFxStatement', () => {
-		// master_fx("limiter")'gain(0.8)
-		this.CONSUME(MasterFx);
-		this.CONSUME(LParen);
-		this.CONSUME(Symbol);
-		this.CONSUME(RParen);
-		this.MANY(() => {
-			this.SUBRULE(this.modifierSuffix);
-		});
-	});
+	// fxAssignment (send_fx) and masterFxStatement removed — send FX are not
+	// supported and master bus FX are UI-configured. Both previously used
+	// SendFx / MasterFx tokens which are no longer active in the lexer.
 
 	// -------------------------------------------------------------------------
 	// Decorator blocks
@@ -545,13 +521,19 @@ class FluxParser extends CstParser {
 	});
 
 	fxExpr = this.RULE('fxExpr', () => {
-		// fx("lpf")'cutoff(1200)
+		// fx(\lpf)'cutoff(1200) 70%
+		// \symbol names the FX SynthDef; optional modifiers set params;
+		// optional Integer Percent at the end sets wet/dry level (default 100% wet).
 		this.CONSUME(Fx);
 		this.CONSUME(LParen);
 		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
 		this.MANY(() => {
 			this.SUBRULE(this.modifierSuffix);
+		});
+		this.OPTION(() => {
+			this.CONSUME(Integer);
+			this.CONSUME(Percent);
 		});
 	});
 

@@ -138,20 +138,17 @@ export const Fx = createToken({
 	// Monaco scope: 'keyword'
 });
 
-/** `send_fx` — named send effect. */
+// send_fx and master_fx are removed — send FX are not supported.
+// master bus FX are UI-configured and have no DSL syntax.
+// Keeping stub exports for any remaining references (will be cleaned up in parser/evaluator).
 export const SendFx = createToken({
 	name: 'SendFx',
-	pattern: /send_fx/,
-	longer_alt: Identifier
-	// Monaco scope: 'keyword'
+	pattern: Lexer.NA
 });
 
-/** `master_fx` — master bus effect. */
 export const MasterFx = createToken({
 	name: 'MasterFx',
-	pattern: /master_fx/,
-	longer_alt: Identifier
-	// Monaco scope: 'keyword'
+	pattern: Lexer.NA
 });
 
 /** `set` — global session state setter. */
@@ -490,6 +487,13 @@ export const Bang = createToken({
 	// Monaco scope: 'operator'
 });
 
+/** `%` — wet/dry percentage in FX pipe: `| fx(\lpf) 70%`. Always follows an integer. */
+export const Percent = createToken({
+	name: 'Percent',
+	pattern: /%/
+	// Monaco scope: 'operator'
+});
+
 /**
  * `_` — rest: a silent slot in a sequence. No synth is spawned; the slot occupies time.
  * Uses a custom pattern that matches a standalone `_` — not followed by alphanumeric or
@@ -576,11 +580,15 @@ export const WhiteSpace = createToken({
 // ORDER MATTERS. Rules:
 //   1. LineComment first — must beat any future Slash token
 //   2. Multi-char keywords before shorter ones that share a prefix:
-//      SendFx before Fx, MasterFx before... (none), Step before Set
+//      Step before Set, Sample before shorter keywords
 //   3. All keywords before Identifier (with longer_alt set on each)
 //   4. Float before Integer
 //   5. Identifier before WhiteSpace
 //   6. WhiteSpace last
+//
+// Note: SendFx and MasterFx are removed — send FX are not supported and
+// master bus FX are UI-only. Their token definitions are kept as Lexer.NA
+// stubs so existing imports don't break, but they are not in this array.
 // ---------------------------------------------------------------------------
 
 export const allTokens = [
@@ -588,8 +596,6 @@ export const allTokens = [
 	BlockComment,
 	LineComment,
 	// Statement keywords (longer ones first where prefixes overlap)
-	SendFx, // 'send_fx' before 'set' and 'fx'
-	MasterFx, // 'master_fx' before 'fx'
 	Sample, // 'sample' before shorter keywords
 	Slice,
 	Cloud,
@@ -634,6 +640,7 @@ export const allTokens = [
 	Slash,
 	Colon,
 	Bang,
+	Percent,
 	// Literals — Float before Integer
 	Float,
 	Integer,

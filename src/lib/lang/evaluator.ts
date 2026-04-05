@@ -86,6 +86,7 @@ export type ScheduledEvent = {
 	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
 	synthdef?: string; // SynthDef name: set on note events by loop(\name)/line(\name), and on FX events
 	params?: Record<string, number>; // FX params (only for type:'fx')
+	wetDry?: number; // wet/dry mix 0–100 (only for type:'fx'; undefined = 100% wet)
 };
 
 export type EvalCycleResult =
@@ -1184,11 +1185,19 @@ function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledEleme
 type CompiledFx = {
 	synthdef: string;
 	paramRunners: Array<{ name: string; runner: RunnerState }>;
+	// undefined = not specified (100% wet default); passes through directly to ScheduledEvent.wetDry
+	wetDry?: number;
 };
 
 function compileFxNode(fxNode: CstNode): CompiledFx {
 	const symTok = ((fxNode.children.Symbol as IToken[]) ?? [])[0];
-	const synthdef = symTok ? symTok.image.slice(1) : 'unknown';
+	if (!symTok) {
+		// Unreachable if the CST is well-formed — the parser requires Symbol in fxExpr.
+		// Log so we know immediately if a future refactor breaks the invariant.
+		console.error('[compileFxNode] fxExpr CST node is missing Symbol token — CST is malformed');
+		return { synthdef: '', paramRunners: [] };
+	}
+	const synthdef = symTok.image.slice(1);
 
 	const mods = (fxNode.children.modifierSuffix as CstNode[]) ?? [];
 	const paramRunners: Array<{ name: string; runner: RunnerState }> = [];
@@ -1197,7 +1206,10 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 		const nameTok = ((mod.children.Identifier as IToken[]) ?? [])[0];
 		if (!nameTok) continue;
 		const paramName = nameTok.image;
-		if (paramName === 'lock' || paramName === 'eager') continue;
+		// 'lock' and 'eager' are control modifiers, not synth parameter names.
+		// Any other unrecognised modifier name falls through and is forwarded to the synth
+		// engine as a parameter — this is intentional (open-ended param set).
+		if (paramName === 'lock' || paramName === 'eager' || paramName === 'tail') continue;
 
 		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
 		if (!genExpr) continue;
@@ -1213,7 +1225,21 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 		paramRunners.push({ name: paramName, runner: makeRunner(poll, mode) });
 	}
 
-	return { synthdef, paramRunners };
+	// Optional wet/dry level: Integer Percent after all modifiers
+	const wetTok = ((fxNode.children.Integer as IToken[]) ?? [])[0];
+	let wetDry: number | undefined;
+	if (wetTok) {
+		const parsed = parseInt(wetTok.image, 10);
+		if (isNaN(parsed)) {
+			console.error(
+				`[compileFxNode] wet/dry token "${wetTok.image}" did not parse to a valid integer`
+			);
+		} else {
+			wetDry = parsed;
+		}
+	}
+
+	return { synthdef, paramRunners, wetDry };
 }
 
 function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number): ScheduledEvent {
@@ -1228,6 +1254,7 @@ function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number
 		type: 'fx',
 		synthdef: compiledFx.synthdef,
 		params,
+		wetDry: compiledFx.wetDry,
 		cycleOffset: atOffset // always present on FX events
 	};
 }
