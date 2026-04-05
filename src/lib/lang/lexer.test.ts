@@ -4,8 +4,11 @@ import {
 	Integer,
 	Float,
 	LineComment,
-	Loop,
-	Line,
+	Note,
+	Mono,
+	Sample,
+	Slice,
+	Cloud,
 	Fx,
 	SendFx,
 	MasterFx,
@@ -45,11 +48,11 @@ describe('FluxLexer', () => {
 		});
 
 		it('does not consume the trailing newline', () => {
-			const { tokens } = FluxLexer.tokenize('// comment\nloop');
-			// LineComment stops at end of line; Loop follows on the next line
+			const { tokens } = FluxLexer.tokenize('// comment\nnote');
+			// LineComment stops at end of line; Note follows on the next line
 			expect(tokens[0].tokenType).toBe(LineComment);
 			expect(tokens[0].image).toBe('// comment');
-			expect(tokens[1].tokenType).toBe(Loop);
+			expect(tokens[1].tokenType).toBe(Note);
 		});
 
 		it('an empty comment is still a comment', () => {
@@ -60,17 +63,35 @@ describe('FluxLexer', () => {
 	});
 
 	describe('Statement keywords', () => {
-		it('tokenizes "loop"', () => {
-			const { tokens, errors } = FluxLexer.tokenize('loop');
+		it('tokenizes "note"', () => {
+			const { tokens, errors } = FluxLexer.tokenize('note');
 			expect(errors).toHaveLength(0);
 			expect(tokens).toHaveLength(1);
-			expect(tokens[0].tokenType).toBe(Loop);
+			expect(tokens[0].tokenType).toBe(Note);
 		});
 
-		it('tokenizes "line"', () => {
-			const { tokens, errors } = FluxLexer.tokenize('line');
+		it('tokenizes "mono"', () => {
+			const { tokens, errors } = FluxLexer.tokenize('mono');
 			expect(errors).toHaveLength(0);
-			expect(tokens[0].tokenType).toBe(Line);
+			expect(tokens[0].tokenType).toBe(Mono);
+		});
+
+		it('tokenizes "sample"', () => {
+			const { tokens, errors } = FluxLexer.tokenize('sample');
+			expect(errors).toHaveLength(0);
+			expect(tokens[0].tokenType).toBe(Sample);
+		});
+
+		it('tokenizes "slice"', () => {
+			const { tokens, errors } = FluxLexer.tokenize('slice');
+			expect(errors).toHaveLength(0);
+			expect(tokens[0].tokenType).toBe(Slice);
+		});
+
+		it('tokenizes "cloud"', () => {
+			const { tokens, errors } = FluxLexer.tokenize('cloud');
+			expect(errors).toHaveLength(0);
+			expect(tokens[0].tokenType).toBe(Cloud);
 		});
 
 		it('tokenizes "fx"', () => {
@@ -97,18 +118,32 @@ describe('FluxLexer', () => {
 			expect(tokens[0].tokenType).toBe(Set);
 		});
 
-		it('keywords are case-sensitive — "Loop" is not a Loop token', () => {
-			const { tokens } = FluxLexer.tokenize('Loop');
-			const hasLoop = tokens.some((t) => t.tokenType === Loop);
-			expect(hasLoop).toBe(false);
+		it('keywords are case-sensitive — "Note" is not a Note token', () => {
+			const { tokens } = FluxLexer.tokenize('Note');
+			const hasNote = tokens.some((t) => t.tokenType === Note);
+			expect(hasNote).toBe(false);
 		});
 
-		it('longer_alt: "loopCount" is a single Identifier, not Loop + Identifier', () => {
-			const { tokens, errors } = FluxLexer.tokenize('loopCount');
+		it('longer_alt: "noteCount" is a single Identifier, not Note + Identifier', () => {
+			const { tokens, errors } = FluxLexer.tokenize('noteCount');
 			expect(errors).toHaveLength(0);
 			expect(tokens).toHaveLength(1);
 			expect(tokens[0].tokenType).toBe(Identifier);
-			expect(tokens[0].image).toBe('loopCount');
+			expect(tokens[0].image).toBe('noteCount');
+		});
+
+		it('longer_alt: "notable" is a single Identifier, not Note + Identifier', () => {
+			const { tokens, errors } = FluxLexer.tokenize('notable');
+			expect(errors).toHaveLength(0);
+			expect(tokens).toHaveLength(1);
+			expect(tokens[0].tokenType).toBe(Identifier);
+		});
+
+		it('longer_alt: "monophonic" is a single Identifier, not Mono + Identifier', () => {
+			const { tokens, errors } = FluxLexer.tokenize('monophonic');
+			expect(errors).toHaveLength(0);
+			expect(tokens).toHaveLength(1);
+			expect(tokens[0].tokenType).toBe(Identifier);
 		});
 	});
 
@@ -339,21 +374,21 @@ describe('FluxLexer', () => {
 
 	describe('WhiteSpace', () => {
 		it('whitespace is skipped — not present in tokens array', () => {
-			const { tokens } = FluxLexer.tokenize('loop   42');
+			const { tokens } = FluxLexer.tokenize('note   42');
 			expect(tokens).toHaveLength(2);
-			expect(tokens[0].tokenType).toBe(Loop);
+			expect(tokens[0].tokenType).toBe(Note);
 			expect(tokens[1].tokenType).toBe(Integer);
 		});
 
 		it('newlines are also skipped', () => {
-			const { tokens } = FluxLexer.tokenize('loop\n42');
+			const { tokens } = FluxLexer.tokenize('note\n42');
 			expect(tokens).toHaveLength(2);
 		});
 	});
 
 	describe('lex errors', () => {
 		it('errors array is empty for fully recognized input', () => {
-			const { errors } = FluxLexer.tokenize("loop 0 1 2 ' // comment");
+			const { errors } = FluxLexer.tokenize("note 0 1 2 ' // comment");
 			expect(errors).toHaveLength(0);
 		});
 
@@ -454,10 +489,10 @@ describe('FluxLexer', () => {
 			expect(gauIdx).toBeGreaterThan(expIdx);
 		});
 
-		it("loop with stut modifier: loop [0rand7 4rand6]'stut(4)", () => {
-			const { tokens, errors } = FluxLexer.tokenize("loop [0rand7 4rand6]'stut(4)");
+		it("note with stut modifier: note [0rand7 4rand6]'stut(4)", () => {
+			const { tokens, errors } = FluxLexer.tokenize("note [0rand7 4rand6]'stut(4)");
 			expect(errors).toHaveLength(0);
-			expect(tokens[0].tokenType).toBe(Loop);
+			expect(tokens[0].tokenType).toBe(Note);
 		});
 	});
 });
@@ -472,8 +507,8 @@ describe('Bang — inline repetition operator', () => {
 		expect(tokens[2].tokenType).toBe(Integer);
 	});
 
-	it('tokenizes loop [1!4] correctly', () => {
-		const { tokens, errors } = FluxLexer.tokenize('loop [1!4]');
+	it('tokenizes note [1!4] correctly', () => {
+		const { tokens, errors } = FluxLexer.tokenize('note [1!4]');
 		expect(errors).toHaveLength(0);
 		const bangIdx = tokens.findIndex((t) => t.tokenType === Bang);
 		expect(bangIdx).toBeGreaterThan(0);
@@ -484,11 +519,11 @@ describe('Bang — inline repetition operator', () => {
 
 describe('BlockComment — multi-line comment (SKIPPED)', () => {
 	it('single-line block comment is invisible to the token array', () => {
-		const { tokens, errors } = FluxLexer.tokenize('/* a comment */ loop [0]');
+		const { tokens, errors } = FluxLexer.tokenize('/* a comment */ note [0]');
 		expect(errors).toHaveLength(0);
-		// BlockComment is SKIPPED — only Loop, LBracket, Integer, RBracket remain
+		// BlockComment is SKIPPED — only Note, LBracket, Integer, RBracket remain
 		expect(tokens.find((t) => t.tokenType.name === 'BlockComment')).toBeUndefined();
-		expect(tokens[0].tokenType).toBe(Loop);
+		expect(tokens[0].tokenType).toBe(Note);
 	});
 
 	it('block comment spanning the whole line is invisible', () => {
@@ -498,8 +533,8 @@ describe('BlockComment — multi-line comment (SKIPPED)', () => {
 	});
 
 	it('does not affect tokens after the closing */', () => {
-		const { tokens, errors } = FluxLexer.tokenize('/* ignored */ loop [0]');
+		const { tokens, errors } = FluxLexer.tokenize('/* ignored */ note [0]');
 		expect(errors).toHaveLength(0);
-		expect(tokens[0].tokenType).toBe(Loop);
+		expect(tokens[0].tokenType).toBe(Note);
 	});
 });

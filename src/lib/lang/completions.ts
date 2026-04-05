@@ -8,9 +8,9 @@
  * CompletionItem format.
  *
  * Completion is largely static table lookups driven by trigger characters:
- *   '    → offer modifier names: lock, eager, stut, legato, at, repeat, mono, tail, offset, …
+ *   '    → offer modifier names: lock, eager, stut, legato, at, n, tail, offset, …
  *   [    → offer generators, scale degrees, literals
- *   (    → context-sensitive: synthdef names after loop/line/fx("…"), arg values after modifiers
+ *   (    → context-sensitive: synthdef names after note/mono/sample/slice/cloud/fx("…"), arg values after modifiers
  *   |    → offer fx("…") patterns
  */
 
@@ -107,30 +107,24 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 		label: 'at(n)',
 		insertText: 'at(${1:1/4})',
 		isSnippet: true,
-		detail: "'at(n) — start time offset in cycles (for line)",
-		documentation: 'Offset from next cycle start. Fractions allowed.',
+		detail: "'at(n) — phase offset in cycles",
+		documentation: 'Offset from next cycle start. Fractions allowed. Applies to all content types.',
 		kind: 'snippet'
 	},
 	{
-		label: 'repeat',
-		insertText: 'repeat',
-		detail: "'repeat — repeat indefinitely",
+		label: 'n',
+		insertText: 'n',
+		detail: "'n — play once",
+		documentation: "Bare 'n plays the pattern once.",
 		kind: 'keyword'
 	},
 	{
-		label: 'repeat(n)',
-		insertText: 'repeat(${1:4})',
+		label: 'n(count)',
+		insertText: 'n(${1:4})',
 		isSnippet: true,
-		detail: "'repeat(n) — repeat n times",
-		documentation: 'n must be a positive integer ≥ 1.',
+		detail: "'n(count) — play n times",
+		documentation: 'count must be a positive integer ≥ 1.',
 		kind: 'snippet'
-	},
-	{
-		label: 'mono',
-		insertText: 'mono',
-		detail: "'mono — monophonic mode",
-		documentation: 'Single synth node; events send set messages instead of new instances.',
-		kind: 'keyword'
 	},
 	{
 		label: 'shuf',
@@ -238,7 +232,7 @@ const PIPE_COMPLETIONS: CompletionItem[] = [
 	}
 ];
 
-/** Synthdef / FX names offered inside loop("..."), line("..."), fx("..."). */
+/** Synthdef / FX names offered inside note("..."), mono("..."), fx("..."), etc. */
 const FX_NAME_COMPLETIONS: CompletionItem[] = [
 	{ label: 'lpf', insertText: 'lpf', detail: 'Low-pass filter', kind: 'value' },
 	{ label: 'hpf', insertText: 'hpf', detail: 'High-pass filter', kind: 'value' },
@@ -353,7 +347,10 @@ export function getCompletions(
 	// ( trigger → context-sensitive argument suggestions
 	if (triggerChar === '(') {
 		if (prevType === 'Set') return SET_PARAM_COMPLETIONS;
-		if (prevType && ['Loop', 'Line', 'Fx', 'SendFx', 'MasterFx'].includes(prevType)) {
+		if (
+			prevType &&
+			['Note', 'Mono', 'Sample', 'Slice', 'Cloud', 'Fx', 'SendFx', 'MasterFx'].includes(prevType)
+		) {
 			return FX_NAME_COMPLETIONS;
 		}
 		return [];

@@ -42,21 +42,21 @@ function tokenAt(src: string, index: number): IToken {
 // ---------------------------------------------------------------------------
 
 describe('getHover — keyword tokens', () => {
-	it('returns documentation for "loop"', () => {
-		const result = getHover(firstToken('loop'));
+	it('returns documentation for "note"', () => {
+		const result = getHover(firstToken('note'));
 		expect(result).not.toBeNull();
-		expect(result!.contents).toContain('loop');
+		expect(result!.contents).toContain('note');
 	});
 
-	it('returns documentation for "line"', () => {
-		const result = getHover(firstToken('line'));
+	it('returns documentation for "mono"', () => {
+		const result = getHover(firstToken('mono'));
 		expect(result).not.toBeNull();
-		expect(result!.contents).toContain('line');
+		expect(result!.contents).toContain('mono');
 	});
 
-	it('loop docs mention "cyclic" or "cycle"', () => {
-		const result = getHover(firstToken('loop'));
-		expect(result!.contents.toLowerCase()).toMatch(/cycl/);
+	it('note docs mention "cyclic" or "cycle" or "loop"', () => {
+		const result = getHover(firstToken('note'));
+		expect(result!.contents.toLowerCase()).toMatch(/cycl|loop/);
 	});
 
 	it('returns documentation for "set"', () => {
@@ -115,8 +115,8 @@ describe('getHover — keyword tokens', () => {
 
 describe('getHover — identifier after Tick (modifier context)', () => {
 	it("returns modifier docs for 'lock' after Tick", () => {
-		// "loop [0]'lock" — last two tokens are Tick + Identifier("lock")
-		const toks = tokens("loop [0]'lock");
+		// "note [0]'lock" — last two tokens are Tick + Identifier("lock")
+		const toks = tokens("note [0]'lock");
 		const lockTok = toks.find((t) => t.image === 'lock');
 		expect(lockTok).toBeDefined();
 		const result = getHover(lockTok!, 'Tick');
@@ -125,7 +125,7 @@ describe('getHover — identifier after Tick (modifier context)', () => {
 	});
 
 	it("returns modifier docs for 'stut' after Tick", () => {
-		const toks = tokens("loop [0]'stut");
+		const toks = tokens("note [0]'stut");
 		const stutTok = toks.find((t) => t.image === 'stut');
 		expect(stutTok).toBeDefined();
 		const result = getHover(stutTok!, 'Tick');
@@ -133,7 +133,7 @@ describe('getHover — identifier after Tick (modifier context)', () => {
 	});
 
 	it("returns modifier docs for 'shuf' after Tick", () => {
-		const toks = tokens("loop [0]'shuf");
+		const toks = tokens("note [0]'shuf");
 		const shufTok = toks.find((t) => t.image === 'shuf');
 		expect(shufTok).toBeDefined();
 		const result = getHover(shufTok!, 'Tick');
@@ -234,7 +234,7 @@ describe('getHover — unknown identifier', () => {
 
 describe('HoverResult shape', () => {
 	it('result.contents is always a string when non-null', () => {
-		const testCases = ['loop', 'line', 'set', '0rand4'];
+		const testCases = ['note', 'mono', 'set', '0rand4'];
 		for (const src of testCases) {
 			const tok = firstToken(src);
 			const result = getHover(tok);
