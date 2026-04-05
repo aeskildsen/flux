@@ -670,18 +670,11 @@ function applyDecoratorToContext(
 
 /**
  * Extract a scale name from a decoratorArg node.
- * Scale names appear as Identifier tokens (e.g. minor) or Symbol tokens (e.g. \minor).
+ * Scale names are always bare Identifier tokens (e.g. minor, lydian).
  */
 function extractScaleNameFromArg(arg: CstNode): string | null {
-	// Identifier (e.g. minor, lydian, major_pentatonic)
 	const idTok = ((arg.children.Identifier as IToken[]) ?? [])[0];
-	if (idTok) return idTok.image;
-
-	// Symbol (e.g. \minor) — strip leading backslash
-	const symTok = ((arg.children.Symbol as IToken[]) ?? [])[0];
-	if (symTok) return symTok.image.slice(1);
-
-	return null;
+	return idTok ? idTok.image : null;
 }
 
 /**
