@@ -9,6 +9,7 @@
  *
  * Completion is largely static table lookups driven by trigger characters:
  *   '    → offer modifier names: lock, eager, stut, legato, at, n, tail, offset, …
+ *   "    → offer SynthDef parameter names from metadata.json (prefix-filtered)
  *   [    → offer generators, scale degrees, literals
  *   (    → context-sensitive: synthdef names after note/mono/sample/slice/cloud/fx("…"), arg values after modifiers
  *   |    → offer fx("…") patterns
@@ -293,6 +294,69 @@ const SET_PARAM_COMPLETIONS: CompletionItem[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// SynthDef metadata types (exported for use by callers / Monaco adapter)
+// ---------------------------------------------------------------------------
+
+export type SynthDefSpecEntry = {
+	default: number;
+	min: number;
+	max: number;
+	unit: string;
+	curve: number;
+};
+export type SynthDefEntry = { specs: Record<string, SynthDefSpecEntry> };
+export type SynthDefMetadata = Record<string, SynthDefEntry>;
+
+// ---------------------------------------------------------------------------
+// SynthDef parameter completions
+// ---------------------------------------------------------------------------
+
+/**
+ * Build completion items for `"param` notation.
+ *
+ * @param synthdefMetadata - The loaded SynthDef metadata (from metadata.json via fetch).
+ * @param activeSynthDef - The SynthDef name currently in scope (e.g. "kick"),
+ *   or undefined to offer params from all known SynthDefs (deduped).
+ * @param prefix - Characters typed after `"`, used for prefix filtering.
+ */
+function getParamCompletions(
+	synthdefMetadata: SynthDefMetadata,
+	activeSynthDef?: string,
+	prefix = ''
+): CompletionItem[] {
+	const entries: [string, SynthDefSpecEntry][] = [];
+
+	if (activeSynthDef) {
+		// Specific SynthDef requested — return only its params (empty if not found).
+		if (activeSynthDef in synthdefMetadata) {
+			entries.push(...Object.entries(synthdefMetadata[activeSynthDef].specs));
+		}
+	} else {
+		// No active SynthDef — collect all params across all defs, deduplicated by name.
+		const seen = new Set<string>();
+		for (const def of Object.values(synthdefMetadata)) {
+			for (const [name, spec] of Object.entries(def.specs)) {
+				if (!seen.has(name)) {
+					seen.add(name);
+					entries.push([name, spec]);
+				}
+			}
+		}
+	}
+
+	return entries
+		.filter(([name]) => name.startsWith(prefix))
+		.map(([name, spec]) => ({
+			label: name,
+			insertText: `${name}(\${1:${spec.default}})`,
+			isSnippet: true,
+			detail: `"${name} — ${spec.unit ? `${spec.unit}, ` : ''}${spec.min}–${spec.max}, default ${spec.default}`,
+			documentation: `SynthDef parameter. Range: ${spec.min}–${spec.max}. Default: ${spec.default}.${spec.unit ? ` Unit: ${spec.unit}.` : ''}`,
+			kind: 'property' as CompletionItemKind
+		}));
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -320,11 +384,17 @@ function lastTokenBefore(tokens: IToken[], cursorOffset: number): IToken | undef
  * @param cursorOffset - Character offset of the cursor within the line.
  * @param triggerChar - The character that triggered the completion, or undefined
  *   for an explicit (Ctrl+Space) invocation.
+ * @param activeSynthDef - The SynthDef name in scope (e.g. "kick"), used for
+ *   `"param` completions. If undefined, all known param names are offered.
+ * @param synthdefMetadata - Runtime SynthDef metadata (loaded via fetch from
+ *   /compiled_synthdefs/metadata.json). If not provided, param completions are empty.
  */
 export function getCompletions(
 	tokens: IToken[],
 	cursorOffset: number,
-	triggerChar?: string
+	triggerChar?: string,
+	activeSynthDef?: string,
+	synthdefMetadata: SynthDefMetadata = {}
 ): CompletionItem[] {
 	const prev = lastTokenBefore(tokens, cursorOffset);
 	const prevType = prev?.tokenType.name;
@@ -332,6 +402,11 @@ export function getCompletions(
 	// ' trigger → modifier names
 	if (triggerChar === "'") {
 		return MODIFIER_COMPLETIONS;
+	}
+
+	// " trigger → SynthDef param names (prefix-filtered as user types)
+	if (triggerChar === '"') {
+		return getParamCompletions(synthdefMetadata, activeSynthDef);
 	}
 
 	// | trigger → fx patterns
@@ -358,6 +433,7 @@ export function getCompletions(
 
 	// Explicit invocation — infer from context
 	if (prevType === 'Tick') return MODIFIER_COMPLETIONS;
+	if (prevType === 'ParamSigil') return getParamCompletions(synthdefMetadata, activeSynthDef);
 	if (prevType === 'Pipe') return PIPE_COMPLETIONS;
 	if (prevType === 'LBracket') return SEQUENCE_BODY_COMPLETIONS;
 

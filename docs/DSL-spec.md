@@ -379,8 +379,6 @@ For single-expression use, decorators may appear inline on the same line:
 
 **Indentation:** block scope uses fixed indentation (2 spaces). Variable indentation is not supported — indentation level is determined by the number of leading 2-space units. This keeps the parser simple and the code visually consistent.
 
-**Decorator vs. modifier boundary:** the distinction is functional, not syntactic. **Decorators (`@`) affect how the numbers inside `[]` are used to calculate the final pitch** — they are parameters in the degree-to-frequency chain: `degree → scale → root → octave → cent → frequency`. **Modifiers (`'`) are everything else** — operations on the event stream or synth parameters.
-
 **Stochastic decorator arguments** follow the same `'lock`/`'eager(n)` semantics as everything else. `@root(3rand7)` with `'eager(4)` redraws every 4 cycles; with `'lock` the value is drawn once when the block is first entered and frozen thereafter. `'lock` is the sensible default for decorators — a randomly wandering root is an opt-in, not the default.
 
 ---
@@ -531,11 +529,31 @@ note lead [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(0)   // free immediately when s
 
 ---
 
+## Three syntactic roles
+
+Three prefix characters serve distinct, non-overlapping roles in the DSL. Understanding the boundary between them is essential for reading and writing Flux code.
+
+| Sigil | Role      | What it does                                                                                                                                                                                                                                                                   |
+| ----- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@`   | Decorator | Language-side pitch calculation. Sets parameters in the degree-to-frequency chain (`root`, `scale`, `octave`, `cent`). Always translates musical intent — never a raw synth argument passthrough.                                                                              |
+| `'`   | Modifier  | Transforms the event stream or controls generator behaviour. Agnostic about content: `'stut`, `'legato`, `'lock`, `'eager`, etc. Never touches raw synth arguments directly.                                                                                                   |
+| `"`   | Param     | Direct synth argument access. Bypasses language abstractions and sends a value straight to a named SynthDef parameter. Intentionally unglamorous — heavy reliance on `"param` is a signal to reconsider the SynthDef design or elevate the parameter to a first-class concept. |
+
+The three mechanisms are mutually exclusive in what they can express:
+
+- `@root(7)` is a decorator — it participates in pitch calculation.
+- `'legato(0.8)` is a modifier — it shapes the event stream.
+- `"amp(0.5)` is a param — it passes `0.5` directly to the `amp` argument of the current SynthDef.
+
+No sigil can substitute for another. Using `'amp(0.5)` to set amplitude is not valid — `amp` is a SynthDef argument, not a stream modifier.
+
+---
+
 ## Modifier syntax
 
 > _See truth tables [1 (Modifier attachment)](DSL-truthtables.md#1-modifier-attachment-truth-table) and [2 (Modifier precedence)](DSL-truthtables.md#2-modifier-precedence-truth-table)._
 
-The sign `'` in an expression like `x'y` indicates a **modifier**, i.e. that `y` modifies the behaviour of `x`.
+The sign `'` in an expression like `x'y` indicates a **modifier**, i.e. that `y` modifies the behaviour of `x`. Modifiers are strictly for stream and generator operations — they do not provide direct access to SynthDef arguments. Use `"param` notation for that (see below).
 
 Modifiers are methods that return `this`, so chaining is supported:
 
@@ -592,6 +610,35 @@ note lead [0 2 4] + 0rand3
 ```
 
 The parser distinguishes modifier continuations from decorator block bodies by the leading `'` character on the indented line.
+
+### `"param` — direct SynthDef argument access
+
+> _See truth table [18 (`"param`)](DSL-truthtables.md#18-param-truth-table)._
+
+`"param(value)` sends a value directly to a named SynthDef argument, bypassing the language's pitch and stream abstractions. It is valid anywhere a modifier is valid.
+
+The token form is `"` immediately followed by an identifier, with no whitespace — analogous to `\symbol`. The `"identifier` is a single token.
+
+```flux
+note [0 2 4]"amp(0.5)            // set amp to 0.5
+note [0 2 4]"amp(0.5)"pan(-0.3)  // chained: set amp and pan
+note [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)  // on FX node
+```
+
+The value argument accepts the same expressions as modifiers — literals, generators, stochastic expressions:
+
+```flux
+note [0 2 4]"amp(0.3rand0.8)              // stochastic amp, eager(1) by default
+note [0 2 4]"amp(0.3rand0.8'eager(4))     // redraw every 4 cycles
+note [0 2 4]"amp(0.3rand0.8'lock)         // freeze at first drawn value
+```
+
+**SynthDef parameter names** come from the SynthDef's `specs` object in `static/compiled_synthdefs/metadata.json`. Each key is a parameter name (e.g. `amp`, `pan`, `rel`); the value carries `{ default, min, max, unit, curve }`. The active SynthDef is determined by the `\symbol` argument on the content type keyword (`note(\kick)` → look up `kick`). Parameter names are lowercase identifiers.
+
+**Tooling:**
+
+- The completion provider offers parameter names on `"` trigger, prefix-filtered as the user types.
+- The hover provider shows `min`, `max`, `default`, and `unit` for a hovered `"param` token.
 
 ---
 

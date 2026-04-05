@@ -12,7 +12,18 @@
 import { describe, it, expect } from 'vitest';
 import { FluxLexer } from './lexer.js';
 import { getCompletions } from './completions.js';
-import type { CompletionItem } from './completions.js';
+import type { CompletionItem, SynthDefMetadata } from './completions.js';
+
+// Inline fixture matching static/compiled_synthdefs/metadata.json shape
+const TEST_METADATA: SynthDefMetadata = {
+	kick: {
+		specs: {
+			amp: { default: 0.1, min: 0, max: 1, unit: 'amp', curve: 4 },
+			pan: { default: 0, min: -1, max: 1, unit: '', curve: 2 },
+			rel: { default: 0.2, min: 0.001, max: 4, unit: 'seconds', curve: 4 }
+		}
+	}
+};
 
 // ---------------------------------------------------------------------------
 // Helper — tokenize a snippet and return tokens
@@ -70,6 +81,60 @@ describe("getCompletions — trigger: '", () => {
 		const tokens = tokenize("note [0]'");
 		const items = getCompletions(tokens, endCursor("note [0]'"), "'");
 		expect(items.some((i: CompletionItem) => i.label === 'maybe(p)')).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 1b. Trigger character: " (param sigil)
+// ---------------------------------------------------------------------------
+
+describe('getCompletions — trigger: "', () => {
+	it("returns param completions for trigger char '\"'", () => {
+		const tokens = tokenize('note [0 2]"');
+		const items = getCompletions(tokens, endCursor('note [0 2]"'), '"', undefined, TEST_METADATA);
+		expect(items.length).toBeGreaterThan(0);
+	});
+
+	it('param completions include "amp" from kick SynthDef when activeSynthDef = "kick"', () => {
+		const tokens = tokenize('note [0 2]"');
+		const items = getCompletions(tokens, endCursor('note [0 2]"'), '"', 'kick', TEST_METADATA);
+		expect(items.some((i: CompletionItem) => i.label === 'amp')).toBe(true);
+	});
+
+	it('param completions include "pan" and "rel" for kick', () => {
+		const tokens = tokenize('note [0]"');
+		const items = getCompletions(tokens, endCursor('note [0]"'), '"', 'kick', TEST_METADATA);
+		expect(items.some((i: CompletionItem) => i.label === 'pan')).toBe(true);
+		expect(items.some((i: CompletionItem) => i.label === 'rel')).toBe(true);
+	});
+
+	it('param completions are snippet items with default value', () => {
+		const items = getCompletions([], 0, '"', 'kick', TEST_METADATA);
+		const amp = items.find((i: CompletionItem) => i.label === 'amp');
+		expect(amp).toBeDefined();
+		expect(amp?.isSnippet).toBe(true);
+		expect(amp?.insertText).toContain('${1:');
+	});
+
+	it('param completions include detail with range info', () => {
+		const items = getCompletions([], 0, '"', 'kick', TEST_METADATA);
+		const amp = items.find((i: CompletionItem) => i.label === 'amp');
+		expect(amp?.detail).toContain('amp');
+	});
+
+	it('with no activeSynthDef, returns params from all known synthdefs', () => {
+		const items = getCompletions([], 0, '"', undefined, TEST_METADATA);
+		expect(items.length).toBeGreaterThan(0);
+	});
+
+	it('returns empty array for unknown activeSynthDef', () => {
+		const items = getCompletions([], 0, '"', 'nonexistent_synth', TEST_METADATA);
+		expect(items).toHaveLength(0);
+	});
+
+	it('returns empty array when no metadata provided', () => {
+		const items = getCompletions([], 0, '"');
+		expect(items).toHaveLength(0);
 	});
 });
 

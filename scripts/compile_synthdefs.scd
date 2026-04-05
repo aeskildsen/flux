@@ -37,6 +37,16 @@ Task({
 			try {
 				def.writeDefFile(~targetDir.fullPath);
 				~metadata.put(def.name, def.metadata ?? Dictionary.new);
+				~metadata[def.name].specs.keysValuesChange({
+					arg x, spec;
+					Dictionary.newFrom([
+						\min, spec.minval,
+						\max, spec.maxval,
+						\default, spec.default,
+						\curve, if(spec.warp.isKindOf(CurveWarp)) { spec.warp.curve } { 0 },
+						\unit, spec.units,
+					]);
+				});
 				~metadata[def.name].put(\source, file.fileName);
                 ~numSynthDefs = ~numSynthDefs + 1;
 			} {
@@ -50,11 +60,11 @@ Task({
 	~metadataFile = File.open(~metadataFilePath.fullPath, "w");
 	~metadataFile.write(~metadata.asJSON);
 	~metadataFile.close;
-    
+
     // Wait for a second before exiting to let any deferred .writeDefFile calls wrap up
     1.wait;
-    
+
     ("\nCompiled" + ~numSynthDefs + "SynthDefs").postln;
-    
+
     0.exit;
 }).play;

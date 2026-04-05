@@ -16,6 +16,17 @@ import { FluxLexer } from './lexer.js';
 import { getHover } from './hover.js';
 import type { HoverResult } from './hover.js';
 import type { IToken } from 'chevrotain';
+import type { SynthDefMetadata } from './completions.js';
+
+const TEST_METADATA: SynthDefMetadata = {
+	kick: {
+		specs: {
+			amp: { default: 0.1, min: 0, max: 1, unit: 'amp', curve: 4 },
+			pan: { default: 0, min: -1, max: 1, unit: '', curve: 2 },
+			rel: { default: 0.2, min: 0.001, max: 4, unit: 'seconds', curve: 4 }
+		}
+	}
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,7 +240,45 @@ describe('getHover — unknown identifier', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. HoverResult shape
+// 6. ParamSigil hover
+// ---------------------------------------------------------------------------
+
+describe('getHover — ParamSigil tokens', () => {
+	it('returns hover for "amp token when metadata provided', () => {
+		const toks = tokens('"amp');
+		const result = getHover(toks[0], undefined, 'kick', TEST_METADATA);
+		expect(result).not.toBeNull();
+	});
+
+	it('"amp hover content mentions "amp"', () => {
+		const toks = tokens('"amp');
+		const result = getHover(toks[0], undefined, 'kick', TEST_METADATA) as HoverResult;
+		expect(result.contents).toContain('amp');
+	});
+
+	it('"amp hover content includes min, max, and default', () => {
+		const toks = tokens('"amp');
+		const result = getHover(toks[0], undefined, 'kick', TEST_METADATA) as HoverResult;
+		expect(result.contents).toContain('Default');
+		expect(result.contents).toContain('Min');
+		expect(result.contents).toContain('Max');
+	});
+
+	it('returns null for unknown param name', () => {
+		const toks = tokens('"unknownparam');
+		const result = getHover(toks[0], undefined, 'kick', TEST_METADATA);
+		expect(result).toBeNull();
+	});
+
+	it('returns null when no metadata provided', () => {
+		const toks = tokens('"amp');
+		const result = getHover(toks[0]);
+		expect(result).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 8. HoverResult shape
 // ---------------------------------------------------------------------------
 
 describe('HoverResult shape', () => {
