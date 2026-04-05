@@ -6,6 +6,7 @@
  */
 
 import type { IToken } from 'chevrotain';
+import type { SynthDefMetadata } from './completions.js';
 
 export interface HoverResult {
 	/** Markdown string to display in the hover popup. */
@@ -479,6 +480,58 @@ const DECORATOR_DOCS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// SynthDef parameter hover
+// ---------------------------------------------------------------------------
+
+/**
+ * Build hover content for a `"param` token (e.g. `"amp`).
+ *
+ * @param paramName - The parameter name (without the leading `"`).
+ * @param activeSynthDef - The SynthDef name in scope, if known.
+ * @param synthdefMetadata - Runtime SynthDef metadata.
+ */
+function getParamHover(
+	paramName: string,
+	activeSynthDef: string | undefined,
+	synthdefMetadata: SynthDefMetadata
+): HoverResult | null {
+	type SpecEntry = { default: number; min: number; max: number; unit: string; curve: number };
+	let spec: SpecEntry | undefined;
+	let defName: string | undefined;
+
+	if (activeSynthDef && activeSynthDef in synthdefMetadata) {
+		spec = synthdefMetadata[activeSynthDef].specs[paramName] as SpecEntry | undefined;
+		defName = activeSynthDef;
+	} else {
+		// Search all known SynthDefs for this param name
+		for (const [name, def] of Object.entries(synthdefMetadata)) {
+			if (paramName in def.specs) {
+				spec = def.specs[paramName] as SpecEntry;
+				defName = name;
+				break;
+			}
+		}
+	}
+
+	if (!spec) return null;
+
+	const lines = [
+		`**\`"${paramName}\`** — direct SynthDef argument${defName ? ` (\`${defName}\`)` : ''}.`,
+		'',
+		`| Property | Value |`,
+		`| -------- | ----- |`,
+		`| Default  | ${spec.default} |`,
+		`| Min      | ${spec.min} |`,
+		`| Max      | ${spec.max} |`,
+		spec.unit ? `| Unit     | ${spec.unit} |` : null
+	]
+		.filter(Boolean)
+		.join('\n');
+
+	return { contents: lines };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -490,9 +543,24 @@ const DECORATOR_DOCS: Record<string, string> = {
  * @param prevTokenName - The tokenType.name of the immediately preceding token
  *   (used to resolve context-sensitive identifier meanings, e.g. modifier vs
  *   decorator key vs scale name).
+ * @param activeSynthDef - The SynthDef name currently in scope, used for
+ *   `"param` token hover.
+ * @param synthdefMetadata - Runtime SynthDef metadata (loaded via fetch). If not
+ *   provided, `"param` tokens return null.
  */
-export function getHover(token: IToken, prevTokenName?: string): HoverResult | null {
+export function getHover(
+	token: IToken,
+	prevTokenName?: string,
+	activeSynthDef?: string,
+	synthdefMetadata: SynthDefMetadata = {}
+): HoverResult | null {
 	const typeName = token.tokenType.name;
+
+	// ParamSigil tokens: `"amp`, `"pan`, etc. — show SynthDef parameter details.
+	if (typeName === 'ParamSigil') {
+		const paramName = token.image.slice(1); // strip leading `"`
+		return getParamHover(paramName, activeSynthDef, synthdefMetadata);
+	}
 
 	// Non-identifier tokens: direct lookup by type name
 	if (typeName !== 'Identifier') {

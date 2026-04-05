@@ -1,3 +1,4 @@
+
 k = SynthDef(\kick, {
     arg pan = 0, amp = 0.2, out = 0, rel = 0.2, cutoff = 8000,
     clickFreq = 500, clickRq = 0.4, clickAmp = 0.5, bodyDelay = 0.005,
@@ -19,6 +20,11 @@ metadata: (
 	credit: "Anders Eskildsen",
 	category: \percussion,
 	tags: [\kick, \percussive, \drum],
+	specs: Dictionary.newFrom([
+		\pan, ControlSpec(-1, 1, 2, 0.0, 0, ""),
+		\amp, ControlSpec(0, 1, 4, 0, 0.1, "amp"),
+		\rel, ControlSpec(0.001, 4, 4, 0, 0.2, "seconds"),
+	]),
     description: "A simple kick drum synthesizer. It combines a clicky noise component with a pitched sine wave body, both shaped by their own envelopes. The parameters allow for tweaking the attack, decay, and tonal characteristics of the kick.",
 	url: "https://sc.anderseskildsen.eu/05/a-kick/#sammenstning-til-synthdef"
 )

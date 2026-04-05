@@ -46,6 +46,8 @@ const TOKEN_CLASS: Record<string, string> = {
 	BlockComment: 'tok-comment',
 	// Identifiers
 	Identifier: 'tok-variable',
+	// Param sigil — visually distinct from 'modifier and \symbol
+	ParamSigil: 'tok-param',
 	// Operators & punctuation
 	Tick: 'tok-operator',
 	Flat: 'tok-operator',
