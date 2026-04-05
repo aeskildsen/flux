@@ -1552,6 +1552,34 @@ describe('FX pipe (truth table 9)', () => {
 		expect(fxEv.wetDry).toBe(50);
 		expect(fxEv.params.cutoff).toBe(800);
 	});
+
+	it('fx with 0% wet/dry emits wetDry: 0 (fully dry — distinct from undefined)', () => {
+		const r = inst('note x [0] | fx(\\lpf) 0%').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
+			wetDry?: number;
+		};
+		expect(fxEv).toBeDefined();
+		expect(fxEv.wetDry).toBe(0); // not undefined — 0 means fully dry
+	});
+
+	it('fx with 100% wet/dry emits wetDry: 100', () => {
+		const r = inst('note x [0] | fx(\\lpf) 100%').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
+			wetDry?: number;
+		};
+		expect(fxEv).toBeDefined();
+		expect(fxEv.wetDry).toBe(100);
+	});
+
+	it('note events emitted alongside fx do not carry wetDry', () => {
+		const r = inst('note x [0] | fx(\\lpf) 70%').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const noteEv = r.events.find((e) => (e as { type?: string }).type !== 'fx');
+		expect(noteEv).toBeDefined();
+		expect((noteEv as { wetDry?: number }).wetDry).toBeUndefined();
+	});
 });
 
 // ---------------------------------------------------------------------------

@@ -1185,12 +1185,19 @@ function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledEleme
 type CompiledFx = {
 	synthdef: string;
 	paramRunners: Array<{ name: string; runner: RunnerState }>;
-	wetDry: number | null; // null = 100% wet (default); 0–100 integer otherwise
+	// undefined = not specified (100% wet default); passes through directly to ScheduledEvent.wetDry
+	wetDry?: number;
 };
 
 function compileFxNode(fxNode: CstNode): CompiledFx {
 	const symTok = ((fxNode.children.Symbol as IToken[]) ?? [])[0];
-	const synthdef = symTok ? symTok.image.slice(1) : 'unknown';
+	if (!symTok) {
+		// Unreachable if the CST is well-formed — the parser requires Symbol in fxExpr.
+		// Log so we know immediately if a future refactor breaks the invariant.
+		console.error('[compileFxNode] fxExpr CST node is missing Symbol token — CST is malformed');
+		return { synthdef: '', paramRunners: [] };
+	}
+	const synthdef = symTok.image.slice(1);
 
 	const mods = (fxNode.children.modifierSuffix as CstNode[]) ?? [];
 	const paramRunners: Array<{ name: string; runner: RunnerState }> = [];
@@ -1199,7 +1206,10 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 		const nameTok = ((mod.children.Identifier as IToken[]) ?? [])[0];
 		if (!nameTok) continue;
 		const paramName = nameTok.image;
-		if (paramName === 'lock' || paramName === 'eager') continue;
+		// 'lock' and 'eager' are control modifiers, not synth parameter names.
+		// Any other unrecognised modifier name falls through and is forwarded to the synth
+		// engine as a parameter — this is intentional (open-ended param set).
+		if (paramName === 'lock' || paramName === 'eager' || paramName === 'tail') continue;
 
 		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
 		if (!genExpr) continue;
@@ -1217,7 +1227,17 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 
 	// Optional wet/dry level: Integer Percent after all modifiers
 	const wetTok = ((fxNode.children.Integer as IToken[]) ?? [])[0];
-	const wetDry = wetTok ? parseInt(wetTok.image, 10) : null;
+	let wetDry: number | undefined;
+	if (wetTok) {
+		const parsed = parseInt(wetTok.image, 10);
+		if (isNaN(parsed)) {
+			console.error(
+				`[compileFxNode] wet/dry token "${wetTok.image}" did not parse to a valid integer`
+			);
+		} else {
+			wetDry = parsed;
+		}
+	}
 
 	return { synthdef, paramRunners, wetDry };
 }
@@ -1234,7 +1254,7 @@ function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number
 		type: 'fx',
 		synthdef: compiledFx.synthdef,
 		params,
-		wetDry: compiledFx.wetDry ?? undefined,
+		wetDry: compiledFx.wetDry,
 		cycleOffset: atOffset // always present on FX events
 	};
 }

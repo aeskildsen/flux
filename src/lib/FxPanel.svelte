@@ -8,6 +8,7 @@
 		enabled: boolean;
 	};
 
+	// TODO: persist slot enabled/disabled state (and parameter values) once audio wiring is implemented.
 	let chain = $state<FxSlot[]>([
 		{ name: 'EQ', enabled: true },
 		{ name: 'Reverb', enabled: true },

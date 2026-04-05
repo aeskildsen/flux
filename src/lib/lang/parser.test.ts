@@ -184,6 +184,10 @@ describe('pipe / FX — wet/dry level', () => {
 	it('parses fx with 0% wet (dry only)', () => {
 		expect(parse('note lead [0] | fx(\\lpf) 0%').parseErrors).toHaveLength(0);
 	});
+
+	it('bare % without preceding integer is a parse error', () => {
+		expect(parse('note lead [0] | fx(\\lpf) %').parseErrors.length).toBeGreaterThan(0);
+	});
 });
 
 describe('accidentals', () => {

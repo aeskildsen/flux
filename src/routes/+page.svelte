@@ -117,6 +117,14 @@
 					const ev = events[i];
 					const nextBeatOffset = i + 1 < events.length ? events[i + 1].beatOffset : 1; // 1 = end of cycle
 					const gap = (nextBeatOffset - ev.beatOffset) * CYCLE_BEATS;
+
+					if (ev.type === 'fx') {
+						// TODO: FX routing not yet wired to audio engine.
+						// ev.synthdef, ev.params, and ev.wetDry are available when this is implemented.
+						yield { note: 0, duration: gap, release: 0, synthdef: undefined, skip: true };
+						continue;
+					}
+
 					const release = clock.beatsToSeconds(ev.duration * CYCLE_BEATS) * 0.9;
 					yield { note: ev.note, duration: gap, release, synthdef: ev.synthdef };
 				}
@@ -125,12 +133,14 @@
 
 		handle = run(
 			gen(),
-			(event, ntpTime) =>
+			(event, ntpTime) => {
+				if (event.skip) return;
 				scProxy.synthAt(ntpTime, event.synthdef ?? 'sonic-pi-prophet', 'source', {
 					note: event.note,
 					release: event.release,
 					cutoff: 90
-				}),
+				});
+			},
 			CYCLE_BEATS,
 			nextCycleBeat
 		);
