@@ -41,12 +41,14 @@ export function run<T>(
 	gen: Generator<T>,
 	callback: (value: T, ntpTime: number) => void,
 	interval = 0.5,
-	startBeat = clock.currentBeat
+	startBeat?: number,
+	onError?: (message: string) => void
 ): SchedulerHandle {
 	let active = true;
-	let nextBeat = startBeat;
+	let nextBeat = startBeat ?? clock.currentBeat;
 	let stopBeat = Infinity;
 	let timerId: ReturnType<typeof setTimeout>;
+	let waitedForEngine = false;
 
 	function tick() {
 		if (!active) return;
@@ -54,15 +56,35 @@ export function run<T>(
 		const sonic = getInstance();
 		const ctx = clock.audioContext;
 
-		if (!sonic || !ctx) {
-			// Engine not ready yet — retry next tick
+		if (!sonic || !ctx || !sonic.initTime) {
+			// Engine not ready yet (or NTP sync pending) — retry next tick
+			waitedForEngine = true;
 			timerId = setTimeout(tick, TICK_INTERVAL_MS);
 			return;
 		}
 
+		if (waitedForEngine) {
+			// Time passed while waiting for NTP sync: snap nextBeat forward so we
+			// don't try to schedule beats whose AudioContext time is already in the past.
+			waitedForEngine = false;
+			nextBeat = Math.max(nextBeat, clock.currentBeat);
+		}
+
 		const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
 
-		while (clock.beatToAudioTime(nextBeat) <= horizon) {
+		let beatTime: number;
+		try {
+			beatTime = clock.beatToAudioTime(nextBeat);
+		} catch {
+			// Clock was stopped while the scheduler was running — stop cleanly.
+			active = false;
+			const msg = `Scheduler: clock not started at beat ${nextBeat} — stopping`;
+			console.error(msg);
+			onError?.(msg);
+			return;
+		}
+
+		while (beatTime <= horizon) {
 			if (nextBeat >= stopBeat) {
 				active = false;
 				return;
@@ -72,9 +94,31 @@ export function run<T>(
 				active = false;
 				return;
 			}
+			const dur = durationOf(value, interval);
+			if (!isFinite(dur) || dur <= 0) {
+				active = false;
+				const msg = `Scheduler: zero or negative duration at beat ${nextBeat}`;
+				console.error(msg, value);
+				onError?.(msg);
+				return;
+			}
+			// clock.beatToAudioTime returns an absolute AudioContext.currentTime value anchored
+			// to when clock.start() was called (same timeline as ctx.currentTime).
+			// sonic.initTime is the NTP base timestamp (seconds since 1900-01-01) at the moment
+			// the AudioContext was created. Adding them converts a scheduled beat to the absolute
+			// NTP timestamp required by SuperSonic's OSC bundle prescheduler.
 			const ntpTime = sonic.initTime + clock.beatToAudioTime(nextBeat);
 			callback(value, ntpTime);
-			nextBeat += durationOf(value, interval);
+			nextBeat += dur;
+			try {
+				beatTime = clock.beatToAudioTime(nextBeat);
+			} catch {
+				active = false;
+				const msg = `Scheduler: clock not started at beat ${nextBeat} — stopping`;
+				console.error(msg);
+				onError?.(msg);
+				return;
+			}
 		}
 
 		timerId = setTimeout(tick, TICK_INTERVAL_MS);
