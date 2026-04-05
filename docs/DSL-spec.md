@@ -481,42 +481,53 @@ Named generators own their insert FX chains. Removing or redefining a named gene
 
 > _See truth table [9 (FX pipe)](DSL-truthtables.md#9-fx-pipe-truth-table)._
 
-FX nodes are plain scsynth nodes and receive `.set` messages like any other synth. There is no architectural distinction between source and effect at the server level — the source/effect distinction is entirely a DSL/routing concern. FX parameters are therefore patternisable using the same `'lock`/`'eager` model as everything else.
+Flux uses a two-tier FX model:
 
-FX parameters use the same `'key(value)` modifier syntax as everything else. Values can be literals, generators, or stochastic expressions.
+- **Master bus FX** — configured via the UI, not the DSL. All audio routes through a default chain (EQ → Reverb → Compressor → Limiter). The DSL cannot reference or modify master bus FX.
+- **Insert FX** — DSL-instantiated, scoped to a source pattern via `|`. Created when the source starts, released after a silence tail when the source stops.
 
-Two categories of FX node, distinguished syntactically by whether they are named:
+There are no send FX.
 
-### Named FX (persistent)
+### Master bus FX (UI-configured)
 
-Send effects. Defined at the top level via assignment, long-lived, independent of any source pattern.
+A default master bus chain is set up at boot:
 
-```flux
-reverb = send_fx(\reverb)'room(0.5)
-delay  = send_fx(\delay)
-```
+1. EQ
+2. Reverb
+3. Compressor
+4. Limiter
 
-The master bus effect is a standalone statement — there is no need to keep a reference to it, since all audio routes to master:
+The UI allows adjusting parameters, reordering, adding, and removing FX from the chain. The DSL has no syntax for master bus FX — it is a UI-only concern.
 
-```flux
-master_fx(\limiter)
-```
+### Insert FX
 
-### Anonymous FX (insert)
-
-Scoped to a source pattern via the `|` pipe operator. Created when the source starts, released after a configurable silence tail when the source stops.
+Insert FX are anonymous, scoped to a source pattern via the `|` pipe operator. Created when the source starts, released after a silence tail when the source stops.
 
 ```flux
+note lead [0 2 4 7] | fx(\lpf)'cutoff(800)
 note lead [0 2 4 7] | fx(\lpf)'cutoff([800 1200 2000 400]'eager)
+note lead [0 2 4 7] | fx(\delay)'time(3/8)'feedback(0.4)
 ```
 
-The pipe operator implicitly passes the source as the audio input to the FX node — no explicit lambda required.
+The pipe operator implicitly passes the source as the audio input to the FX node — no explicit routing required.
 
-Silence tail duration for anonymous inserts is controlled via `'tail` on the `fx(...)` call (default TBD):
+FX parameters use the same `'key(value)` modifier syntax as everything else. Values can be literals, generators, or stochastic expressions. FX nodes are plain scsynth nodes and receive `.set` messages like any other synth.
+
+**Wet/dry level** is an optional integer percentage written after all parameter modifiers. Default is 100% wet.
 
 ```flux
-note lead [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(4)  // release after 4s silence
+note lead [0 2 4 7] | fx(\ringmod) 70%      // 70% wet, 30% dry
+note lead [0 2 4 7] | fx(\lpf)'cutoff(800) 50%
 ```
+
+**Silence tail** duration defaults to 5 seconds (post-envelope — the FX node runs until silence after its source has stopped). Override with `'tail`:
+
+```flux
+note lead [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(10)  // 10s tail
+note lead [0 2 4 7] | fx(\lpf)'cutoff(1200)'tail(0)   // free immediately when source stops
+```
+
+`'tail` value is in seconds and must be a non-negative number.
 
 ---
 

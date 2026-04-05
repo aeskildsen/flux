@@ -10,8 +10,6 @@ import {
 	Slice,
 	Cloud,
 	Fx,
-	SendFx,
-	MasterFx,
 	Set,
 	Tick,
 	Identifier,
@@ -34,7 +32,8 @@ import {
 	Symbol,
 	Sharp,
 	Flat,
-	Bang
+	Bang,
+	Percent
 } from './lexer.js';
 
 describe('FluxLexer', () => {
@@ -100,16 +99,18 @@ describe('FluxLexer', () => {
 			expect(tokens[0].tokenType).toBe(Fx);
 		});
 
-		it('tokenizes "send_fx"', () => {
+		it('"send_fx" tokenizes as Identifier (send FX removed)', () => {
 			const { tokens, errors } = FluxLexer.tokenize('send_fx');
 			expect(errors).toHaveLength(0);
-			expect(tokens[0].tokenType).toBe(SendFx);
+			expect(tokens[0].tokenType).toBe(Identifier);
+			expect(tokens[0].image).toBe('send_fx');
 		});
 
-		it('tokenizes "master_fx"', () => {
+		it('"master_fx" tokenizes as Identifier (master bus FX are UI-only)', () => {
 			const { tokens, errors } = FluxLexer.tokenize('master_fx');
 			expect(errors).toHaveLength(0);
-			expect(tokens[0].tokenType).toBe(MasterFx);
+			expect(tokens[0].tokenType).toBe(Identifier);
+			expect(tokens[0].image).toBe('master_fx');
 		});
 
 		it('tokenizes "set"', () => {
@@ -514,6 +515,33 @@ describe('Bang — inline repetition operator', () => {
 		expect(bangIdx).toBeGreaterThan(0);
 		expect(tokens[bangIdx - 1].tokenType).toBe(Integer);
 		expect(tokens[bangIdx + 1].tokenType).toBe(Integer);
+	});
+});
+
+describe('Percent — wet/dry operator', () => {
+	it('tokenizes 70% as Integer Percent', () => {
+		const { tokens, errors } = FluxLexer.tokenize('70%');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(2);
+		expect(tokens[0].tokenType).toBe(Integer);
+		expect(tokens[0].image).toBe('70');
+		expect(tokens[1].tokenType).toBe(Percent);
+	});
+
+	it('tokenizes 0% as Integer Percent', () => {
+		const { tokens, errors } = FluxLexer.tokenize('0%');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(Integer);
+		expect(tokens[1].tokenType).toBe(Percent);
+	});
+
+	it('tokenizes fx pipe with wet/dry: note lead [0] | fx(\\lpf) 70%', () => {
+		const { tokens, errors } = FluxLexer.tokenize('note lead [0] | fx(\\lpf) 70%');
+		expect(errors).toHaveLength(0);
+		const pctIdx = tokens.findIndex((t) => t.tokenType === Percent);
+		expect(pctIdx).toBeGreaterThan(0);
+		expect(tokens[pctIdx - 1].tokenType).toBe(Integer);
+		expect(tokens[pctIdx - 1].image).toBe('70');
 	});
 });
 

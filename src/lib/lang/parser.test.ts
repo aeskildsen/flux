@@ -147,27 +147,46 @@ describe('name conventions — \\symbol vs bare identifier', () => {
 	});
 });
 
-describe('fxAssignment', () => {
-	it('parses a named send_fx assignment with symbol', () => {
-		const { parseErrors } = parse('reverb = send_fx(\\reverb)');
-		expect(parseErrors).toHaveLength(0);
+describe('send_fx and master_fx — removed, must produce parse errors', () => {
+	// send FX are not supported. master bus FX are UI-configured.
+	// send_fx and master_fx lex as Identifier and fail to parse as statements.
+
+	it('send_fx(\\reverb) is a parse error', () => {
+		expect(parse('send_fx(\\reverb)').parseErrors.length).toBeGreaterThan(0);
 	});
 
-	it('parses send_fx assignment with modifier', () => {
-		const { parseErrors } = parse("reverb = send_fx(\\reverb)'room(0.5)");
-		expect(parseErrors).toHaveLength(0);
+	it("send_fx(\\reverb)'room(0.5) is a parse error", () => {
+		expect(parse("send_fx(\\reverb)'room(0.5)").parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('master_fx(\\limiter) is a parse error', () => {
+		expect(parse('master_fx(\\limiter)').parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it("master_fx(\\limiter)'gain(0.8) is a parse error", () => {
+		expect(parse("master_fx(\\limiter)'gain(0.8)").parseErrors.length).toBeGreaterThan(0);
 	});
 });
 
-describe('masterFxStatement', () => {
-	it('parses master_fx(\\limiter) with symbol', () => {
-		const { parseErrors } = parse('master_fx(\\limiter)');
-		expect(parseErrors).toHaveLength(0);
+describe('pipe / FX — wet/dry level', () => {
+	it('parses fx with wet/dry: note lead [0] | fx(\\lpf) 70%', () => {
+		expect(parse('note lead [0] | fx(\\lpf) 70%').parseErrors).toHaveLength(0);
 	});
 
-	it('parses master_fx with modifier', () => {
-		const { parseErrors } = parse("master_fx(\\limiter)'gain(0.8)");
-		expect(parseErrors).toHaveLength(0);
+	it("parses fx with params and wet/dry: note lead [0] | fx(\\lpf)'cutoff(800) 50%", () => {
+		expect(parse("note lead [0] | fx(\\lpf)'cutoff(800) 50%").parseErrors).toHaveLength(0);
+	});
+
+	it('parses fx with 100% wet (explicit full wet)', () => {
+		expect(parse('note lead [0] | fx(\\lpf) 100%').parseErrors).toHaveLength(0);
+	});
+
+	it('parses fx with 0% wet (dry only)', () => {
+		expect(parse('note lead [0] | fx(\\lpf) 0%').parseErrors).toHaveLength(0);
+	});
+
+	it('bare % without preceding integer is a parse error', () => {
+		expect(parse('note lead [0] | fx(\\lpf) %').parseErrors.length).toBeGreaterThan(0);
 	});
 });
 
