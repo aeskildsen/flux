@@ -13,23 +13,41 @@ Issues are formal steering documents — contracts between design and implementa
 
 This means: **if content is missing, ask — don't fill it in.** The only exceptions are purely mechanical additions that involve no design judgement (see below).
 
-## Required sections
+## Issue types and required sections
 
-Every issue must have all of these before filing. If any are absent or too vague, stop and ask the user to supply them — do not write them yourself.
+Identify the issue type first — it determines what sections are required.
+
+### DSL feature or change
 
 - **Summary** — what changes and why
-- **Spec changes required** — each change listed explicitly with an action verb (**Add**, **Remove**, **Update**, **Generalise**) and enough detail that an implementer knows exactly what to edit. A vague bullet like "update examples" fails unless it says what specifically changes.
-- **Implementation scope** — specific files (e.g. `src/lib/lang/parser.ts`) and the rule, token, or function being changed. Subsystem names ("Parser", "Evaluator") without file paths fail the bar.
+- **Examples** — truth-table-style input/output pairs showing the new behaviour. Format as a table or annotated code block. Must cover the happy path and at least one edge case.
+- **Spec changes required** — each change listed explicitly with an action verb (**Add**, **Remove**, **Update**, **Generalise**) and enough detail that an implementer knows exactly what to edit.
+- **Implementation scope** — specific files and the rule, token, or function being changed.
 
-Optional but include if applicable:
-- **Syntax** — before/after `flux` examples for any syntactic change
-- **Semantics** — for behavioural changes with non-obvious runtime implications
+### Bug report
+
+- **Summary** — what is wrong and what was expected
+- **Minimal reproduction** — the shortest `flux` snippet (or UI steps) that reliably triggers the bug. Must be self-contained.
+- **Actual behaviour** — what happens
+- **Expected behaviour** — what should happen instead
+- **Implementation scope** — where in the code the fault likely lives (file + function if known; subsystem if not yet diagnosed)
+
+### UI / non-DSL feature
+
+- **Summary** — what changes and why
+- **Examples** — concrete description of the desired behaviour: screenshots, ASCII mockups, or a step-by-step user interaction. Vague descriptions ("make it nicer") fail the bar.
+- **Implementation scope** — specific files and components affected.
+
+### Common optional sections (all types)
+
 - **Dependencies** — if this issue must land after another (e.g. "Depends on #1")
 - **Notes** — ordering constraints, cross-cutting concerns
 
 ## Quality gate
 
-Check every required section. A section fails if it is absent, or if it contains vague or unresolved content that leaves decisions to the implementer. For each failure, tell the user specifically what is missing and ask the resolving question directly.
+Identify the issue type, then check every required section for that type. A section fails if it is absent, or if its content is too vague to act on — e.g. examples that don't cover edge cases, a reproduction that isn't self-contained, spec change bullets without action verbs, or implementation scope that names subsystems but not files.
+
+For each failure, tell the user specifically what is missing and ask the resolving question directly.
 
 **Do not proceed until all failures are resolved by the user.**
 
