@@ -33,7 +33,8 @@ import {
 	Sharp,
 	Flat,
 	Bang,
-	Percent
+	Percent,
+	ParamSigil
 } from './lexer.js';
 
 describe('FluxLexer', () => {
@@ -542,6 +543,59 @@ describe('Percent — wet/dry operator', () => {
 		expect(pctIdx).toBeGreaterThan(0);
 		expect(tokens[pctIdx - 1].tokenType).toBe(Integer);
 		expect(tokens[pctIdx - 1].image).toBe('70');
+	});
+});
+
+describe('ParamSigil — direct SynthDef argument access', () => {
+	it('tokenizes "amp as a single ParamSigil token', () => {
+		const { tokens, errors } = FluxLexer.tokenize('"amp');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(ParamSigil);
+		expect(tokens[0].image).toBe('"amp');
+	});
+
+	it('tokenizes "pan as ParamSigil', () => {
+		const { tokens, errors } = FluxLexer.tokenize('"pan');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(ParamSigil);
+		expect(tokens[0].image).toBe('"pan');
+	});
+
+	it('tokenizes "my_param as ParamSigil (underscores allowed)', () => {
+		const { tokens, errors } = FluxLexer.tokenize('"my_param');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(ParamSigil);
+		expect(tokens[0].image).toBe('"my_param');
+	});
+
+	it('"amp(0.5) tokenizes as ParamSigil + LParen + Float + RParen', () => {
+		const { tokens, errors } = FluxLexer.tokenize('"amp(0.5)');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(ParamSigil);
+		expect(tokens[0].image).toBe('"amp');
+		expect(tokens[1].tokenType).toBe(LParen);
+		expect(tokens[2].tokenType).toBe(Float);
+		expect(tokens[3].tokenType).toBe(RParen);
+	});
+
+	it('chained params: "amp(0.5)"pan(-0.3) tokenizes as two ParamSigil tokens', () => {
+		const { tokens, errors } = FluxLexer.tokenize('"amp(0.5)"pan(-0.3)');
+		expect(errors).toHaveLength(0);
+		const paramTokens = tokens.filter((t) => t.tokenType === ParamSigil);
+		expect(paramTokens).toHaveLength(2);
+		expect(paramTokens[0].image).toBe('"amp');
+		expect(paramTokens[1].image).toBe('"pan');
+	});
+
+	it('double-quoted string with space is a lex error (not ParamSigil)', () => {
+		const { errors } = FluxLexer.tokenize('"moog"');
+		expect(errors.length).toBeGreaterThan(0);
+	});
+
+	it('" followed by space is a lex error', () => {
+		const { errors } = FluxLexer.tokenize('" amp');
+		expect(errors.length).toBeGreaterThan(0);
 	});
 });
 

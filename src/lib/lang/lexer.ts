@@ -557,6 +557,22 @@ export const Symbol = createToken({
 	// Monaco scope: 'string'
 });
 
+/**
+ * ParamSigil — direct SynthDef argument access.
+ * `"identifier` — double-quote immediately followed by an identifier, no whitespace.
+ * Analogous to `\symbol`: the `"` and identifier form a single token.
+ *
+ * e.g. `"amp`, `"pan`, `"cutoff`
+ *
+ * Used as: `note [0 2 4]"amp(0.5)"pan(-0.3)`
+ * The value argument is parsed separately (LParen + generatorExpr + RParen).
+ */
+export const ParamSigil = createToken({
+	name: 'ParamSigil',
+	pattern: /"[a-zA-Z_][a-zA-Z0-9_]*/
+	// Monaco scope: 'property'
+});
+
 // ---------------------------------------------------------------------------
 // Whitespace (skipped)
 // ---------------------------------------------------------------------------
@@ -645,6 +661,7 @@ export const allTokens = [
 	Float,
 	Integer,
 	Symbol,
+	ParamSigil,
 	// Whitespace — always last
 	WhiteSpace
 ];

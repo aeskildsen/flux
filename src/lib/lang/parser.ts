@@ -79,6 +79,7 @@ import {
 	Rest,
 	Colon,
 	Percent,
+	ParamSigil,
 	INDENT,
 	DEDENT
 } from './lexer.js';
@@ -291,7 +292,10 @@ class FluxParser extends CstParser {
 			}
 		]);
 		this.MANY(() => {
-			this.SUBRULE(this.modifierSuffix);
+			this.OR3([
+				{ ALT: () => this.SUBRULE(this.modifierSuffix) },
+				{ ALT: () => this.SUBRULE(this.paramSuffix) }
+			]);
 		});
 		this.OPTION2(() => {
 			this.SUBRULE(this.transposition);
@@ -521,15 +525,18 @@ class FluxParser extends CstParser {
 	});
 
 	fxExpr = this.RULE('fxExpr', () => {
-		// fx(\lpf)'cutoff(1200) 70%
-		// \symbol names the FX SynthDef; optional modifiers set params;
+		// fx(\lpf)'cutoff(1200)"rq(0.3) 70%
+		// \symbol names the FX SynthDef; optional modifiers and/or params set args;
 		// optional Integer Percent at the end sets wet/dry level (default 100% wet).
 		this.CONSUME(Fx);
 		this.CONSUME(LParen);
 		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
 		this.MANY(() => {
-			this.SUBRULE(this.modifierSuffix);
+			this.OR([
+				{ ALT: () => this.SUBRULE(this.modifierSuffix) },
+				{ ALT: () => this.SUBRULE(this.paramSuffix) }
+			]);
 		});
 		this.OPTION(() => {
 			this.CONSUME(Integer);
@@ -839,6 +846,16 @@ class FluxParser extends CstParser {
 		this.SUBRULE(this.numericLiteral); // last
 		this.CONSUME(LenSep); // 'x' separator
 		this.SUBRULE2(this.numericLiteral); // length
+	});
+
+	paramSuffix = this.RULE('paramSuffix', () => {
+		// `"paramName(generatorExpr)` — direct SynthDef argument access.
+		// ParamSigil is a single token: `"` immediately followed by the identifier.
+		// The value argument is mandatory (unlike modifiers where bare form is valid).
+		this.CONSUME(ParamSigil);
+		this.CONSUME(LParen);
+		this.SUBRULE(this.generatorExpr);
+		this.CONSUME(RParen);
 	});
 
 	constructor() {

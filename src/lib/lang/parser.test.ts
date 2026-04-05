@@ -634,6 +634,40 @@ describe('generator naming — unnamed patterns are errors', () => {
 	});
 });
 
+describe('"param — direct SynthDef argument access', () => {
+	it('parses note with single param: note lead [0 2 4]"amp(0.5)', () => {
+		expect(parse('note lead [0 2 4]"amp(0.5)').parseErrors).toHaveLength(0);
+	});
+
+	it('parses chained params: note lead [0 2 4]"amp(0.5)"pan(-0.3)', () => {
+		expect(parse('note lead [0 2 4]"amp(0.5)"pan(-0.3)').parseErrors).toHaveLength(0);
+	});
+
+	it('parses param with stochastic value: note lead [0 2 4]"amp(0.3rand0.8)', () => {
+		expect(parse('note lead [0 2 4]"amp(0.3rand0.8)').parseErrors).toHaveLength(0);
+	});
+
+	it('parses param with locked value: note lead [0 2 4]"amp(0.3rand0.8\'lock)', () => {
+		expect(parse('note lead [0 2 4]"amp(0.3rand0.8\'lock)').parseErrors).toHaveLength(0);
+	});
+
+	it('parses param with eager value: note lead [0 2 4]"amp(0.3rand0.8\'eager(4))', () => {
+		expect(parse('note lead [0 2 4]"amp(0.3rand0.8\'eager(4))').parseErrors).toHaveLength(0);
+	});
+
+	it('parses param on fx node: note lead [0 2 4] | fx(\\lpf)"cutoff(800)"rq(0.3)', () => {
+		expect(parse('note lead [0 2 4] | fx(\\lpf)"cutoff(800)"rq(0.3)').parseErrors).toHaveLength(0);
+	});
+
+	it('parses param mixed with modifiers: note lead [0 2 4]\'legato(0.8)"amp(0.5)', () => {
+		expect(parse('note lead [0 2 4]\'legato(0.8)"amp(0.5)').parseErrors).toHaveLength(0);
+	});
+
+	it('errors on bare "amp with no preceding expression', () => {
+		expect(parse('"amp(0.5)').parseErrors.length).toBeGreaterThan(0);
+	});
+});
+
 describe('derived generators — child:parent syntax', () => {
 	it("parses derived generator: sample perc:drums 'at(1/8)", () => {
 		expect(parse("sample perc:drums 'at(1/8)").parseErrors).toHaveLength(0);
