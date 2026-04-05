@@ -40,8 +40,11 @@ import { CstParser, type IToken, createToken } from 'chevrotain';
 import {
 	allTokens,
 	LineComment,
-	Loop,
-	Line,
+	Note,
+	Mono,
+	Sample,
+	Slice,
+	Cloud,
 	Fx,
 	SendFx,
 	MasterFx,
@@ -240,8 +243,7 @@ class FluxParser extends CstParser {
 	statement = this.RULE('statement', () => {
 		this.OR([
 			{ ALT: () => this.SUBRULE(this.decoratorBlock) },
-			{ ALT: () => this.SUBRULE(this.loopStatement) },
-			{ ALT: () => this.SUBRULE(this.lineStatement) },
+			{ ALT: () => this.SUBRULE(this.patternStatement) },
 			{ ALT: () => this.SUBRULE(this.setStatement) },
 			{ ALT: () => this.SUBRULE(this.fxAssignment) },
 			{ ALT: () => this.SUBRULE(this.masterFxStatement) },
@@ -250,46 +252,25 @@ class FluxParser extends CstParser {
 	});
 
 	// -------------------------------------------------------------------------
-	// Loop / Line statements
+	// Pattern statement (unified: note, mono, sample, slice, cloud)
 	// -------------------------------------------------------------------------
 
-	loopStatement = this.RULE('loopStatement', () => {
-		// `loop [...]`  or  `loop("synthdef") [...]`
-		this.CONSUME(Loop);
-		this.OPTION(() => {
-			this.SUBRULE(this.synthdefArg);
-		});
-		this.SUBRULE(this.sequenceExpr);
-		this.MANY(() => {
-			this.SUBRULE(this.modifierSuffix);
-		});
-		this.OPTION2(() => {
-			this.SUBRULE(this.transposition);
-		});
-		// Continuation modifiers: an indented block of `'modName(args)` lines.
-		// The pre-processor injects INDENT before the first indented line and
-		// DEDENT after the last — all continuation lines are inside one block.
-		this.OPTION3(() => {
-			this.CONSUME(INDENT);
-			this.AT_LEAST_ONE(() => {
-				this.SUBRULE(this.continuationModifier);
-			});
-			this.CONSUME(DEDENT);
-		});
-		this.OPTION4(() => {
-			this.SUBRULE(this.pipeExpr);
-		});
-	});
-
-	lineStatement = this.RULE('lineStatement', () => {
-		// `line [...]`  or  `line("synthdef") [...]`
-		this.CONSUME(Line);
-		this.OPTION(() => {
-			this.SUBRULE(this.synthdefArg);
-		});
+	patternStatement = this.RULE('patternStatement', () => {
+		// `note [...]`  or  `mono [...]`  or  `note(\synthdef) [...]`  etc.
+		// All content type keywords share the same grammar shape.
 		this.OR([
-			// timedList starts with '[' containing at least one 'degree@time' element.
-			// We use a GATE to peek ahead: if any element in [...] has '@', it's a timedList.
+			{ ALT: () => this.CONSUME(Note) },
+			{ ALT: () => this.CONSUME(Mono) },
+			{ ALT: () => this.CONSUME(Sample) },
+			{ ALT: () => this.CONSUME(Slice) },
+			{ ALT: () => this.CONSUME(Cloud) }
+		]);
+		this.OPTION(() => {
+			this.SUBRULE(this.synthdefArg);
+		});
+		this.OR2([
+			// timedList: '[' containing at least one 'degree@time' element.
+			// GATE peeks ahead to detect '@' inside the brackets.
 			{
 				GATE: () => this.isRelTimedList(),
 				ALT: () => this.SUBRULE(this.relTimedList)
@@ -302,7 +283,7 @@ class FluxParser extends CstParser {
 		this.OPTION2(() => {
 			this.SUBRULE(this.transposition);
 		});
-		// Continuation modifiers block (same pattern as loopStatement)
+		// Continuation modifiers: an indented block of `'modName(args)` lines.
 		this.OPTION3(() => {
 			this.CONSUME(INDENT);
 			this.AT_LEAST_ONE(() => {
@@ -394,7 +375,7 @@ class FluxParser extends CstParser {
 
 	decoratorBlock = this.RULE('decoratorBlock', () => {
 		// One or more decorators, followed by either:
-		//   - an inline body on the same line (loopStatement or lineStatement), OR
+		//   - an inline body on the same line (patternStatement), OR
 		//   - an INDENT-indented body on subsequent lines.
 		this.AT_LEAST_ONE(() => {
 			this.SUBRULE(this.decorator);
@@ -405,8 +386,7 @@ class FluxParser extends CstParser {
 				ALT: () => {
 					this.CONSUME(INDENT);
 					this.OR2([
-						{ ALT: () => this.SUBRULE(this.loopStatement) },
-						{ ALT: () => this.SUBRULE(this.lineStatement) },
+						{ ALT: () => this.SUBRULE(this.patternStatement) },
 						{ ALT: () => this.SUBRULE(this.decoratorBlock) }
 					]);
 					this.CONSUME(DEDENT);
@@ -415,10 +395,7 @@ class FluxParser extends CstParser {
 			// Inline body on the same line
 			{
 				ALT: () => {
-					this.OR3([
-						{ ALT: () => this.SUBRULE2(this.loopStatement) },
-						{ ALT: () => this.SUBRULE2(this.lineStatement) }
-					]);
+					this.SUBRULE2(this.patternStatement);
 				}
 			}
 		]);
@@ -515,7 +492,7 @@ class FluxParser extends CstParser {
 
 	continuationModifier = this.RULE('continuationModifier', () => {
 		// `'modName` or `'modName(args)` — one modifier on an indented line.
-		// INDENT/DEDENT are consumed by the enclosing loopStatement/lineStatement block.
+		// INDENT/DEDENT are consumed by the enclosing patternStatement block.
 		this.CONSUME(Tick);
 		this.CONSUME(Identifier);
 		this.OPTION(() => {
@@ -548,10 +525,10 @@ class FluxParser extends CstParser {
 	// -------------------------------------------------------------------------
 	// Sequence expressions
 	//
-	// sequenceExpr  — the top-level list directly after loop/line
+	// sequenceExpr  — the top-level list directly after a content type keyword
 	// sequenceGenerator — same body, but used inside a generatorExpr (nested)
 	// They are separate rules so the CST clearly labels which context a list
-	// appeared in, and so the parser can enforce that loop/line always take a list.
+	// appeared in.
 	// -------------------------------------------------------------------------
 
 	sequenceExpr = this.RULE('sequenceExpr', () => {
@@ -628,7 +605,7 @@ class FluxParser extends CstParser {
 	});
 
 	// -------------------------------------------------------------------------
-	// Timed lists (line only)
+	// Timed lists (relTimedList — used by all content types)
 	// -------------------------------------------------------------------------
 
 	relTimedList = this.RULE('relTimedList', () => {
@@ -727,7 +704,7 @@ class FluxParser extends CstParser {
 	});
 
 	atModifier = this.RULE('atModifier', () => {
-		// 'at(timeExpr) — start offset for loop/line.
+		// 'at(timeExpr) — start offset for all content types.
 		// timeExpr is integer or integer/integer (e.g. 0, 1, 3/4, -1/8).
 		// The leading minus on a negative offset is consumed as part of timeExpr.
 		this.CONSUME(Tick);

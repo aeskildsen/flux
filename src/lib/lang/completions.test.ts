@@ -43,32 +43,32 @@ function triggerCursor(src: string) {
 
 describe("getCompletions — trigger: '", () => {
 	it('returns modifier completions for trigger char "\'"', () => {
-		const tokens = tokenize("loop [0 2]'");
-		const items = getCompletions(tokens, endCursor("loop [0 2]'"), "'");
+		const tokens = tokenize("note [0 2]'");
+		const items = getCompletions(tokens, endCursor("note [0 2]'"), "'");
 		expect(items.length).toBeGreaterThan(0);
 	});
 
 	it("modifier completions include 'lock'", () => {
-		const tokens = tokenize("loop [0]'");
-		const items = getCompletions(tokens, endCursor("loop [0]'"), "'");
+		const tokens = tokenize("note [0]'");
+		const items = getCompletions(tokens, endCursor("note [0]'"), "'");
 		expect(items.some((i: CompletionItem) => i.label === 'lock')).toBe(true);
 	});
 
 	it("modifier completions include 'stut'", () => {
-		const tokens = tokenize("loop [0]'");
-		const items = getCompletions(tokens, endCursor("loop [0]'"), "'");
+		const tokens = tokenize("note [0]'");
+		const items = getCompletions(tokens, endCursor("note [0]'"), "'");
 		expect(items.some((i: CompletionItem) => i.label === 'stut(n)')).toBe(true);
 	});
 
 	it("modifier completions include 'eager(n)' snippet", () => {
-		const tokens = tokenize("loop [0]'");
-		const items = getCompletions(tokens, endCursor("loop [0]'"), "'");
+		const tokens = tokenize("note [0]'");
+		const items = getCompletions(tokens, endCursor("note [0]'"), "'");
 		expect(items.some((i: CompletionItem) => i.label === 'eager(n)')).toBe(true);
 	});
 
 	it("modifier completions include 'maybe'", () => {
-		const tokens = tokenize("loop [0]'");
-		const items = getCompletions(tokens, endCursor("loop [0]'"), "'");
+		const tokens = tokenize("note [0]'");
+		const items = getCompletions(tokens, endCursor("note [0]'"), "'");
 		expect(items.some((i: CompletionItem) => i.label === 'maybe(p)')).toBe(true);
 	});
 });
@@ -79,20 +79,20 @@ describe("getCompletions — trigger: '", () => {
 
 describe('getCompletions — trigger: |', () => {
 	it('returns pipe/fx completions for trigger char "|"', () => {
-		const tokens = tokenize('loop [0]|');
-		const items = getCompletions(tokens, endCursor('loop [0]|'), '|');
+		const tokens = tokenize('note [0]|');
+		const items = getCompletions(tokens, endCursor('note [0]|'), '|');
 		expect(items.length).toBeGreaterThan(0);
 	});
 
 	it('pipe completions include an fx("lpf") entry', () => {
-		const tokens = tokenize('loop [0]|');
-		const items = getCompletions(tokens, endCursor('loop [0]|'), '|');
+		const tokens = tokenize('note [0]|');
+		const items = getCompletions(tokens, endCursor('note [0]|'), '|');
 		expect(items.some((i: CompletionItem) => i.label.includes('lpf'))).toBe(true);
 	});
 
 	it('pipe completions include an fx("reverb") entry', () => {
-		const tokens = tokenize('loop [0]|');
-		const items = getCompletions(tokens, endCursor('loop [0]|'), '|');
+		const tokens = tokenize('note [0]|');
+		const items = getCompletions(tokens, endCursor('note [0]|'), '|');
 		expect(items.some((i: CompletionItem) => i.label.includes('reverb'))).toBe(true);
 	});
 });
@@ -148,17 +148,17 @@ describe('getCompletions — trigger: ( after Set', () => {
 	});
 });
 
-describe('getCompletions — trigger: ( after Loop', () => {
-	it('returns FX name completions after "loop("', () => {
-		// Cursor is AT the '(' — lastTokenBefore sees 'Loop'
-		const src = 'loop(';
+describe('getCompletions — trigger: ( after Note', () => {
+	it('returns FX name completions after "note("', () => {
+		// Cursor is AT the '(' — lastTokenBefore sees 'Note'
+		const src = 'note(';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, triggerCursor(src), '(');
 		expect(items.length).toBeGreaterThan(0);
 	});
 
 	it('FX name completions include "lpf"', () => {
-		const src = 'loop(';
+		const src = 'note(';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, triggerCursor(src), '(');
 		expect(items.some((i: CompletionItem) => i.label === 'lpf')).toBe(true);
@@ -177,7 +177,7 @@ describe('getCompletions — trigger: ( after Loop', () => {
 
 describe('getCompletions — explicit invocation (no triggerChar)', () => {
 	it("returns modifier completions when cursor is after Tick (')", () => {
-		const src = "loop [0]'";
+		const src = "note [0]'";
 		const tokens = tokenize(src);
 		// No trigger char — relies on prevType === 'Tick'
 		const items = getCompletions(tokens, endCursor(src), undefined);
@@ -185,14 +185,14 @@ describe('getCompletions — explicit invocation (no triggerChar)', () => {
 	});
 
 	it('returns pipe completions when cursor is after Pipe (|)', () => {
-		const src = 'loop [0] |';
+		const src = 'note [0] |';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, endCursor(src), undefined);
 		expect(items.some((i: CompletionItem) => i.label.includes('lpf'))).toBe(true);
 	});
 
 	it('returns sequence body completions when cursor is after LBracket', () => {
-		const src = 'loop [';
+		const src = 'note [';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, endCursor(src), undefined);
 		expect(items.length).toBeGreaterThan(0);
@@ -200,7 +200,7 @@ describe('getCompletions — explicit invocation (no triggerChar)', () => {
 
 	it('returns empty array when cursor is not after a recognised trigger token', () => {
 		// After a closing bracket — no completion context
-		const src = 'loop [0 2]';
+		const src = 'note [0 2]';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, endCursor(src), undefined);
 		expect(items).toHaveLength(0);
