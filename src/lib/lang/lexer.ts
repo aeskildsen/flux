@@ -632,6 +632,7 @@ export const allTokens = [
 	Plus,
 	Minus,
 	Slash,
+	Colon,
 	Bang,
 	// Literals — Float before Integer
 	Float,

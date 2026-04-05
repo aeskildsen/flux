@@ -92,10 +92,14 @@ export type EvalCycleResult =
 	| { ok: true; events: ScheduledEvent[]; done: boolean }
 	| { ok: false; error: string };
 
+export type ReinitResult = { ok: true } | { ok: false; error: string };
+
 export type EvalInstance =
 	| {
 			ok: true;
 			evaluate: (ctx: CycleContext) => EvalCycleResult;
+			/** Re-compile from new source, preserving runner state for unchanged named generators. */
+			reinit: (newSource: string) => ReinitResult;
 	  }
 	| { ok: false; error: string };
 
@@ -971,6 +975,8 @@ function compileTransposition(patternNode: CstNode): CompiledTransposition {
 type TraversalMode = 'seq' | 'shuf' | 'pick' | 'wran';
 
 type CompiledPattern = {
+	name: string; // generator name (mandatory since issue #2)
+	parentName: string | null; // parent name for derived (child:parent) generators; null = plain
 	elements: CompiledElement[];
 	listMode: EagerMode; // mode from list-level modifiers (inherited by elements)
 	traversal: TraversalMode;
@@ -1009,7 +1015,10 @@ function collectPatternModifiers(patternNode: CstNode): CstNode[] {
 	return [...seqMods, ...directMods, ...contMods];
 }
 
-function compilePattern(patternNode: CstNode): CompiledPattern | string {
+function compilePattern(
+	patternNode: CstNode,
+	parentPattern?: CompiledPattern
+): CompiledPattern | string {
 	const seqNode = (
 		(patternNode.children.sequenceExpr ?? patternNode.children.sequenceGenerator) as
 			| CstNode[]
@@ -1018,10 +1027,10 @@ function compilePattern(patternNode: CstNode): CompiledPattern | string {
 	const relNode = ((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
 
 	const bodyNode = seqNode ?? relNode;
-	if (!bodyNode) return 'pattern has no sequence body';
+	if (!bodyNode && !parentPattern) return 'pattern has no sequence body';
 
 	// List-level modifiers (on the [...] itself)
-	const listMods = (bodyNode.children.modifierSuffix as CstNode[]) ?? [];
+	const listMods = bodyNode ? ((bodyNode.children.modifierSuffix as CstNode[]) ?? []) : [];
 	const listMode = extractEagerMode(listMods) ?? DEFAULT_MODE;
 
 	// Traversal mode
@@ -1046,6 +1055,22 @@ function compilePattern(patternNode: CstNode): CompiledPattern | string {
 			const ce = compileTimedElement(elem, listMode);
 			if (ce) compiled.push(ce);
 		}
+	} else if (parentPattern) {
+		// Derived generator with no body — inherit parent's elements (deep-copy runners)
+		for (const el of parentPattern.elements) {
+			if (el.kind === 'scalar') {
+				compiled.push({
+					kind: 'scalar',
+					runner: makeRunner(el.runner.poll, el.runner.mode),
+					accidentalOffset: el.accidentalOffset,
+					weight: makeRunner(el.weight.poll, el.weight.mode),
+					...(el.beatOverride !== undefined && { beatOverride: el.beatOverride })
+				});
+			} else {
+				compiled.push(el);
+			}
+		}
+		traversal = parentPattern.traversal;
 	}
 
 	if (compiled.length === 0) return 'pattern sequence is empty';
@@ -1102,7 +1127,15 @@ function compilePattern(patternNode: CstNode): CompiledPattern | string {
 		: null;
 	const synthdef = synthdefTok ? synthdefTok.image.slice(1) : null;
 
+	// Generator name and optional parent name (child:parent syntax)
+	const genNameNode = ((patternNode.children.generatorName as CstNode[]) ?? [])[0];
+	const genNameToks = genNameNode ? ((genNameNode.children.Identifier as IToken[]) ?? []) : [];
+	const name = genNameToks[0]?.image ?? '';
+	const parentName = genNameToks[1]?.image ?? null;
+
 	return {
+		name,
+		parentName,
 		elements: compiled,
 		listMode,
 		traversal,
@@ -1457,7 +1490,16 @@ function resolveDecoratorContext(
 // createInstance — public entry point
 // ---------------------------------------------------------------------------
 
-export function createInstance(source: string): EvalInstance {
+type PatternEntry =
+	| { kind: 'plain'; compiled: CompiledPattern }
+	| { kind: 'decorated'; compiled: CompiledPattern; decoratorLayers: CstNode[][] };
+
+type CompileResult =
+	| { ok: true; setNodes: CstNode[]; patternEntries: PatternEntry[] }
+	| { ok: false; error: string };
+
+/** Parse and compile a source string into setNodes and patternEntries. */
+function compileSource(source: string): CompileResult {
 	const { tokens, errors: lexErrors } = FluxLexer.tokenize(source);
 	if (lexErrors.length > 0) {
 		return { ok: false, error: `Lex error: ${lexErrors[0].message}` };
@@ -1469,46 +1511,55 @@ export function createInstance(source: string): EvalInstance {
 		return { ok: false, error: `Parse error: ${parser.errors[0].message}` };
 	}
 
-	// ---------------------------------------------------------------------------
-	// Compile phase: find all statements, partition into sets and patterns.
-	// The scale context is built lazily at evaluate() time from set nodes and
-	// decorator blocks so that stochastic decorator args respect cycle semantics.
-	// ---------------------------------------------------------------------------
-
 	const statements = (cst.children.statement ?? []) as CstNode[];
-
-	type PatternEntry =
-		| { kind: 'plain'; compiled: CompiledPattern }
-		| { kind: 'decorated'; compiled: CompiledPattern; decoratorLayers: CstNode[][] };
-
 	const setNodes: CstNode[] = [];
 	const patternEntries: PatternEntry[] = [];
+
+	// Collect plain (non-decorator) pattern statement nodes for two-pass processing.
+	// Decorated blocks are pre-compiled by compileDecoratorBlock and don't support
+	// child:parent derivation (they're processed in a single pass below).
+	const plainPatternNodes: CstNode[] = [];
+	const compiledByName = new Map<string, CompiledPattern>();
 
 	for (const stmt of statements) {
 		const patternNodes = stmt.children.patternStatement as CstNode[] | undefined;
 		if (patternNodes?.length) {
-			const compiled = compilePattern(patternNodes[0]);
-			if (typeof compiled !== 'string') {
-				patternEntries.push({ kind: 'plain', compiled });
-			}
+			plainPatternNodes.push(patternNodes[0]);
 			continue;
 		}
-
 		const setNodes2 = stmt.children.setStatement as CstNode[] | undefined;
 		if (setNodes2?.length) {
 			setNodes.push(setNodes2[0]);
 			continue;
 		}
-
 		const decBlockNodes = stmt.children.decoratorBlock as CstNode[] | undefined;
 		if (decBlockNodes?.length) {
-			// Compile patterns eagerly (runners keep state across cycles).
-			// Decorator context is resolved lazily per cycle.
-			const compiled = compileDecoratorBlock(decBlockNodes[0], []);
-			for (const { compiled: cl, decoratorLayers } of compiled) {
+			const innerCompiled = compileDecoratorBlock(decBlockNodes[0], []);
+			for (const { compiled: cl, decoratorLayers } of innerCompiled) {
+				if (cl.name) compiledByName.set(cl.name, cl);
 				patternEntries.push({ kind: 'decorated', compiled: cl, decoratorLayers });
 			}
 			continue;
+		}
+	}
+
+	// Pass 1: compile plain non-derived patterns (no child:parent) and register by name.
+	// Pass 2: compile derived patterns, resolving parents from the map built in pass 1.
+	for (let pass = 1; pass <= 2; pass++) {
+		for (const node of plainPatternNodes) {
+			const genNameNode = ((node.children.generatorName as CstNode[]) ?? [])[0];
+			const genNameToks = genNameNode ? ((genNameNode.children.Identifier as IToken[]) ?? []) : [];
+			const isDerived = genNameToks.length >= 2;
+			if (pass === 1 && isDerived) continue;
+			if (pass === 2 && !isDerived) continue;
+
+			const parentName = isDerived ? (genNameToks[1]?.image ?? null) : null;
+			const parent = parentName ? compiledByName.get(parentName) : undefined;
+			const compiled = compilePattern(node, parent);
+			if (typeof compiled !== 'string') {
+				compiledByName.set(compiled.name, compiled);
+				patternEntries.push({ kind: 'plain', compiled });
+			}
 		}
 	}
 
@@ -1516,42 +1567,156 @@ export function createInstance(source: string): EvalInstance {
 		return { ok: false, error: 'No pattern statement found' };
 	}
 
+	return { ok: true, setNodes, patternEntries };
+}
+
+/**
+ * Validate generator names in a list of pattern entries.
+ * Returns an error string if:
+ *   - Two patterns share the same name (duplicate name static error)
+ *   - A derived generator references a parent name not present in the same evaluation
+ */
+function validateNames(patternEntries: PatternEntry[]): string | null {
+	const names = new Set<string>();
+	// Collect all names first (detect duplicates)
+	for (const entry of patternEntries) {
+		const { name } = entry.compiled;
+		if (!name) continue;
+		if (names.has(name)) {
+			return `Duplicate generator name: "${name}"`;
+		}
+		names.add(name);
+	}
+	// Check derived refs
+	for (const entry of patternEntries) {
+		const { parentName } = entry.compiled;
+		if (parentName && !names.has(parentName)) {
+			return `Dangling derived reference: parent generator "${parentName}" not found in this evaluation`;
+		}
+	}
+	return null;
+}
+
+/**
+ * Transfer runner state from old pattern entries to new ones where names match.
+ * For each CompiledPattern in newEntries whose name matches one in oldEntries,
+ * copy the runner state arrays so that locked values survive reinit.
+ */
+function transferRunnerState(oldEntries: PatternEntry[], newEntries: PatternEntry[]): void {
+	const oldByName = new Map<string, CompiledPattern>();
+	for (const e of oldEntries) {
+		if (e.compiled.name) oldByName.set(e.compiled.name, e.compiled);
+	}
+	for (const e of newEntries) {
+		const { name } = e.compiled;
+		if (!name) continue;
+		const old = oldByName.get(name);
+		if (!old) continue;
+		// Transfer runner state for matching runners by position.
+		// Runners are positional within the compiled elements array.
+		// We only transfer if element counts match — if the pattern changed
+		// structurally, runners are rebuilt fresh.
+		if (old.elements.length === e.compiled.elements.length) {
+			for (let i = 0; i < old.elements.length; i++) {
+				const oldEl = old.elements[i];
+				const newEl = e.compiled.elements[i];
+				if (oldEl.kind === 'scalar' && newEl.kind === 'scalar') {
+					// Transfer lock state: if old runner has a cached value, share it
+					if (oldEl.runner.hasValue) {
+						newEl.runner.hasValue = oldEl.runner.hasValue;
+						newEl.runner.cachedValue = oldEl.runner.cachedValue;
+						newEl.runner.lastSampledCycle = oldEl.runner.lastSampledCycle;
+					}
+				}
+			}
+		}
+		// Transfer pattern-level runner state (stut, maybe, legato, offset)
+		for (const key of ['stutRunner', 'maybeRunner', 'legatoRunner', 'offsetRunner'] as const) {
+			const oldR = old[key];
+			const newR = e.compiled[key];
+			if (oldR && newR && oldR.hasValue) {
+				newR.hasValue = oldR.hasValue;
+				newR.cachedValue = oldR.cachedValue;
+				newR.lastSampledCycle = oldR.lastSampledCycle;
+			}
+		}
+	}
+}
+
+function makeEvaluator(
+	setNodes: CstNode[],
+	patternEntries: PatternEntry[]
+): (ctx: CycleContext) => EvalCycleResult {
+	return function evaluate(ctx: CycleContext): EvalCycleResult {
+		const { cycleNumber } = ctx;
+
+		// Build the global ScaleContext from set statements
+		let globalCtx: ScaleContext = { ...DEFAULT_SCALE_CONTEXT };
+		for (const setNode of setNodes) {
+			globalCtx = applySetStatement(setNode, globalCtx, cycleNumber);
+		}
+
+		// Evaluate all patterns and collect their events
+		const allEvents: ScheduledEvent[] = [];
+		let anyDone = false;
+		let evaluated = false;
+
+		for (const entry of patternEntries) {
+			const compiled = entry.compiled;
+			const scaleCtx =
+				entry.kind === 'decorated'
+					? resolveDecoratorContext(entry.decoratorLayers, globalCtx, cycleNumber)
+					: globalCtx;
+
+			const { elements } = compiled;
+			if (elements.length === 0) continue;
+
+			const { events, done } = evaluateCompiledPattern(compiled, scaleCtx, cycleNumber);
+			allEvents.push(...events);
+			if (done) anyDone = true;
+			evaluated = true;
+		}
+
+		if (!evaluated) {
+			return { ok: false, error: 'No pattern found in evaluate' };
+		}
+		return { ok: true, events: allEvents, done: anyDone };
+	};
+}
+
+export function createInstance(source: string): EvalInstance {
+	const compiled = compileSource(source);
+	if (!compiled.ok) return compiled;
+
+	const nameError = validateNames(compiled.patternEntries);
+	if (nameError) return { ok: false, error: nameError };
+
+	// Mutable state: current set nodes and pattern entries (updated by reinit)
+	let currentSetNodes = compiled.setNodes;
+	let currentPatternEntries = compiled.patternEntries;
+
 	return {
 		ok: true,
-		evaluate(ctx: CycleContext): EvalCycleResult {
-			const { cycleNumber } = ctx;
+		evaluate: makeEvaluator(currentSetNodes, currentPatternEntries),
+		reinit(newSource: string): ReinitResult {
+			const newCompiled = compileSource(newSource);
+			if (!newCompiled.ok) return { ok: false, error: newCompiled.error };
 
-			// Build the global ScaleContext from set statements
-			let globalCtx: ScaleContext = { ...DEFAULT_SCALE_CONTEXT };
-			for (const setNode of setNodes) {
-				globalCtx = applySetStatement(setNode, globalCtx, cycleNumber);
-			}
+			const newNameError = validateNames(newCompiled.patternEntries);
+			if (newNameError) return { ok: false, error: newNameError };
 
-			// Evaluate all patterns and collect their events
-			const allEvents: ScheduledEvent[] = [];
-			let anyDone = false;
-			let evaluated = false;
+			// Transfer runner state from old patterns to new ones with matching names
+			transferRunnerState(currentPatternEntries, newCompiled.patternEntries);
 
-			for (const entry of patternEntries) {
-				const compiled = entry.compiled;
-				const scaleCtx =
-					entry.kind === 'decorated'
-						? resolveDecoratorContext(entry.decoratorLayers, globalCtx, cycleNumber)
-						: globalCtx;
+			// Swap in new state
+			currentSetNodes = newCompiled.setNodes;
+			currentPatternEntries = newCompiled.patternEntries;
 
-				const { elements } = compiled;
-				if (elements.length === 0) continue;
+			// Rebind the evaluate function to use the new entries
+			const self = this as Extract<EvalInstance, { ok: true }>;
+			self.evaluate = makeEvaluator(currentSetNodes, currentPatternEntries);
 
-				const { events, done } = evaluateCompiledPattern(compiled, scaleCtx, cycleNumber);
-				allEvents.push(...events);
-				if (done) anyDone = true;
-				evaluated = true;
-			}
-
-			if (!evaluated) {
-				return { ok: false, error: 'No pattern found in evaluate' };
-			}
-			return { ok: true, events: allEvents, done: anyDone };
+			return { ok: true };
 		}
 	};
 }

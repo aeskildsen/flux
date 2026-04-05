@@ -80,6 +80,7 @@ import {
 	Flat,
 	Bang,
 	Rest,
+	Colon,
 	INDENT,
 	DEDENT
 } from './lexer.js';
@@ -256,7 +257,8 @@ class FluxParser extends CstParser {
 	// -------------------------------------------------------------------------
 
 	patternStatement = this.RULE('patternStatement', () => {
-		// `note [...]`  or  `mono [...]`  or  `note(\synthdef) [...]`  etc.
+		// `note name [...]`  or  `note(\synthdef) name [...]`  or
+		// `note child:parent [...]` (derived generator)
 		// All content type keywords share the same grammar shape.
 		this.OR([
 			{ ALT: () => this.CONSUME(Note) },
@@ -268,6 +270,12 @@ class FluxParser extends CstParser {
 		this.OPTION(() => {
 			this.SUBRULE(this.synthdefArg);
 		});
+		// Mandatory generator name: either `name` (plain) or `child:parent` (derived).
+		this.SUBRULE(this.generatorName);
+		// For derived generators (child:parent), the sequence body is optional —
+		// the parent's pattern is inherited. For plain names, body is required.
+		// We use OPTION3 here but only conditionally: Chevrotain's alternative-based
+		// approach means we use OR2 with a derived-optional fallback.
 		this.OR2([
 			// timedList: '[' containing at least one 'degree@time' element.
 			// GATE peeks ahead to detect '@' inside the brackets.
@@ -275,7 +283,16 @@ class FluxParser extends CstParser {
 				GATE: () => this.isRelTimedList(),
 				ALT: () => this.SUBRULE(this.relTimedList)
 			},
-			{ ALT: () => this.SUBRULE(this.sequenceExpr) }
+			{ ALT: () => this.SUBRULE(this.sequenceExpr) },
+			// Derived generator with no body — body is optional for child:parent form.
+			// Detected by the absence of '[' as the next token.
+			// The evaluator enforces that only derived (child:parent) names may omit the body.
+			{
+				GATE: () => this.LA(1).tokenType !== LBracket,
+				ALT: () => {
+					/* no body — inherited from parent */
+				}
+			}
 		]);
 		this.MANY(() => {
 			this.SUBRULE(this.modifierSuffix);
@@ -328,6 +345,23 @@ class FluxParser extends CstParser {
 		this.CONSUME(LParen);
 		this.CONSUME(Symbol);
 		this.CONSUME(RParen);
+	});
+
+	/**
+	 * Generator name: either a plain identifier (`lead`) or a derived
+	 * child:parent reference (`perc:drums`).
+	 *
+	 * CST children:
+	 *   - Identifier[0] — the child/plain name
+	 *   - Colon[0]      — present only for derived generators
+	 *   - Identifier[1] — the parent name (only for derived generators)
+	 */
+	generatorName = this.RULE('generatorName', () => {
+		this.CONSUME(Identifier); // child name (or plain name)
+		this.OPTION(() => {
+			this.CONSUME(Colon);
+			this.CONSUME2(Identifier); // parent name
+		});
 	});
 
 	// -------------------------------------------------------------------------
