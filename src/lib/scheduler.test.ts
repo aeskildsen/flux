@@ -149,6 +149,45 @@ describe('run() — engine not ready', () => {
 		expect(callback).toHaveBeenCalledTimes(1);
 	});
 
+	it('does not emit when sonic.initTime is 0 (NTP sync pending)', () => {
+		// initTime=0 means NTP hasn't synced yet — ntpTime would be computed as
+		// 0 + beatToAudioTime(beat), a tiny number far in the past relative to NTP
+		// epoch (1900), causing every bundle to arrive LATE.
+		vi.mocked(getInstance).mockReturnValue({ initTime: 0 } as ReturnType<typeof getInstance>);
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const callback = vi.fn();
+		run(finiteGen([1]), callback);
+		expect(callback).not.toHaveBeenCalled();
+	});
+
+	it('snaps nextBeat to currentBeat when engine becomes ready after a wait', () => {
+		// Simulates the LATE scenario: run() is called with startBeat=0, but
+		// initTime=0 delays the first real tick by several ticks. By then
+		// currentBeat has advanced; without the snap, beatToAudioTime(0) is in
+		// the past and the bundle arrives LATE.
+		vi.mocked(getInstance).mockReturnValue({ initTime: 0 } as ReturnType<typeof getInstance>);
+
+		// After the wait, currentBeat will be 5 — only beat 5 is in-window
+		const currentBeatSpy = vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(5);
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation((beat: number) =>
+			beat === 5 ? fakeCurrentTime - 1 : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+		);
+
+		const callback = vi.fn();
+		run(finiteGen([{ note: 60, duration: 1 }]), callback, 1, 0); // startBeat=0
+
+		expect(callback).not.toHaveBeenCalled(); // still waiting for initTime
+
+		// Engine becomes ready
+		vi.mocked(getInstance).mockReturnValue(fakeSonic as ReturnType<typeof getInstance>);
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		// nextBeat snapped from 0 to currentBeat(5), so the event at beat 5 fires
+		expect(callback).toHaveBeenCalledTimes(1);
+		currentBeatSpy.mockRestore();
+	});
+
 	it('does not emit on first tick when audioContext is null', () => {
 		vi.spyOn(clock, 'audioContext', 'get').mockReturnValueOnce(null);
 		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime + LOOKAHEAD_SECONDS + 1);
@@ -325,8 +364,8 @@ describe('handle.setStopBeat()', () => {
 describe('run() — startBeat default (#9)', () => {
 	it('uses clock.currentBeat at call time, not module load time', () => {
 		// Simulate the engine being mid-session: currentBeat is 100.
-		// If startBeat were captured at module load it would be 0,
-		// flooding the queue with late bundles before beat 100.
+		// Verifies startBeat defaults to clock.currentBeat at call time,
+		// preventing a flood of late bundles for beats 0–99.
 		// The fix ensures nextBeat starts at 100.
 		const callTimeBeat = 100;
 		vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(callTimeBeat);
@@ -359,6 +398,22 @@ describe('run() — startBeat default (#9)', () => {
 		// With the fix, nextBeat starts at 50 (out-of-window), so nothing emits
 		expect(callback).not.toHaveBeenCalled();
 	});
+
+	it('respects explicit startBeat=0, does not fall back to clock.currentBeat', () => {
+		// Guards against a hypothetical ?? → || regression: || would treat 0 as falsy
+		// and redirect to clock.currentBeat (100), silently skipping beat 0.
+		vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(100);
+
+		// beat 0 is in-window; beat 1 is not
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation((beat: number) =>
+			beat === 0 ? fakeCurrentTime - 1 : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+		);
+
+		const callback = vi.fn();
+		run(finiteGen([{ note: 60, duration: 1 }]), callback, 1, 0); // explicit 0
+
+		expect(callback).toHaveBeenCalledTimes(1);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -375,6 +430,7 @@ describe('run() — zero/negative duration guard (#11)', () => {
 
 		// Scheduler must stop on the zero-duration event, not emit the second event
 		expect(callback).toHaveBeenCalledTimes(0);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
 		errorSpy.mockRestore();
 	});
 
@@ -384,7 +440,7 @@ describe('run() — zero/negative duration guard (#11)', () => {
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		run(finiteGen([{ duration: 0 }]), vi.fn(), 0.5, 0);
 
-		expect(errorSpy).toHaveBeenCalled();
+		expect(errorSpy).toHaveBeenCalledTimes(1);
 		expect(errorSpy.mock.calls[0][0]).toMatch(/zero or negative duration/i);
 		errorSpy.mockRestore();
 	});
@@ -397,6 +453,7 @@ describe('run() — zero/negative duration guard (#11)', () => {
 		run(finiteGen([{ duration: -1 }, { duration: 1 }]), callback, 0.5, 0);
 
 		expect(callback).toHaveBeenCalledTimes(0);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
 		errorSpy.mockRestore();
 	});
 
@@ -406,9 +463,38 @@ describe('run() — zero/negative duration guard (#11)', () => {
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		run(finiteGen([{ duration: 0 }]), vi.fn(), 0.5, 0);
 
-		const timersBefore = vi.getTimerCount();
+		// Guard fires synchronously on first tick: active=false, no setTimeout was registered
 		vi.advanceTimersByTime(TICK_INTERVAL_MS * 5);
-		expect(vi.getTimerCount()).toBeLessThanOrEqual(timersBefore);
+		expect(vi.getTimerCount()).toBe(0);
+		errorSpy.mockRestore();
+	});
+
+	it('stops when interval=0 causes a duration-less event to have zero duration', () => {
+		// durationOf(42, 0) returns the interval fallback (0) — guard must fire.
+		// The event value itself has no .duration field; the zero comes from interval.
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const callback = vi.fn();
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		run(finiteGen([42, 99]), callback, 0); // interval=0, no .duration on events
+
+		expect(callback).toHaveBeenCalledTimes(0);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		expect(errorSpy.mock.calls[0][0]).toMatch(/zero or negative duration/i);
+		errorSpy.mockRestore();
+	});
+
+	it('stops when event duration is NaN — does not hang silently', () => {
+		// NaN <= 0 is false, so without !isFinite() the guard would not fire.
+		// nextBeat += NaN makes nextBeat NaN permanently → eternal silent hang.
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const callback = vi.fn();
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		run(finiteGen([{ duration: NaN }, { duration: 1 }]), callback, 0.5, 0);
+
+		expect(callback).toHaveBeenCalledTimes(0);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
 		errorSpy.mockRestore();
 	});
 });

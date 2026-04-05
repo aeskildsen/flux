@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { boot, serverState, getServer } from 'svelte-supersonic';
+	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
 	import FluxEditor from '$lib/FluxEditor.svelte';
@@ -41,6 +41,11 @@
 		// Must be called from a user interaction — satisfies browser autoplay policy
 		await boot({ debug: true });
 		if (!sc) return;
+
+		// Point the clock at SuperSonic's AudioContext so beatToAudioTime and
+		// sonic.initTime are on the same timeline.
+		const sonicCtx = getInstance()?.audioContext;
+		if (sonicCtx) clock.setContext(sonicCtx);
 
 		// Load compiled synthdefs — metadata already available via page load
 		try {
@@ -87,10 +92,15 @@
 		}
 		const inst = instResult;
 
-		if (clock.startTime === null) clock.start();
+		const firstPlay = clock.startTime === null;
+		if (firstPlay) clock.start();
 
 		const CYCLE_BEATS = 4; // 1 DSL cycle = 4 real beats
-		const nextCycleBeat = Math.ceil(clock.currentBeat / CYCLE_BEATS) * CYCLE_BEATS;
+		// On first play currentBeat is 0, so ceil(0/4)*4 = 0 = "right now".
+		// Add CYCLE_BEATS so the first event lands one cycle ahead, giving the
+		// lookahead scheduler enough runway to deliver bundles before their NTP time.
+		const nextCycleBeat =
+			Math.ceil(clock.currentBeat / CYCLE_BEATS) * CYCLE_BEATS + (firstPlay ? CYCLE_BEATS : 0);
 
 		// Let the current loop finish its cycle, then stop it.
 		// setStopBeat prevents the old loop from scheduling the event at

@@ -10,11 +10,6 @@ let _ctx: AudioContext | null = null;
 let _startTime: number | null = null;
 let _bpm = 100;
 
-function getCtx(): AudioContext {
-	if (!_ctx) _ctx = new AudioContext();
-	return _ctx;
-}
-
 export const clock = {
 	get bpm(): number {
 		return _bpm;
@@ -32,12 +27,18 @@ export const clock = {
 	},
 
 	get currentBeat(): number {
-		if (_startTime === null) return 0;
-		return (getCtx().currentTime - _startTime) / (60 / _bpm);
+		if (_startTime === null || _ctx === null) return 0;
+		return (_ctx.currentTime - _startTime) / (60 / _bpm);
+	},
+
+	/** Set the AudioContext to use. Must be called before start(). */
+	setContext(ctx: AudioContext): void {
+		_ctx = ctx;
 	},
 
 	start(): void {
-		_startTime = getCtx().currentTime;
+		if (_ctx === null) throw new Error('Clock: call setContext() before start()');
+		_startTime = _ctx.currentTime;
 	},
 
 	stop(): void {
@@ -49,7 +50,7 @@ export const clock = {
 		return beats * (60 / _bpm);
 	},
 
-	/** Convert an absolute beat position to an AudioContext.currentTime offset. */
+	/** Convert an absolute beat position to an AudioContext.currentTime value. */
 	beatToAudioTime(beat: number): number {
 		if (_startTime === null) throw new Error('Clock not started');
 		return _startTime + this.beatsToSeconds(beat);
