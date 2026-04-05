@@ -188,19 +188,27 @@ Decorators apply lexically like indentation-based blocks.
 
 # 9. **FX Pipe Truth Table**
 
-Piped FX attaches to preceding expression.
+Piped insert FX attaches to preceding pattern expression. Wet/dry level (integer `%`) is optional and written after all parameter modifiers.
 
-| Code                                | Interpretation | Evaluation                              | Result                   |
-| ----------------------------------- | -------------- | --------------------------------------- | ------------------------ |
-| `note [0] \| fx(\lpf)`              | Insert FX.     | Create FX node for duration of pattern. | Pattern audio → lpf.     |
-| `note [0] \| fx(\lpf)'cutoff(1200)` | Parameter mod. | cutoff sampled per eager/lock.          | Fixed or dynamic cutoff. |
+| Code                                   | Interpretation       | Evaluation                              | Result                       |
+| -------------------------------------- | -------------------- | --------------------------------------- | ---------------------------- |
+| `note [0] \| fx(\lpf)`                 | Insert FX, 100% wet. | Create FX node for duration of pattern. | Pattern audio → lpf.         |
+| `note [0] \| fx(\lpf)'cutoff(1200)`    | Parameter modifier.  | cutoff sampled per eager/lock.          | Fixed or dynamic cutoff.     |
+| `note [0] \| fx(\lpf) 70%`             | Wet/dry level.       | 70% wet signal mixed with 30% dry.      | Partial effect blend.        |
+| `note [0] \| fx(\lpf)'cutoff(800) 50%` | Params + wet/dry.    | cutoff mod applied; 50% wet.            | Combined mod and blend.      |
+| `note [0] \| fx(\lpf)'tail(10)`        | Custom silence tail. | FX node freed 10s after source stops.   | Extended reverb/delay tails. |
+| `note [0] \| fx(\lpf)'tail(0)`         | Immediate free.      | FX node freed when source stops.        | No tail.                     |
 
 **Error cases**
 
-| Code                   | Failure Type   | Why                                                   |
-| ---------------------- | -------------- | ----------------------------------------------------- |
-| `\| fx("lpf")`         | Parse error    | Pipe operator requires a LHS expression.              |
-| `note [0] \| note [1]` | Semantic error | RHS of pipe must be an `fx(...)` call, not a pattern. |
+| Code                    | Failure Type   | Why                                                             |
+| ----------------------- | -------------- | --------------------------------------------------------------- |
+| `\| fx(\lpf)`           | Parse error    | Pipe operator requires a LHS expression.                        |
+| `note [0] \| note [1]`  | Semantic error | RHS of pipe must be an `fx(...)` call, not a pattern.           |
+| `note [0] \| fx("lpf")` | Lex error      | FX name must be a `\symbol`, not a string literal.              |
+| `note [0] \| fx(lpf)`   | Parse error    | FX name must be a `\symbol`, not a bare identifier.             |
+| `send_fx(\reverb)`      | Parse error    | `send_fx` is not supported — use `\| fx(...)` insert syntax.    |
+| `master_fx(\limiter)`   | Parse error    | `master_fx` is not supported — master bus FX are UI-configured. |
 
 ---
 

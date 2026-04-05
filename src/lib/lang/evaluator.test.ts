@@ -1520,6 +1520,38 @@ describe('FX pipe (truth table 9)', () => {
 		};
 		expect(fx(r0)!.params.cutoff).toBe(fx(r1)!.params.cutoff);
 	});
+
+	it('fx without wet/dry has wetDry undefined (100% wet by default)', () => {
+		const r = inst('note x [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
+			wetDry?: number;
+		};
+		expect(fxEv).toBeDefined();
+		expect(fxEv.wetDry).toBeUndefined();
+	});
+
+	it('fx with 70% wet/dry emits wetDry: 70', () => {
+		const r = inst('note x [0] | fx(\\lpf) 70%').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
+			wetDry?: number;
+		};
+		expect(fxEv).toBeDefined();
+		expect(fxEv.wetDry).toBe(70);
+	});
+
+	it("fx with params and wet/dry: fx(\\lpf)'cutoff(800) 50% emits wetDry: 50", () => {
+		const r = inst("note x [0] | fx(\\lpf)'cutoff(800) 50%").evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
+			wetDry?: number;
+			params: Record<string, number>;
+		};
+		expect(fxEv).toBeDefined();
+		expect(fxEv.wetDry).toBe(50);
+		expect(fxEv.params.cutoff).toBe(800);
+	});
 });
 
 // ---------------------------------------------------------------------------

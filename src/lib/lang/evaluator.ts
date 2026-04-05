@@ -86,6 +86,7 @@ export type ScheduledEvent = {
 	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
 	synthdef?: string; // SynthDef name: set on note events by loop(\name)/line(\name), and on FX events
 	params?: Record<string, number>; // FX params (only for type:'fx')
+	wetDry?: number; // wet/dry mix 0–100 (only for type:'fx'; undefined = 100% wet)
 };
 
 export type EvalCycleResult =
@@ -1184,6 +1185,7 @@ function compileTimedElement(elem: CstNode, inherited: EagerMode): CompiledEleme
 type CompiledFx = {
 	synthdef: string;
 	paramRunners: Array<{ name: string; runner: RunnerState }>;
+	wetDry: number | null; // null = 100% wet (default); 0–100 integer otherwise
 };
 
 function compileFxNode(fxNode: CstNode): CompiledFx {
@@ -1213,7 +1215,11 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 		paramRunners.push({ name: paramName, runner: makeRunner(poll, mode) });
 	}
 
-	return { synthdef, paramRunners };
+	// Optional wet/dry level: Integer Percent after all modifiers
+	const wetTok = ((fxNode.children.Integer as IToken[]) ?? [])[0];
+	const wetDry = wetTok ? parseInt(wetTok.image, 10) : null;
+
+	return { synthdef, paramRunners, wetDry };
 }
 
 function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number): ScheduledEvent {
@@ -1228,6 +1234,7 @@ function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number
 		type: 'fx',
 		synthdef: compiledFx.synthdef,
 		params,
+		wetDry: compiledFx.wetDry ?? undefined,
 		cycleOffset: atOffset // always present on FX events
 	};
 }

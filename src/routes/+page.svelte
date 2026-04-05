@@ -5,6 +5,7 @@
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
+	import FxPanel from '$lib/FxPanel.svelte';
 	import type { PageData } from './$types';
 
 	const { data }: { data: PageData } = $props();
@@ -165,6 +166,7 @@
 		</div>
 
 		<SynthDefPanel synthdefs={data.synthdefs} />
+		<FxPanel />
 
 		<div class="feedback-log" bind:this={logEl}>
 			{#each log as entry, i (i)}
