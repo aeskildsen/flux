@@ -318,6 +318,101 @@ describe('handle.setStopBeat()', () => {
 // 7. durationOf — custom .duration field on events
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 8. startBeat default (#9) — must use clock.currentBeat at call time
+// ---------------------------------------------------------------------------
+
+describe('run() — startBeat default (#9)', () => {
+	it('uses clock.currentBeat at call time, not module load time', () => {
+		// Simulate the engine being mid-session: currentBeat is 100.
+		// If startBeat were captured at module load it would be 0,
+		// flooding the queue with late bundles before beat 100.
+		// The fix ensures nextBeat starts at 100.
+		const callTimeBeat = 100;
+		vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(callTimeBeat);
+
+		// Only beat 100 is in-window; beat 100+interval is out
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation((beat: number) =>
+			beat === callTimeBeat ? fakeCurrentTime : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+		);
+
+		const callback = vi.fn();
+		// No explicit startBeat — should default to clock.currentBeat at call time
+		run(finiteGen([{ note: 60, duration: 1 }]), callback, 1);
+
+		expect(callback).toHaveBeenCalledTimes(1);
+	});
+
+	it('does NOT schedule events from beat 0 when currentBeat is non-zero', () => {
+		// If startBeat defaults to 0 (old bug), beat 0 would be in-window when
+		// currentBeat is 100, causing spurious early emission.
+		vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(50);
+
+		// beat 0 is in-window, beat 50 is not — the bug would emit at beat 0
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation((beat: number) =>
+			beat < 50 ? fakeCurrentTime - 1 : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+		);
+
+		const callback = vi.fn();
+		run(finiteGen([1, 2, 3]), callback, 1);
+
+		// With the fix, nextBeat starts at 50 (out-of-window), so nothing emits
+		expect(callback).not.toHaveBeenCalled();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 9. Zero/negative duration guard (#11)
+// ---------------------------------------------------------------------------
+
+describe('run() — zero/negative duration guard (#11)', () => {
+	it('stops the scheduler when an event has duration 0', () => {
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1); // always in-window
+
+		const callback = vi.fn();
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		run(finiteGen([{ duration: 0 }, { duration: 1 }]), callback, 0.5, 0);
+
+		// Scheduler must stop on the zero-duration event, not emit the second event
+		expect(callback).toHaveBeenCalledTimes(0);
+		errorSpy.mockRestore();
+	});
+
+	it('logs a console.error when duration is zero', () => {
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		run(finiteGen([{ duration: 0 }]), vi.fn(), 0.5, 0);
+
+		expect(errorSpy).toHaveBeenCalled();
+		expect(errorSpy.mock.calls[0][0]).toMatch(/zero or negative duration/i);
+		errorSpy.mockRestore();
+	});
+
+	it('stops the scheduler when an event has negative duration', () => {
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const callback = vi.fn();
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		run(finiteGen([{ duration: -1 }, { duration: 1 }]), callback, 0.5, 0);
+
+		expect(callback).toHaveBeenCalledTimes(0);
+		errorSpy.mockRestore();
+	});
+
+	it('does not freeze — no subsequent ticks fire after a zero-duration stop', () => {
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		run(finiteGen([{ duration: 0 }]), vi.fn(), 0.5, 0);
+
+		const timersBefore = vi.getTimerCount();
+		vi.advanceTimersByTime(TICK_INTERVAL_MS * 5);
+		expect(vi.getTimerCount()).toBeLessThanOrEqual(timersBefore);
+		errorSpy.mockRestore();
+	});
+});
+
 describe('run() — event duration field', () => {
 	it('advances nextBeat by event.duration when the field is present', () => {
 		// With duration=2 and startBeat=0: nextBeat goes 0 → 2 → 4

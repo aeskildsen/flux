@@ -41,10 +41,10 @@ export function run<T>(
 	gen: Generator<T>,
 	callback: (value: T, ntpTime: number) => void,
 	interval = 0.5,
-	startBeat = clock.currentBeat
+	startBeat?: number
 ): SchedulerHandle {
 	let active = true;
-	let nextBeat = startBeat;
+	let nextBeat = startBeat ?? clock.currentBeat;
 	let stopBeat = Infinity;
 	let timerId: ReturnType<typeof setTimeout>;
 
@@ -72,9 +72,18 @@ export function run<T>(
 				active = false;
 				return;
 			}
+			const dur = durationOf(value, interval);
+			if (dur <= 0) {
+				active = false;
+				console.error(`Scheduler: zero or negative duration at beat ${nextBeat}`, value);
+				return;
+			}
+			// clock.beatToAudioTime returns AudioContext-relative time (seconds since ctx creation).
+			// sonic.initTime is the NTP offset: AudioContext epoch expressed as NTP wall-clock seconds.
+			// Their sum is the absolute NTP timestamp required by SuperSonic's OSC bundle prescheduler.
 			const ntpTime = sonic.initTime + clock.beatToAudioTime(nextBeat);
 			callback(value, ntpTime);
-			nextBeat += durationOf(value, interval);
+			nextBeat += dur;
 		}
 
 		timerId = setTimeout(tick, TICK_INTERVAL_MS);
