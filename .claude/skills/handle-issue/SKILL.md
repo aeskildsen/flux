@@ -1,10 +1,10 @@
 ---
-name: next-issue
+name: handle-issue
 description: Full issue-to-PR cycle for the Flux project. Use this skill whenever the user wants to pick up the next GitHub issue, work on an issue, do the next ticket, or ship something from the backlog — even if they just say "what's next?" or "let's work on something". Handles everything: pulling main, selecting the lowest-numbered open issue, branching, implementing via TDD, committing, and opening a PR.
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, AskUserQuestion, TodoWrite
 ---
 
-# next-issue
+# handle-issue
 
 Automates the full cycle from "what's next?" to an open PR. Follow each step in order — don't skip ahead.
 

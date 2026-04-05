@@ -1,5 +1,5 @@
 ---
-name: gh-issue
+name: file-issue
 description: Create a GitHub issue from a Flux DSL issue description. Use this skill whenever the user asks to file, create, register, or post a GitHub issue — whether from dev-notes/Issues.md, from a description in the conversation, or from scratch. Always use this skill rather than running `gh issue create` directly, because it applies the project's quality bar before filing.
 ---
 
