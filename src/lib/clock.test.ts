@@ -44,6 +44,7 @@ function setTime(t: number) {
 
 beforeEach(() => {
 	fakeCurrentTime = 0;
+	clock.setContext(new AudioContext());
 	clock.stop();
 	clock.bpm = 100;
 });
