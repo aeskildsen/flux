@@ -8,11 +8,11 @@
 	};
 
 	type SynthDefMeta = {
-		category: string;
 		credit: string;
 		description: string;
 		source: string;
-		tags: string[];
+		type: string;
+		fx_role?: string;
 		url: string;
 		specs?: Record<string, ParamSpec>;
 	};
@@ -36,13 +36,6 @@
 	{#each entries as [name, meta]}
 		<div class="card">
 			<div class="card-name">{name}</div>
-
-			<div class="chips">
-				<span class="chip category">{meta.category}</span>
-				{#each meta.tags as tag}
-					<span class="chip tag">#{tag}</span>
-				{/each}
-			</div>
 
 			{#if meta.description}
 				<p class="description">{meta.description}</p>
@@ -123,24 +116,6 @@
 		color: var(--color-text-muted);
 		font-weight: bold;
 		font-size: 0.8rem;
-	}
-
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-	}
-
-	.chip {
-		font-size: 0.68rem;
-		color: var(--color-text-hint);
-		padding: 1px 4px;
-		border: 1px solid var(--color-bg-border);
-		border-radius: 2px;
-	}
-
-	.chip.category {
-		color: var(--color-text-dim);
 	}
 
 	.description {

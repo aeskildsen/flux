@@ -9,11 +9,11 @@ export type ParamSpec = {
 };
 
 type SynthDefMeta = {
-	category: string;
 	credit: string;
 	description: string;
 	source: string;
-	tags: string[];
+	type: string;
+	fx_role?: string;
 	url: string;
 	specs?: Record<string, ParamSpec>;
 };

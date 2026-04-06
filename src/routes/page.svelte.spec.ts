@@ -7,11 +7,10 @@ const emptyData = { synthdefs: {} };
 const loadedData = {
 	synthdefs: {
 		kick: {
-			category: 'percussion',
 			credit: 'Anders Eskildsen',
 			description: 'A kick drum.',
 			source: 'kick.scd',
-			tags: ['kick'],
+			type: 'instrument',
 			url: 'https://example.com'
 		}
 	}

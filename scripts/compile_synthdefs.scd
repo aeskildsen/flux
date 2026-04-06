@@ -43,7 +43,16 @@ Task({
 						\min, spec.minval,
 						\max, spec.maxval,
 						\default, spec.default,
-						\curve, if(spec.warp.isKindOf(CurveWarp)) { spec.warp.curve } { 0 },
+						\curve, switch(spec.warp.class,
+							LinearWarp,      { \lin },
+							ExponentialWarp, { \exp },
+							SineWarp,        { \sin },
+							CosineWarp,      { \cos },
+							FaderWarp,       { \amp },
+							DbFaderWarp,     { \db },
+							CurveWarp,       { spec.warp.curve },
+							/* fallback */   { 0 }
+						),
 						\unit, spec.units,
 					]);
 				});

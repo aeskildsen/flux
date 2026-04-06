@@ -4,11 +4,10 @@ import { render } from 'vitest-browser-svelte';
 import SynthDefPanel from './SynthDefPanel.svelte';
 
 const kickMeta = {
-	category: 'percussion',
 	credit: 'Anders Eskildsen',
 	description: 'A simple kick drum synthesizer.',
 	source: 'kick.scd',
-	tags: ['kick', 'percussive', 'drum'],
+	type: 'instrument',
 	url: 'https://example.com/kick'
 };
 
@@ -26,18 +25,6 @@ describe('SynthDefPanel', () => {
 	it('renders the synthdef name', async () => {
 		render(SynthDefPanel, { synthdefs: { kick: kickMeta } });
 		await expect.element(page.getByText('kick', { exact: true }).first()).toBeInTheDocument();
-	});
-
-	it('renders the category chip', async () => {
-		render(SynthDefPanel, { synthdefs: { kick: kickMeta } });
-		await expect.element(page.getByText('percussion')).toBeInTheDocument();
-	});
-
-	it('renders all tags as chips', async () => {
-		render(SynthDefPanel, { synthdefs: { kick: kickMeta } });
-		await expect.element(page.getByText('#kick')).toBeInTheDocument();
-		await expect.element(page.getByText('#percussive')).toBeInTheDocument();
-		await expect.element(page.getByText('#drum')).toBeInTheDocument();
 	});
 
 	it('renders the description', async () => {
@@ -85,7 +72,7 @@ describe('SynthDefPanel', () => {
 		render(SynthDefPanel, {
 			synthdefs: {
 				kick: kickMeta,
-				snare: { ...kickMeta, category: 'percussion', tags: ['snare'] }
+				snare: { ...kickMeta }
 			}
 		});
 		await expect.element(page.getByText('synthdefs (2)')).toBeInTheDocument();
