@@ -1609,23 +1609,26 @@ describe('"param notation on loop/line (truth table 18)', () => {
 
 	it('"param with stochastic value varies per cycle (eager(1) default)', () => {
 		const i = inst('note x [0]"amp(0.3rand0.8)');
-		const results = Array.from({ length: 10 }, (_, c) => {
+		const results = Array.from({ length: 100 }, (_, c) => {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
 			return (r.events[0] as { params?: Record<string, number> }).params!.amp;
 		});
-		// At least some values should differ across cycles with rand
 		expect(results.every((v) => v >= 0.3 && v <= 0.8)).toBe(true);
+		// Values must actually vary — a 'lock bug would freeze them
+		expect(new Set(results.map((v) => v.toFixed(6))).size).toBeGreaterThan(1);
 	});
 
 	it('"param with \'lock holds value across cycles', () => {
 		const i = inst('note x [0]"amp(0.3rand0.8\'lock)');
-		const r0 = i.evaluate({ cycleNumber: 0 });
-		const r1 = i.evaluate({ cycleNumber: 1 });
-		if (!r0.ok || !r1.ok) throw new Error('eval failed');
-		const amp0 = (r0.events[0] as { params?: Record<string, number> }).params!.amp;
-		const amp1 = (r1.events[0] as { params?: Record<string, number> }).params!.amp;
-		expect(amp0).toBe(amp1);
+		const amps = [0, 1, 5].map((c) => {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error('eval failed');
+			return (r.events[0] as { params?: Record<string, number> }).params!.amp;
+		});
+		// Same value at cycles 0, 1, and 5 — rules out 'eager(2) false positive
+		expect(amps[0]).toBe(amps[1]);
+		expect(amps[0]).toBe(amps[2]);
 	});
 
 	it('"param applies to all note events in a multi-element pattern', () => {

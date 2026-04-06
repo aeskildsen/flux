@@ -14,7 +14,10 @@
 	let editor: Monaco.editor.IStandaloneCodeEditor | undefined;
 
 	onMount(() => {
+		let mounted = true;
+
 		import('monaco-editor').then((monaco) => {
+			if (!mounted) return;
 			registerFluxLanguage(monaco);
 
 			editor = monaco.editor.create(container, {
@@ -75,6 +78,7 @@
 		});
 
 		return () => {
+			mounted = false;
 			editor?.dispose();
 		};
 	});
