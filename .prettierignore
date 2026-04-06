@@ -16,3 +16,7 @@ dev-*/
 
 # Submodule (managed independently)
 svelte-supersonic/
+
+# SuperCollider files
+**/*.scd
+**/*.scsyndef
