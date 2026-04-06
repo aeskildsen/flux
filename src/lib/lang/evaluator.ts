@@ -85,7 +85,7 @@ export type ScheduledEvent = {
 	mono?: boolean; // if true, send set instead of new synth
 	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
 	synthdef?: string; // SynthDef name: set on note events by loop(\name)/line(\name), and on FX events
-	params?: Record<string, number>; // FX params (only for type:'fx')
+	params?: Record<string, number>; // SynthDef params: from "param modifiers (note events) or FX pipe (fx events)
 	wetDry?: number; // wet/dry mix 0–100 (only for type:'fx'; undefined = 100% wet)
 };
 
@@ -984,6 +984,7 @@ type CompiledPattern = {
 	transposition: CompiledTransposition;
 	fx: CompiledFx | null; // compiled FX (stateful runners; null = no FX)
 	synthdef: string | null; // SynthDef name from synthdefArg; null = use default
+	paramRunners: Array<{ name: string; runner: RunnerState }>; // "param modifiers on the pattern
 };
 
 /** Collect all modifiers from the patternStatement node plus continuation block.
@@ -1121,6 +1122,26 @@ function compilePattern(
 		: null;
 	const synthdef = synthdefTok ? synthdefTok.image.slice(1) : null;
 
+	// "param modifiers — direct SynthDef argument access on the pattern statement
+	const paramSuffixes = (patternNode.children.paramSuffix as CstNode[]) ?? [];
+	const paramRunners: Array<{ name: string; runner: RunnerState }> = [];
+	for (const ps of paramSuffixes) {
+		const sigilTok = ((ps.children.ParamSigil as IToken[]) ?? [])[0];
+		if (!sigilTok) continue;
+		const paramName = sigilTok.image.slice(1); // strip leading `"`
+		const genExpr = ((ps.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!genExpr) continue;
+		const genMods = (genExpr.children.modifierSuffix as CstNode[]) ?? [];
+		const mode = extractEagerMode(genMods) ?? DEFAULT_MODE;
+		const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+		if (!atomic) continue;
+		const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
+		if (!numGen) continue;
+		const poll = numGenToPollFn(numGen);
+		if (!poll) continue;
+		paramRunners.push({ name: paramName, runner: makeRunner(poll, mode) });
+	}
+
 	// Generator name and optional parent name (child:parent syntax)
 	const genNameNode = ((patternNode.children.generatorName as CstNode[]) ?? [])[0];
 	const genNameToks = genNameNode ? ((genNameNode.children.Identifier as IToken[]) ?? []) : [];
@@ -1142,7 +1163,8 @@ function compilePattern(
 		repeat,
 		transposition,
 		fx,
-		synthdef
+		synthdef,
+		paramRunners
 	};
 }
 
@@ -1303,6 +1325,7 @@ type SlotParams = {
 	offsetMs: number | undefined;
 	cycleOff: number;
 	synthdef: string | null;
+	noteParams: Record<string, number> | undefined;
 };
 
 /**
@@ -1350,6 +1373,7 @@ function expandSlot(
 	if (p.mono) event.mono = true;
 	if (p.cycleOff !== 0) event.cycleOffset = p.cycleOff;
 	if (p.synthdef !== null) event.synthdef = p.synthdef;
+	if (p.noteParams !== undefined) event.params = p.noteParams;
 	return [event];
 }
 
@@ -1362,8 +1386,17 @@ function evaluateCompiledPattern(
 	scaleCtx: ScaleContext,
 	cycle: number
 ): { events: ScheduledEvent[]; done: boolean } {
-	const { elements, stutRunner, maybeRunner, legatoRunner, offsetRunner, mono, atOffset, repeat } =
-		compiled;
+	const {
+		elements,
+		stutRunner,
+		maybeRunner,
+		legatoRunner,
+		offsetRunner,
+		mono,
+		atOffset,
+		repeat,
+		paramRunners
+	} = compiled;
 
 	// Sample stutter count once per cycle
 	const stutCount = stutRunner ? Math.max(1, Math.round(sampleRunner(stutRunner, cycle))) : 1;
@@ -1373,6 +1406,15 @@ function evaluateCompiledPattern(
 
 	// Sample offset once per cycle
 	const offsetMs = offsetRunner ? sampleRunner(offsetRunner, cycle) : undefined;
+
+	// Sample "param runners once per cycle
+	let noteParams: Record<string, number> | undefined;
+	if (paramRunners.length > 0) {
+		noteParams = {};
+		for (const { name, runner } of paramRunners) {
+			noteParams[name] = sampleRunner(runner, cycle);
+		}
+	}
 
 	// Sample maybe probability once per cycle
 	const maybeProb = maybeRunner ? sampleRunner(maybeRunner, cycle) : null;
@@ -1429,7 +1471,8 @@ function evaluateCompiledPattern(
 					mono,
 					offsetMs,
 					cycleOff,
-					synthdef: compiled.synthdef
+					synthdef: compiled.synthdef,
+					noteParams
 				})
 			);
 		}

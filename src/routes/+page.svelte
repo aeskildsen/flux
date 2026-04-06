@@ -254,7 +254,8 @@
 		}
 
 		// Yield one entry per scheduled event; `duration` is the gap to the next
-		// event (drives scheduler advancement) and `release` is the synth gate time.
+		// event (drives scheduler advancement) and `sustain` is the synth gate time
+		// (how long before the envelope enters the release phase).
 		function* gen() {
 			let cycleNumber = 0;
 			while (true) {
@@ -273,12 +274,12 @@
 					if (ev.type === 'fx') {
 						// TODO: FX routing not yet wired to audio engine.
 						// ev.synthdef, ev.params, and ev.wetDry are available when this is implemented.
-						yield { note: 0, duration: gap, release: 0, synthdef: undefined, skip: true };
+						yield { note: 0, duration: gap, sustain: 0, synthdef: undefined, skip: true };
 						continue;
 					}
 
-					const release = clock.beatsToSeconds(ev.duration * CYCLE_BEATS) * 0.9;
-					yield { note: ev.note, duration: gap, release, synthdef: ev.synthdef };
+					const sustain = clock.beatsToSeconds(ev.duration * CYCLE_BEATS);
+					yield { note: ev.note, duration: gap, sustain, synthdef: ev.synthdef, params: ev.params };
 				}
 			}
 		}
@@ -289,8 +290,8 @@
 				if (event.skip) return;
 				scProxy.synthAt(ntpTime, event.synthdef ?? 'sonic-pi-prophet', 'source', {
 					note: event.note,
-					release: event.release,
-					cutoff: 90
+					sustain: event.sustain,
+					...event.params
 				});
 			},
 			CYCLE_BEATS,
