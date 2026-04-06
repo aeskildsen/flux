@@ -18,7 +18,8 @@ k = SynthDef(\kick, {
 },
 metadata: (
 	credit: "Anders Eskildsen",
-	category: \percussion,
+	category: \percussive,
+	type: \instrument_synth,
 	tags: [\kick, \percussive, \drum],
 	specs: Dictionary.newFrom([
 		\pan, ControlSpec(-1, 1, 2, 0.0, 0, ""),

@@ -1,5 +1,13 @@
 import type { PageLoad } from './$types';
 
+export type ParamSpec = {
+	min?: number;
+	max?: number;
+	default?: number;
+	warp?: string;
+	unit?: string;
+};
+
 type SynthDefMeta = {
 	category: string;
 	credit: string;
@@ -7,10 +15,7 @@ type SynthDefMeta = {
 	source: string;
 	tags: string[];
 	url: string;
-	specs?: Record<
-		string,
-		{ min?: number; max?: number; default?: number; warp?: string; unit?: string }
-	>;
+	specs?: Record<string, ParamSpec>;
 };
 
 export const load: PageLoad = async ({ fetch }) => {
