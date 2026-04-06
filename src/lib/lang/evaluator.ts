@@ -83,6 +83,7 @@ export type ScheduledEvent = {
 	cycleOffset?: number; // cycle-level offset (for 'at)
 	offsetMs?: number; // ms shift (positive = late, negative = early)
 	mono?: boolean; // if true, send set instead of new synth
+	loopId?: string; // source pattern name — used by mono dispatch to track per-loop node state
 	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
 	synthdef?: string; // SynthDef name: set on note events by loop(\name)/line(\name), and on FX events
 	params?: Record<string, number>; // SynthDef params: from "param modifiers (note events) or FX pipe (fx events)
@@ -1322,6 +1323,7 @@ type SlotParams = {
 	scaleCtx: ScaleContext;
 	transposeDelta: number;
 	mono: boolean;
+	loopId: string;
 	offsetMs: number | undefined;
 	cycleOff: number;
 	synthdef: string | null;
@@ -1371,6 +1373,7 @@ function expandSlot(
 	if (p.scaleCtx.cent !== 0) event.cent = p.scaleCtx.cent;
 	if (p.offsetMs !== undefined && p.offsetMs !== 0) event.offsetMs = p.offsetMs;
 	if (p.mono) event.mono = true;
+	if (p.loopId) event.loopId = p.loopId;
 	if (p.cycleOff !== 0) event.cycleOffset = p.cycleOff;
 	if (p.synthdef !== null) event.synthdef = p.synthdef;
 	if (p.noteParams !== undefined) event.params = p.noteParams;
@@ -1387,6 +1390,7 @@ function evaluateCompiledPattern(
 	cycle: number
 ): { events: ScheduledEvent[]; done: boolean } {
 	const {
+		name: loopId,
 		elements,
 		stutRunner,
 		maybeRunner,
@@ -1469,6 +1473,7 @@ function evaluateCompiledPattern(
 					scaleCtx,
 					transposeDelta,
 					mono,
+					loopId,
 					offsetMs,
 					cycleOff,
 					synthdef: compiled.synthdef,

@@ -150,6 +150,7 @@ export const sc: Pick<
 	'synth' | 'set' | 'free' | 'loadSynthDef'
 > & {
 	synthAt(ntpTime: number, name: string, group?: GroupName, params?: SynthParams): number;
+	setAt(ntpTime: number, nodeId: number, params: SynthParams): void;
 } = {
 	synth: (name: string, group?: GroupName, params?: SynthParams) =>
 		getServer()!.synth(name, group, params),
@@ -174,6 +175,18 @@ export const sc: Pick<
 		const bytes = osc.encodeSingleBundle(ntpTime, '/s_new', [name, id, 0, GROUPS[group], ...flat]);
 		sonic.sendOSC(bytes);
 		return id;
+	},
+
+	/**
+	 * Send a timed /n_set bundle to update a running node's parameters.
+	 * Use from scheduler callbacks for gate-close and mono voice updates.
+	 */
+	setAt(ntpTime: number, nodeId: number, params: SynthParams): void {
+		const sonic = getInstance()!;
+		const osc = getOsc()!;
+		const flat = Object.entries(params).flat();
+		const bytes = osc.encodeSingleBundle(ntpTime, '/n_set', [nodeId, ...flat]);
+		sonic.sendOSC(bytes);
 	}
 };
 

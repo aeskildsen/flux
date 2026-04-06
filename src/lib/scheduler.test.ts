@@ -24,10 +24,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // ---------------------------------------------------------------------------
 
 vi.mock('svelte-supersonic', () => ({
-	getInstance: vi.fn()
+	getInstance: vi.fn(),
+	getOsc: vi.fn(),
+	getServer: vi.fn(),
+	GROUPS: { source: 1, master: 2 }
 }));
 
-import { getInstance } from 'svelte-supersonic';
+import { getInstance, getOsc } from 'svelte-supersonic';
 
 // ---------------------------------------------------------------------------
 // Shared fake state
@@ -49,7 +52,7 @@ const fakeSonic = {
 // Import module under test (after mocks are set up)
 // ---------------------------------------------------------------------------
 
-import { run, TICK_INTERVAL_MS, LOOKAHEAD_SECONDS } from './scheduler.js';
+import { run, sc, TICK_INTERVAL_MS, LOOKAHEAD_SECONDS } from './scheduler.js';
 import { clock } from './clock.js';
 
 // ---------------------------------------------------------------------------
@@ -524,5 +527,51 @@ describe('run() — event duration field', () => {
 		const callback = vi.fn();
 		run(finiteGen([42, 99]), callback, 1, 0);
 		expect(callback).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 10. sc.setAt — timed /n_set bundle (issue #18)
+// ---------------------------------------------------------------------------
+
+describe('sc.setAt()', () => {
+	const fakeNodeId = 42;
+	const fakeNtpTime = 1234.5;
+
+	function makeOscMock() {
+		const sendOSC = vi.fn();
+		const encodeSingleBundle = vi.fn().mockReturnValue(new Uint8Array([1, 2, 3]));
+		const sonic = { ...fakeSonic, nextNodeId: vi.fn().mockReturnValue(fakeNodeId) };
+		const osc = { encodeSingleBundle };
+		vi.mocked(getInstance).mockReturnValue(sonic as unknown as ReturnType<typeof getInstance>);
+		vi.mocked(getOsc).mockReturnValue(osc as ReturnType<typeof getOsc>);
+		// Patch sendOSC onto sonic
+		(sonic as Record<string, unknown>).sendOSC = sendOSC;
+		return { sendOSC, encodeSingleBundle, sonic };
+	}
+
+	it('calls encodeSingleBundle with /n_set and the nodeId', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, { gate: 0 });
+		expect(encodeSingleBundle).toHaveBeenCalledWith(fakeNtpTime, '/n_set', [fakeNodeId, 'gate', 0]);
+	});
+
+	it('sends the encoded bytes via sonic.sendOSC', () => {
+		const { sendOSC } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, { gate: 0 });
+		expect(sendOSC).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+	});
+
+	it('flattens multiple params into the OSC message', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, { note: 64, amp: 0.8 });
+		const args = encodeSingleBundle.mock.calls[0][2] as unknown[];
+		// nodeId, then key-value pairs
+		expect(args[0]).toBe(fakeNodeId);
+		// params: note=64, amp=0.8 — order follows Object.entries
+		expect(args).toContain('note');
+		expect(args).toContain(64);
+		expect(args).toContain('amp');
+		expect(args).toContain(0.8);
 	});
 });
