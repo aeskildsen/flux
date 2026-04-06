@@ -7,6 +7,7 @@
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
 	import FxPanel from '$lib/FxPanel.svelte';
 	import type { PageData } from './$types';
+	import type { ParamSpec } from './+page';
 
 	const { data }: { data: PageData } = $props();
 
@@ -24,6 +25,24 @@
 	// Outgoing handle: the previous loop, kept alive until the next cycle boundary.
 	let outgoingHandle: SchedulerHandle | null = null;
 
+	// Master FX node IDs — keyed by synthdef name. Set after boot-time instantiation.
+	let fxNodeIds = $state<Record<string, number>>({});
+
+	// Master FX chain definition — driven by metadata loaded at page load.
+	// Order defines the processing chain: EQ → Reverb → Dynamics.
+	const MASTER_FX_CHAIN = [
+		{ synthdef: 'master_eq', label: 'EQ' },
+		{ synthdef: 'master_reverb', label: 'Reverb' },
+		{ synthdef: 'master_dynamics', label: 'Dynamics' }
+	] as const;
+
+	const fxSlots = $derived(
+		MASTER_FX_CHAIN.map((entry) => ({
+			...entry,
+			specs: (data.synthdefs[entry.synthdef]?.specs ?? {}) as Record<string, ParamSpec>
+		}))
+	);
+
 	function clearOutgoing() {
 		outgoingHandle?.stop();
 		outgoingHandle = null;
@@ -39,27 +58,150 @@
 
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
-		await boot({ debug: true });
-		if (!sc) return;
-
-		// Point the clock at SuperSonic's AudioContext so beatToAudioTime and
-		// sonic.initTime are on the same timeline.
-		const sonicCtx = getInstance()?.audioContext;
-		if (sonicCtx) clock.setContext(sonicCtx);
-
-		// Load compiled synthdefs — metadata already available via page load
 		try {
-			await Promise.all(
-				Object.keys(data.synthdefs).map((name) =>
-					sc!.loadSynthDef(`/compiled_synthdefs/${name}.scsyndef`)
-				)
-			);
-		} catch (e) {
-			console.warn('Could not load local compiled synthdefs:', e);
-		}
+			await boot({ debug: true });
+			if (!sc) return;
 
-		// Load the CDN synthdef used for playback
-		await sc.loadSynthDef('sonic-pi-prophet');
+			// Point the clock at SuperSonic's AudioContext so beatToAudioTime and
+			// sonic.initTime are on the same timeline.
+			const sonicCtx = getInstance()?.audioContext;
+			if (sonicCtx) clock.setContext(sonicCtx);
+
+			// Load compiled synthdefs — metadata already available via page load
+			try {
+				await Promise.all(
+					Object.keys(data.synthdefs).map((name) =>
+						sc!.loadSynthDef(`/compiled_synthdefs/${name}.scsyndef`)
+					)
+				);
+			} catch (e) {
+				console.warn('Could not load local compiled synthdefs:', e);
+				appendLog('Some synths could not be loaded — see browser console for details', 'error');
+			}
+
+			// Load the CDN synthdef used for playback
+			await sc.loadSynthDef('sonic-pi-prophet');
+
+			// Instantiate master bus FX in chain order on the master group.
+			// ReplaceOut reads from + replaces the output bus, so order matters.
+			// We read FxPanel's persisted state from localStorage to restore param values.
+			let stored: Record<string, { enabled?: boolean; params?: Record<string, unknown> }> = {};
+			try {
+				const raw = localStorage.getItem('flux:master-fx');
+				if (raw) {
+					const parsed: unknown = JSON.parse(raw);
+					if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+						stored = parsed as typeof stored;
+					}
+				}
+			} catch (e) {
+				if (e instanceof SyntaxError) {
+					console.warn('[handleBoot] Corrupt master-fx state in localStorage — starting fresh');
+				} else {
+					throw e;
+				}
+			}
+
+			for (const entry of MASTER_FX_CHAIN) {
+				const slotState = stored[entry.synthdef];
+				const enabled: boolean = slotState?.enabled ?? true;
+				if (!enabled) continue;
+
+				const specDefaults = Object.fromEntries(
+					Object.entries(
+						(data.synthdefs[entry.synthdef]?.specs ?? {}) as Record<string, ParamSpec>
+					).map(([k, s]) => [k, s.default ?? 0])
+				);
+				// Only spread stored params that are numbers to avoid type mismatches in sc.synth
+				const storedParams = Object.fromEntries(
+					Object.entries(slotState?.params ?? {}).filter(([, v]) => typeof v === 'number')
+				) as Record<string, number>;
+				const params = { ...specDefaults, ...storedParams };
+				try {
+					const nodeId = sc.synth(entry.synthdef, 'master', params);
+					fxNodeIds[entry.synthdef] = nodeId;
+				} catch (e) {
+					const msg = e instanceof Error ? e.message : String(e);
+					appendLog(`Master FX "${entry.synthdef}" failed to load: ${msg}`, 'error');
+					console.error(`[handleBoot] synth instantiation failed for ${entry.synthdef}:`, e);
+				}
+			}
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			appendLog(`Boot failed: ${msg}`, 'error');
+			console.error('[handleBoot]', e);
+		}
+	}
+
+	// Rebuild master FX chain in order, freeing any active nodes first.
+	// Used on boot and when re-enabling a slot to preserve ReplaceOut chain order.
+	function rebuildFxChain(
+		enabledStates: Record<string, boolean>,
+		paramSets: Record<string, Record<string, number>>
+	) {
+		if (!sc) return;
+		// Free existing nodes
+		for (const [synthdef, nodeId] of Object.entries(fxNodeIds)) {
+			try {
+				sc.free(nodeId);
+			} catch (e) {
+				console.error(`[rebuildFxChain] Failed to free node ${nodeId} for ${synthdef}:`, e);
+			}
+		}
+		fxNodeIds = {};
+		// Re-instantiate in chain order
+		for (const entry of MASTER_FX_CHAIN) {
+			if (!enabledStates[entry.synthdef]) continue;
+			try {
+				const nodeId = sc.synth(entry.synthdef, 'master', paramSets[entry.synthdef] ?? {});
+				fxNodeIds[entry.synthdef] = nodeId;
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				appendLog(`Master FX "${entry.synthdef}" failed to load: ${msg}`, 'error');
+				console.error(`[rebuildFxChain] synth instantiation failed for ${entry.synthdef}:`, e);
+			}
+		}
+	}
+
+	// Called by FxPanel when a slot is enabled.
+	// Receives the full chain snapshot so the rebuild preserves correct ReplaceOut order.
+	// Returns true if the node was successfully created.
+	function handleFxEnable(
+		synthdef: string,
+		allEnabledStates: Record<string, boolean>,
+		allParams: Record<string, Record<string, number>>
+	): boolean {
+		if (!sc) {
+			appendLog('Cannot enable FX — engine not booted yet', 'error');
+			return false;
+		}
+		// Rebuild in full chain order so ReplaceOut stages stay correctly sequenced.
+		rebuildFxChain(allEnabledStates, allParams);
+		return synthdef in fxNodeIds;
+	}
+
+	// Called by FxPanel when a slot is disabled
+	function handleFxDisable(synthdef: string) {
+		const nodeId = fxNodeIds[synthdef];
+		if (nodeId === undefined) return;
+		if (!sc) {
+			appendLog('Cannot disable FX — engine not booted', 'error');
+			return;
+		}
+		try {
+			sc.free(nodeId);
+		} catch (e) {
+			console.error(`[handleFxDisable] Failed to free node ${nodeId} for ${synthdef}:`, e);
+		}
+		const { [synthdef]: _, ...rest } = fxNodeIds;
+		fxNodeIds = rest;
+	}
+
+	// Called by FxPanel when a param slider changes
+	function handleFxParamChange(synthdef: string, param: string, value: number) {
+		const nodeId = fxNodeIds[synthdef];
+		if (nodeId === undefined) return;
+		sc?.set(nodeId, { [param]: value });
 	}
 
 	function handleStop() {
@@ -186,7 +328,12 @@
 		</div>
 
 		<SynthDefPanel synthdefs={data.synthdefs} />
-		<FxPanel />
+		<FxPanel
+			slots={fxSlots}
+			onEnable={handleFxEnable}
+			onDisable={handleFxDisable}
+			onParamChange={handleFxParamChange}
+		/>
 
 		<div class="feedback-log" bind:this={logEl}>
 			{#each log as entry, i (i)}
