@@ -1582,6 +1582,62 @@ describe('FX pipe (truth table 9)', () => {
 	});
 });
 
+describe('"param notation on loop/line (truth table 18)', () => {
+	it('literal "param sets params on note events', () => {
+		const r = inst('note x [0]"amp(0.5)').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const noteEv = r.events[0] as { params?: Record<string, number> };
+		expect(noteEv.params).toBeDefined();
+		expect(noteEv.params!.amp).toBe(0.5);
+	});
+
+	it('chained "params both appear on note events', () => {
+		const r = inst('note x [0]"amp(0.5)"pan(-0.3)').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const noteEv = r.events[0] as { params?: Record<string, number> };
+		expect(noteEv.params).toBeDefined();
+		expect(noteEv.params!.amp).toBe(0.5);
+		expect(noteEv.params!.pan).toBeCloseTo(-0.3);
+	});
+
+	it('note events without "param have no params field', () => {
+		const r = inst('note x [0]').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const noteEv = r.events[0] as { params?: Record<string, number> };
+		expect(noteEv.params).toBeUndefined();
+	});
+
+	it('"param with stochastic value varies per cycle (eager(1) default)', () => {
+		const i = inst('note x [0]"amp(0.3rand0.8)');
+		const results = Array.from({ length: 10 }, (_, c) => {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			return (r.events[0] as { params?: Record<string, number> }).params!.amp;
+		});
+		// At least some values should differ across cycles with rand
+		expect(results.every((v) => v >= 0.3 && v <= 0.8)).toBe(true);
+	});
+
+	it('"param with \'lock holds value across cycles', () => {
+		const i = inst('note x [0]"amp(0.3rand0.8\'lock)');
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		if (!r0.ok || !r1.ok) throw new Error('eval failed');
+		const amp0 = (r0.events[0] as { params?: Record<string, number> }).params!.amp;
+		const amp1 = (r1.events[0] as { params?: Record<string, number> }).params!.amp;
+		expect(amp0).toBe(amp1);
+	});
+
+	it('"param applies to all note events in a multi-element pattern', () => {
+		const r = inst('note x [0 2 4]"amp(0.5)').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		expect(r.events.length).toBe(3);
+		for (const ev of r.events) {
+			expect((ev as { params?: Record<string, number> }).params!.amp).toBe(0.5);
+		}
+	});
+});
+
 // ---------------------------------------------------------------------------
 // 11. Cross-cutting interactions
 // ---------------------------------------------------------------------------
