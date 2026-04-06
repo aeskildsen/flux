@@ -11,9 +11,8 @@ a = SynthDef(\master_eq, {
 },
 metadata: (
 	credit: "Anders Eskildsen",
-	category: \fx_spectral,
 	type: \fx,
-	tags: [\eq, \equalizer],
+	fx_role: \master,
 	specs: Dictionary.newFrom([
 		\lo_freq,  ControlSpec(20, 500, 4, 0, 80, "Hz"),
 		\lo_db,    ControlSpec(-12, 12, 0, 0, 0, "dB"),
@@ -35,9 +34,8 @@ b = SynthDef(\master_reverb, {
 },
 metadata: (
 	credit: "Anders Eskildsen",
-	category: \fx_time,
 	type: \fx,
-	tags: [\reverb],
+	fx_role: \master,
 	specs: Dictionary.newFrom([
 		\mix, ControlSpec(0, 1, 0, 0, 0.2, ""),
 		\room, ControlSpec(0, 1, 0, 0, 0.2, ""),
@@ -72,9 +70,8 @@ c = SynthDef(\master_dynamics, {
 },
 metadata: (
 	credit: "Anders Eskildsen",
-	category: \fx_dynamics,
 	type: \fx,
-	tags: [\compressor, \limiter],
+	fx_role: \master,
 	specs: Dictionary.newFrom([
 		\comp_thresh, ControlSpec(0, 1, 0, 0, 0.75, "amp"),
 		\limit_thresh, ControlSpec(0, 1, 0, 0, 0.95, "amp"),
