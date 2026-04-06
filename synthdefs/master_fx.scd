@@ -1,8 +1,8 @@
 a = SynthDef(\master_eq, {
 	arg out = 0,
-	    lo_freq = 80, lo_db = 0,
-	    mid_freq = 1000, mid_rq = 1, mid_db = 0,
-	    hi_freq = 8000, hi_db = 0;
+	lo_freq = 80, lo_db = 0,
+	mid_freq = 1000, mid_rq = 1, mid_db = 0,
+	hi_freq = 8000, hi_db = 0;
 	var sig = In.ar(out, 2);
 	sig = BLowShelf.ar(sig, lo_freq, 1, lo_db);
 	sig = BPeakEQ.ar(sig, mid_freq, mid_rq, mid_db);
