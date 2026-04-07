@@ -2,7 +2,7 @@
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
-	import { buildOscParams } from '$lib/dispatch';
+	import { buildOscParams, eventBeatPosition } from '$lib/dispatch';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
@@ -279,20 +279,32 @@
 
 		// Yield one entry per scheduled event; `duration` is the gap to the next
 		// event (drives scheduler advancement).
+		//
+		// Beat positions are computed as absolute offsets from nextCycleBeat using
+		// eventBeatPosition(), which handles cycleOffset ('at / finite 'n repetitions).
+		// schedulerBeat mirrors the scheduler's internal nextBeat cursor so we can
+		// compute gaps correctly when cycleOffset anchors events away from the cursor.
 		function* gen(): Generator<GenEvent> {
-			let cycleNumber = 0;
+			let cycleIdx = 0;
+			let schedulerBeat = nextCycleBeat;
 			while (true) {
-				const result = inst.evaluate({ cycleNumber: cycleNumber++ });
+				const result = inst.evaluate({ cycleNumber: cycleIdx });
 				if (!result.ok) return;
 				if (result.done) return;
-				// Sort by beatOffset so events from multiple loops are interleaved
-				// correctly — without this, a negative gap causes all remaining events
-				// to collapse to the same NTP time.
-				const events = result.events.slice().sort((a, b) => a.beatOffset - b.beatOffset);
+				// Sort by absolute beat position so events from multiple loops are
+				// interleaved correctly, including cycleOffset-shifted events.
+				const events = result.events
+					.slice()
+					.sort(
+						(a, b) =>
+							eventBeatPosition(a, cycleIdx, nextCycleBeat, CYCLE_BEATS) -
+							eventBeatPosition(b, cycleIdx, nextCycleBeat, CYCLE_BEATS)
+					);
 				for (let i = 0; i < events.length; i++) {
 					const ev = events[i];
-					const nextBeatOffset = i + 1 < events.length ? events[i + 1].beatOffset : 1; // 1 = end of cycle
-					const gap = (nextBeatOffset - ev.beatOffset) * CYCLE_BEATS;
+					const targetBeat = eventBeatPosition(ev, cycleIdx, nextCycleBeat, CYCLE_BEATS);
+					const gap = Math.max(0, targetBeat - schedulerBeat);
+					schedulerBeat = targetBeat;
 
 					if (ev.type === 'fx' || ev.type === 'rest') {
 						// FX routing not yet wired. Rest slots advance the clock but produce no sound.
@@ -303,6 +315,16 @@
 					const gateDurationSeconds = clock.beatsToSeconds(ev.duration * CYCLE_BEATS);
 					yield { skip: false, ev, duration: gap, gateDurationSeconds };
 				}
+				// Advance scheduler to the start of the next cycle boundary before
+				// evaluating the next cycle. This ensures the cursor is always aligned
+				// to a cycle edge regardless of where the last event landed.
+				const nextCycleBoundary = nextCycleBeat + (cycleIdx + 1) * CYCLE_BEATS;
+				const cycleEndGap = nextCycleBoundary - schedulerBeat;
+				if (cycleEndGap > 0) {
+					yield { duration: cycleEndGap, skip: true };
+					schedulerBeat = nextCycleBoundary;
+				}
+				cycleIdx++;
 			}
 		}
 

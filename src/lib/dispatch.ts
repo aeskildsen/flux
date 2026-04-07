@@ -32,6 +32,33 @@ export function noteToFreq(note: number, cent?: number): number {
 }
 
 /**
+ * Compute the absolute beat position of a scheduled event.
+ *
+ * Events without `cycleOffset` (looping, no 'at) are positioned relative to
+ * the cycle they come from: startBeat + cycleNumber * CYCLE_BEATS + beatOffset * CYCLE_BEATS.
+ *
+ * Events with `cycleOffset` (from 'at or finite 'n repetitions) are anchored
+ * from startBeat using the formula from the issue spec:
+ *   startBeat + (cycleNumber + cycleOffset) * CYCLE_BEATS + beatOffset * CYCLE_BEATS
+ *
+ * For looping patterns with 'at(X), the evaluator always emits cycleOffset=X and
+ * cycleNumber increments each cycle — so the full offset is (cycleNumber + X).
+ *
+ * For finite patterns 'n(N), the evaluator emits all repetitions in cycleNumber=0
+ * with cycleOffset=0,1,...,N-1 — so cycleNumber contributes 0 and cycleOffset provides
+ * the integer rep offset.
+ */
+export function eventBeatPosition(
+	ev: Pick<ScheduledEvent, 'beatOffset' | 'cycleOffset'>,
+	cycleNumber: number,
+	startBeat: number,
+	CYCLE_BEATS: number
+): number {
+	const cycleOff = ev.cycleOffset ?? 0;
+	return startBeat + (cycleNumber + cycleOff) * CYCLE_BEATS + ev.beatOffset * CYCLE_BEATS;
+}
+
+/**
  * Build the OSC parameter object for a note event.
  *
  * Priority (lowest → highest):

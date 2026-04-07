@@ -1,13 +1,14 @@
 /**
- * Tests for pure dispatch helpers (issue #18).
+ * Tests for pure dispatch helpers (issue #18, #20).
  *
  * Covers:
  *  - noteToFreq: MIDI note → Hz, with and without cent offset
  *  - buildOscParams: param priority (synthdef defaults < ev.params < freq)
+ *  - eventBeatPosition: absolute beat position for cycleOffset / 'at wiring
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { noteToFreq, buildOscParams } from './dispatch.js';
+import { noteToFreq, buildOscParams, eventBeatPosition } from './dispatch.js';
 
 // ---------------------------------------------------------------------------
 // noteToFreq
@@ -129,5 +130,87 @@ describe('buildOscParams', () => {
 
 	it('throws for Infinity note', () => {
 		expect(() => buildOscParams({ note: Infinity }, undefined)).toThrow();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// eventBeatPosition (issue #20 — cycleOffset / 'at wiring)
+// ---------------------------------------------------------------------------
+
+describe('eventBeatPosition', () => {
+	const CB = 4; // CYCLE_BEATS
+
+	// No cycleOffset: position is cycleNumber + beatOffset, scaled by CYCLE_BEATS
+	it('no cycleOffset, cycleNumber=0, beatOffset=0 → startBeat', () => {
+		expect(eventBeatPosition({ beatOffset: 0 }, 0, 100, CB)).toBeCloseTo(100);
+	});
+
+	it('no cycleOffset, cycleNumber=0, beatOffset=0.5 → startBeat + 0.5*CB', () => {
+		expect(eventBeatPosition({ beatOffset: 0.5 }, 0, 100, CB)).toBeCloseTo(100 + 0.5 * CB);
+	});
+
+	it('no cycleOffset, cycleNumber=1, beatOffset=0 → startBeat + 1*CB', () => {
+		expect(eventBeatPosition({ beatOffset: 0 }, 1, 100, CB)).toBeCloseTo(100 + CB);
+	});
+
+	it('no cycleOffset, cycleNumber=2, beatOffset=0.25 → startBeat + 2*CB + 0.25*CB', () => {
+		expect(eventBeatPosition({ beatOffset: 0.25 }, 2, 100, CB)).toBeCloseTo(
+			100 + 2 * CB + 0.25 * CB
+		);
+	});
+
+	// cycleOffset=0: same as no cycleOffset (cycleNumber still applied)
+	it('cycleOffset=0, cycleNumber=1, beatOffset=0 → startBeat + 1*CB', () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0 }, 1, 100, CB)).toBeCloseTo(100 + CB);
+	});
+
+	// cycleOffset set: anchors from startBeat, ignores cycleNumber
+	it("'at(1/4): cycleOffset=0.25, cycleNumber=0, beatOffset=0 → startBeat + 0.25*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0.25 }, 0, 100, CB)).toBeCloseTo(
+			100 + 0.25 * CB
+		);
+	});
+
+	it("'at(1/4): cycleOffset=0.25, cycleNumber=0, beatOffset=1/3 → startBeat + 0.25*CB + (1/3)*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 1 / 3, cycleOffset: 0.25 }, 0, 100, CB)).toBeCloseTo(
+			100 + 0.25 * CB + (1 / 3) * CB
+		);
+	});
+
+	it("'at(1) shifts pattern one full cycle: cycleOffset=1 → startBeat + 1*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 1 }, 0, 100, CB)).toBeCloseTo(100 + CB);
+	});
+
+	// Finite pattern 'n(3): events emitted in cycleNumber=0 with cycleOffset=0,1,2
+	it("'n(3) rep 0: cycleOffset=0, cycleNumber=0 → startBeat", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0 }, 0, 0, CB)).toBeCloseTo(0);
+	});
+
+	it("'n(3) rep 1: cycleOffset=1, cycleNumber=0 → startBeat + CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 1 }, 0, 0, CB)).toBeCloseTo(CB);
+	});
+
+	it("'n(3) rep 2: cycleOffset=2, cycleNumber=0 → startBeat + 2*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 2 }, 0, 0, CB)).toBeCloseTo(2 * CB);
+	});
+
+	// Looping with 'at(0.25): cycleOffset stays 0.25 each cycle; cycleNumber provides the integer part
+	it("looping 'at(0.25), cycleNumber=1 → startBeat + (1+0.25)*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0.25 }, 1, 0, CB)).toBeCloseTo(
+			1.25 * CB
+		);
+	});
+
+	it("looping 'at(0.25), cycleNumber=2 → startBeat + (2+0.25)*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0.25 }, 2, 0, CB)).toBeCloseTo(
+			2.25 * CB
+		);
+	});
+
+	// Negative cycleOffset 'at(-1/4)
+	it("'at(-1/4): cycleOffset=-0.25, cycleNumber=0 → startBeat - 0.25*CB", () => {
+		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: -0.25 }, 0, 100, CB)).toBeCloseTo(
+			100 - 0.25 * CB
+		);
 	});
 });
