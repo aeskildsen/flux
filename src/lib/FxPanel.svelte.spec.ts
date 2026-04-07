@@ -96,7 +96,7 @@ describe('FxPanel', () => {
 		expect(props.onEnable).toHaveBeenCalled();
 		expect(props.onDisable).not.toHaveBeenCalled();
 		// First arg is the synthdef being enabled
-		expect(props.onEnable.mock.calls[0][0]).toBe('master_eq');
+		expect(vi.mocked(props.onEnable).mock.calls[0][0]).toBe('master_eq');
 	});
 
 	it('does not flip the checkbox when onEnable returns false (pre-boot guard)', async () => {
@@ -126,7 +126,7 @@ describe('FxPanel', () => {
 		render(FxPanel, props);
 		await page.getByText('master bus FX').click();
 		await page.getByRole('checkbox').first().click();
-		const allEnabledStates = props.onEnable.mock.calls[0][1] as Record<string, boolean>;
+		const allEnabledStates = vi.mocked(props.onEnable).mock.calls[0][1] as Record<string, boolean>;
 		expect(allEnabledStates['master_eq']).toBe(true);
 		// Reverb was already enabled
 		expect(allEnabledStates['master_reverb']).toBe(true);
