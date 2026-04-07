@@ -2,6 +2,7 @@
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
+	import { buildOscParams } from '$lib/dispatch';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
@@ -80,7 +81,15 @@
 			}
 
 			// Load the CDN synthdef used for playback
-			await sc.loadSynthDef('sonic-pi-prophet');
+			try {
+				await sc.loadSynthDef('sonic-pi-prophet');
+			} catch (e) {
+				console.error('[handleBoot] sonic-pi-prophet load failed:', e);
+				appendLog(
+					'CDN synth "sonic-pi-prophet" failed to load — default synth unavailable. Check network.',
+					'error'
+				);
+			}
 
 			// Instantiate master bus FX in chain order on the master group.
 			// ReplaceOut reads from + replaces the output bus, so order matters.
@@ -253,10 +262,24 @@
 			outgoingHandle = handle;
 		}
 
+		// Per-loop mono node ID map: loopId → active SC node ID.
+		// Scoped to a single run() invocation — a fresh map is created each time the
+		// user triggers playback. Stale entries (from stopped patterns) are cleared
+		// when the pattern stops producing events; full lifecycle cleanup deferred to #19.
+		const monoNodes = new Map<string, number>();
+
+		type GenEvent =
+			| { skip: true; duration: number }
+			| {
+					skip: false;
+					duration: number;
+					ev: import('$lib/lang/evaluator').ScheduledEvent;
+					gateDurationSeconds: number;
+			  };
+
 		// Yield one entry per scheduled event; `duration` is the gap to the next
-		// event (drives scheduler advancement) and `sustain` is the synth gate time
-		// (how long before the envelope enters the release phase).
-		function* gen() {
+		// event (drives scheduler advancement).
+		function* gen(): Generator<GenEvent> {
 			let cycleNumber = 0;
 			while (true) {
 				const result = inst.evaluate({ cycleNumber: cycleNumber++ });
@@ -271,15 +294,14 @@
 					const nextBeatOffset = i + 1 < events.length ? events[i + 1].beatOffset : 1; // 1 = end of cycle
 					const gap = (nextBeatOffset - ev.beatOffset) * CYCLE_BEATS;
 
-					if (ev.type === 'fx') {
-						// TODO: FX routing not yet wired to audio engine.
-						// ev.synthdef, ev.params, and ev.wetDry are available when this is implemented.
-						yield { note: 0, duration: gap, sustain: 0, synthdef: undefined, skip: true };
+					if (ev.type === 'fx' || ev.type === 'rest') {
+						// FX routing not yet wired. Rest slots advance the clock but produce no sound.
+						yield { duration: gap, skip: true };
 						continue;
 					}
 
-					const sustain = clock.beatsToSeconds(ev.duration * CYCLE_BEATS);
-					yield { note: ev.note, duration: gap, sustain, synthdef: ev.synthdef, params: ev.params };
+					const gateDurationSeconds = clock.beatsToSeconds(ev.duration * CYCLE_BEATS);
+					yield { skip: false, ev, duration: gap, gateDurationSeconds };
 				}
 			}
 		}
@@ -288,11 +310,32 @@
 			gen(),
 			(event, ntpTime) => {
 				if (event.skip) return;
-				scProxy.synthAt(ntpTime, event.synthdef ?? 'sonic-pi-prophet', 'source', {
-					note: event.note,
-					sustain: event.sustain,
-					...event.params
-				});
+				const { ev, gateDurationSeconds } = event;
+				const synthdef = ev.synthdef ?? 'sonic-pi-prophet';
+				const adjustedTime = ntpTime + (ev.offsetMs ?? 0) / 1000;
+				const oscParams = buildOscParams(ev, data.synthdefs[synthdef]);
+
+				if (ev.mono && ev.loopId) {
+					const existing = monoNodes.get(ev.loopId);
+					if (existing !== undefined) {
+						// Mono voice already running — update pitch and params in place
+						scProxy.setAt(adjustedTime, existing, oscParams);
+					} else {
+						// First event for this mono loop — spawn a new node
+						const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+						monoNodes.set(ev.loopId, nodeId);
+					}
+					// No gate-close for mono — voice persists until pattern stops (#19)
+				} else {
+					if (ev.mono) {
+						console.warn('[flux] mono event has no loopId — falling back to polyphonic', ev);
+					}
+					// Polyphonic: spawn a new node and schedule a gate close.
+					// Gate closes gateDurationSeconds after the adjusted note-on time,
+					// so offsetMs shifts both the note-on and the gate-close together.
+					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
+				}
 			},
 			CYCLE_BEATS,
 			nextCycleBeat

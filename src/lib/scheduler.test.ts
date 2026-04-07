@@ -24,10 +24,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // ---------------------------------------------------------------------------
 
 vi.mock('svelte-supersonic', () => ({
-	getInstance: vi.fn()
+	getInstance: vi.fn(),
+	getOsc: vi.fn(),
+	getServer: vi.fn(),
+	GROUPS: { source: 1, master: 2 }
 }));
 
-import { getInstance } from 'svelte-supersonic';
+import { getInstance, getOsc } from 'svelte-supersonic';
 
 // ---------------------------------------------------------------------------
 // Shared fake state
@@ -49,7 +52,7 @@ const fakeSonic = {
 // Import module under test (after mocks are set up)
 // ---------------------------------------------------------------------------
 
-import { run, TICK_INTERVAL_MS, LOOKAHEAD_SECONDS } from './scheduler.js';
+import { run, sc, TICK_INTERVAL_MS, LOOKAHEAD_SECONDS } from './scheduler.js';
 import { clock } from './clock.js';
 
 // ---------------------------------------------------------------------------
@@ -524,5 +527,185 @@ describe('run() — event duration field', () => {
 		const callback = vi.fn();
 		run(finiteGen([42, 99]), callback, 1, 0);
 		expect(callback).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 10. sc.setAt — timed /n_set bundle (issue #18)
+// ---------------------------------------------------------------------------
+
+describe('sc.setAt()', () => {
+	const fakeNodeId = 42;
+	const fakeNtpTime = 1234.5;
+
+	function makeOscMock() {
+		const sendOSC = vi.fn();
+		const encodeSingleBundle = vi.fn().mockReturnValue(new Uint8Array([1, 2, 3]));
+		const sonic = { ...fakeSonic, nextNodeId: vi.fn().mockReturnValue(fakeNodeId) };
+		const osc = { encodeSingleBundle };
+		vi.mocked(getInstance).mockReturnValue(sonic as unknown as ReturnType<typeof getInstance>);
+		vi.mocked(getOsc).mockReturnValue(osc as ReturnType<typeof getOsc>);
+		// Patch sendOSC onto sonic
+		(sonic as Record<string, unknown>).sendOSC = sendOSC;
+		return { sendOSC, encodeSingleBundle, sonic };
+	}
+
+	it('calls encodeSingleBundle with /n_set and the nodeId', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, { gate: 0 });
+		expect(encodeSingleBundle).toHaveBeenCalledWith(fakeNtpTime, '/n_set', [fakeNodeId, 'gate', 0]);
+	});
+
+	it('sends the encoded bytes via sonic.sendOSC', () => {
+		const { sendOSC } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, { gate: 0 });
+		expect(sendOSC).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+	});
+
+	it('flattens multiple params into the OSC message', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, { note: 64, amp: 0.8 });
+		const args = encodeSingleBundle.mock.calls[0][2] as unknown[];
+		// nodeId, then key-value pairs
+		expect(args[0]).toBe(fakeNodeId);
+		// params: note=64, amp=0.8 — order follows Object.entries
+		expect(args).toContain('note');
+		expect(args).toContain(64);
+		expect(args).toContain('amp');
+		expect(args).toContain(0.8);
+	});
+
+	it('sends only nodeId when params is empty', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		sc.setAt(fakeNtpTime, fakeNodeId, {});
+		expect(encodeSingleBundle).toHaveBeenCalledWith(fakeNtpTime, '/n_set', [fakeNodeId]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 11. sc.synthAt / sc.setAt — null guard when engine not ready
+// ---------------------------------------------------------------------------
+
+describe('sc.synthAt() — null guard', () => {
+	beforeEach(() => {
+		vi.mocked(getInstance).mockReturnValue(null as ReturnType<typeof getInstance>);
+		vi.mocked(getOsc).mockReturnValue(null as ReturnType<typeof getOsc>);
+	});
+
+	it('returns -1 and does not throw when engine is not ready', () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect(() => {
+			const id = sc.synthAt(1234.5, 'sonic-pi-prophet');
+			expect(id).toBe(-1);
+		}).not.toThrow();
+		consoleSpy.mockRestore();
+	});
+
+	it('logs an error when engine is not ready', () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		sc.synthAt(1234.5, 'sonic-pi-prophet');
+		expect(consoleSpy).toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+});
+
+describe('sc.setAt() — null guard', () => {
+	beforeEach(() => {
+		vi.mocked(getInstance).mockReturnValue(null as ReturnType<typeof getInstance>);
+		vi.mocked(getOsc).mockReturnValue(null as ReturnType<typeof getOsc>);
+	});
+
+	it('does not throw when engine is not ready', () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		expect(() => sc.setAt(1234.5, 42, { gate: 0 })).not.toThrow();
+		consoleSpy.mockRestore();
+	});
+
+	it('logs an error when engine is not ready', () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		sc.setAt(1234.5, 42, { gate: 0 });
+		expect(consoleSpy).toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 12. run() — callback exception handling
+// ---------------------------------------------------------------------------
+
+describe('run() — callback exception handling', () => {
+	it('calls onError when the callback throws', () => {
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation(boundedBeatMock(1));
+		vi.spyOn(clock, 'beatsToSeconds').mockReturnValue(0.5);
+
+		const onError = vi.fn();
+		const throwingCallback = vi.fn().mockImplementationOnce(() => {
+			throw new Error('boom');
+		});
+
+		run(finiteGen([{ duration: 1 }]), throwingCallback, 1, 0, onError);
+
+		expect(onError).toHaveBeenCalledWith(expect.stringContaining('boom'));
+	});
+
+	it('stops the scheduler when the callback throws', () => {
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation(boundedBeatMock(3));
+
+		const callback = vi.fn().mockImplementationOnce(() => {
+			throw new Error('stop me');
+		});
+		const onError = vi.fn();
+
+		run(finiteGen([{ duration: 1 }, { duration: 1 }, { duration: 1 }]), callback, 1, 0, onError);
+
+		// Callback threw on first call — should not be called again
+		expect(callback).toHaveBeenCalledTimes(1);
+		expect(onError).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 13. sc.synthAt — non-finite param filtering
+// ---------------------------------------------------------------------------
+
+describe('sc.synthAt() — non-finite param filtering', () => {
+	function makeOscMock() {
+		const sendOSC = vi.fn();
+		const encodeSingleBundle = vi.fn().mockReturnValue(new Uint8Array([1, 2, 3]));
+		const sonic = { ...fakeSonic, nextNodeId: vi.fn().mockReturnValue(99) };
+		const osc = { encodeSingleBundle };
+		vi.mocked(getInstance).mockReturnValue(sonic as unknown as ReturnType<typeof getInstance>);
+		vi.mocked(getOsc).mockReturnValue(osc as ReturnType<typeof getOsc>);
+		(sonic as Record<string, unknown>).sendOSC = sendOSC;
+		return { sendOSC, encodeSingleBundle };
+	}
+
+	it('drops NaN params and logs an error', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		sc.synthAt(1234.5, 'sonic-pi-prophet', 'source', { freq: NaN, amp: 0.5 });
+		const args = encodeSingleBundle.mock.calls[0][2] as unknown[];
+		expect(args).not.toContain('freq');
+		expect(args).not.toContain(NaN);
+		expect(consoleSpy).toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+
+	it('drops Infinity params and logs an error', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		sc.synthAt(1234.5, 'sonic-pi-prophet', 'source', { freq: Infinity, amp: 0.5 });
+		const args = encodeSingleBundle.mock.calls[0][2] as unknown[];
+		expect(args).not.toContain('freq');
+		expect(consoleSpy).toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+
+	it('keeps finite params', () => {
+		const { encodeSingleBundle } = makeOscMock();
+		sc.synthAt(1234.5, 'sonic-pi-prophet', 'source', { freq: 440, amp: 0.5 });
+		const args = encodeSingleBundle.mock.calls[0][2] as unknown[];
+		expect(args).toContain('freq');
+		expect(args).toContain(440);
 	});
 });
