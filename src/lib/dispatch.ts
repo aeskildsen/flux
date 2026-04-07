@@ -32,6 +32,42 @@ export function noteToFreq(note: number, cent?: number): number {
 }
 
 /**
+ * Compute the absolute beat position of a scheduled event.
+ *
+ * Formula: startBeat + (cycleNumber + cycleOffset) * CYCLE_BEATS + beatOffset * CYCLE_BEATS
+ *
+ * Both cycleNumber and cycleOffset always contribute — cycleOffset shifts the
+ * anchor relative to cycleNumber (total cycle offset = cycleNumber + cycleOffset).
+ *
+ * For looping patterns with 'at(X), the evaluator emits cycleOffset=X each cycle
+ * and increments cycleNumber — so the event lands at (cycleNumber + X) cycles from
+ * startBeat.
+ *
+ * For finite patterns 'n(N), the evaluator emits all repetitions in cycleNumber=0
+ * with cycleOffset=0,1,...,N-1. cycleNumber contributes 0 and cycleOffset provides
+ * the integer rep offset.
+ * (Evaluator contract — see createInstance / 'n handling.)
+ *
+ * Throws if CYCLE_BEATS is not a positive finite number, or if beatOffset is not
+ * finite, to match the validation pattern in buildOscParams.
+ */
+export function eventBeatPosition(
+	ev: Pick<ScheduledEvent, 'beatOffset' | 'cycleOffset'>,
+	cycleNumber: number,
+	startBeat: number,
+	CYCLE_BEATS: number
+): number {
+	if (!Number.isFinite(CYCLE_BEATS) || CYCLE_BEATS <= 0) {
+		throw new Error(`eventBeatPosition: invalid CYCLE_BEATS ${CYCLE_BEATS}`);
+	}
+	if (!Number.isFinite(ev.beatOffset)) {
+		throw new Error(`eventBeatPosition: beatOffset is not finite: ${ev.beatOffset}`);
+	}
+	const cycleOff = ev.cycleOffset ?? 0;
+	return startBeat + (cycleNumber + cycleOff) * CYCLE_BEATS + ev.beatOffset * CYCLE_BEATS;
+}
+
+/**
  * Build the OSC parameter object for a note event.
  *
  * Priority (lowest → highest):

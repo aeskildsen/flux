@@ -2,7 +2,7 @@
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
-	import { buildOscParams } from '$lib/dispatch';
+	import { buildOscParams, eventBeatPosition } from '$lib/dispatch';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
@@ -279,20 +279,49 @@
 
 		// Yield one entry per scheduled event; `duration` is the gap to the next
 		// event (drives scheduler advancement).
+		//
+		// Beat positions are computed as absolute offsets from nextCycleBeat using
+		// eventBeatPosition(), which handles cycleOffset ('at / finite 'n repetitions).
+		// schedulerBeat is the generator's local accounting cursor — it tracks where
+		// the last yielded event landed so gap durations can be computed correctly
+		// when cycleOffset anchors events away from the natural cycle start.
 		function* gen(): Generator<GenEvent> {
-			let cycleNumber = 0;
+			let cycleIdx = 0;
+			let schedulerBeat = nextCycleBeat;
 			while (true) {
-				const result = inst.evaluate({ cycleNumber: cycleNumber++ });
-				if (!result.ok) return;
-				if (result.done) return;
-				// Sort by beatOffset so events from multiple loops are interleaved
-				// correctly — without this, a negative gap causes all remaining events
-				// to collapse to the same NTP time.
-				const events = result.events.slice().sort((a, b) => a.beatOffset - b.beatOffset);
+				const result = inst.evaluate({ cycleNumber: cycleIdx });
+				if (!result.ok) {
+					appendLog(`Pattern error in cycle ${cycleIdx}: ${result.error}`, 'error');
+					console.error('[gen] evaluate() failed:', result.error);
+					return;
+				}
+				if (result.done) {
+					appendLog('Pattern finished', 'info');
+					return;
+				}
+				// Sort by absolute beat position so events from multiple loops are
+				// interleaved correctly, including cycleOffset-shifted events.
+				const events = result.events
+					.slice()
+					.sort(
+						(a, b) =>
+							eventBeatPosition(a, cycleIdx, nextCycleBeat, CYCLE_BEATS) -
+							eventBeatPosition(b, cycleIdx, nextCycleBeat, CYCLE_BEATS)
+					);
 				for (let i = 0; i < events.length; i++) {
 					const ev = events[i];
-					const nextBeatOffset = i + 1 < events.length ? events[i + 1].beatOffset : 1; // 1 = end of cycle
-					const gap = (nextBeatOffset - ev.beatOffset) * CYCLE_BEATS;
+					const targetBeat = eventBeatPosition(ev, cycleIdx, nextCycleBeat, CYCLE_BEATS);
+					const rawGap = targetBeat - schedulerBeat;
+					if (rawGap < 0) {
+						console.warn(
+							`[gen] Event at beat ${targetBeat} is behind scheduler cursor ${schedulerBeat} ` +
+								`(gap ${rawGap.toFixed(4)}). cycleOffset=${ev.cycleOffset ?? 0}, ` +
+								`beatOffset=${ev.beatOffset}. Clamping to 0 — timing may be incorrect.`
+						);
+					}
+					const gap = Math.max(0, rawGap);
+					// Only advance the cursor — never move it backward on a clamped event.
+					schedulerBeat = Math.max(schedulerBeat, targetBeat);
 
 					if (ev.type === 'fx' || ev.type === 'rest') {
 						// FX routing not yet wired. Rest slots advance the clock but produce no sound.
@@ -303,6 +332,24 @@
 					const gateDurationSeconds = clock.beatsToSeconds(ev.duration * CYCLE_BEATS);
 					yield { skip: false, ev, duration: gap, gateDurationSeconds };
 				}
+				// Fill any remaining gap to the cycle boundary so cycleIdx always
+				// advances from a clean cycle edge. For events that land exactly on or
+				// past the boundary (cycleEndGap <= 0), skip the yield but always snap
+				// the cursor so it never drifts into the next cycle.
+				const nextCycleBoundary = nextCycleBeat + (cycleIdx + 1) * CYCLE_BEATS;
+				const cycleEndGap = nextCycleBoundary - schedulerBeat;
+				if (cycleEndGap < 0) {
+					console.warn(
+						`[gen] Cycle ${cycleIdx} overshot its boundary by ${(-cycleEndGap).toFixed(4)} beats ` +
+							`(schedulerBeat=${schedulerBeat}, boundary=${nextCycleBoundary}). ` +
+							`Snapping cursor to prevent cumulative drift.`
+					);
+				}
+				if (cycleEndGap > 0) {
+					yield { duration: cycleEndGap, skip: true };
+				}
+				schedulerBeat = nextCycleBoundary;
+				cycleIdx++;
 			}
 		}
 
@@ -338,7 +385,8 @@
 				}
 			},
 			CYCLE_BEATS,
-			nextCycleBeat
+			nextCycleBeat,
+			(msg) => appendLog(`Scheduler error: ${msg}`, 'error')
 		);
 
 		appendLog('playing loop', 'info');
