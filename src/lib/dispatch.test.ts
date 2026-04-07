@@ -164,7 +164,7 @@ describe('eventBeatPosition', () => {
 		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0 }, 1, 100, CB)).toBeCloseTo(100 + CB);
 	});
 
-	// cycleOffset set: anchors from startBeat, ignores cycleNumber
+	// cycleOffset shifts the anchor relative to cycleNumber (total offset = cycleNumber + cycleOffset)
 	it("'at(1/4): cycleOffset=0.25, cycleNumber=0, beatOffset=0 → startBeat + 0.25*CB", () => {
 		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: 0.25 }, 0, 100, CB)).toBeCloseTo(
 			100 + 0.25 * CB
@@ -211,6 +211,41 @@ describe('eventBeatPosition', () => {
 	it("'at(-1/4): cycleOffset=-0.25, cycleNumber=0 → startBeat - 0.25*CB", () => {
 		expect(eventBeatPosition({ beatOffset: 0, cycleOffset: -0.25 }, 0, 100, CB)).toBeCloseTo(
 			100 - 0.25 * CB
+		);
+	});
+
+	// beatOffset > 1 (event extends beyond current cycle boundary)
+	it('beatOffset=1.5 extends 1.5 cycles past startBeat', () => {
+		expect(eventBeatPosition({ beatOffset: 1.5 }, 0, 0, CB)).toBeCloseTo(1.5 * CB);
+	});
+
+	// Large cycleNumber — no float precision surprises
+	it('large cycleNumber produces correct absolute beat', () => {
+		expect(eventBeatPosition({ beatOffset: 0 }, 10000, 0, CB)).toBeCloseTo(10000 * CB);
+	});
+
+	// Input validation
+	it('throws for CYCLE_BEATS = 0', () => {
+		expect(() => eventBeatPosition({ beatOffset: 0 }, 0, 0, 0)).toThrow(
+			'eventBeatPosition: invalid CYCLE_BEATS 0'
+		);
+	});
+
+	it('throws for negative CYCLE_BEATS', () => {
+		expect(() => eventBeatPosition({ beatOffset: 0 }, 0, 0, -4)).toThrow(
+			'eventBeatPosition: invalid CYCLE_BEATS -4'
+		);
+	});
+
+	it('throws for non-finite CYCLE_BEATS', () => {
+		expect(() => eventBeatPosition({ beatOffset: 0 }, 0, 0, Infinity)).toThrow(
+			'eventBeatPosition: invalid CYCLE_BEATS Infinity'
+		);
+	});
+
+	it('throws for NaN beatOffset', () => {
+		expect(() => eventBeatPosition({ beatOffset: NaN }, 0, 0, CB)).toThrow(
+			'eventBeatPosition: beatOffset is not finite'
 		);
 	});
 });
