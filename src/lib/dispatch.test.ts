@@ -6,7 +6,7 @@
  *  - buildOscParams: param priority (synthdef defaults < ev.params < freq)
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { noteToFreq, buildOscParams } from './dispatch.js';
 
 // ---------------------------------------------------------------------------
@@ -110,5 +110,24 @@ describe('buildOscParams', () => {
 		expect(result.amp).toBe(0.9);
 		expect(result.pan).toBe(-0.5);
 		expect(result.freq).toBeCloseTo(noteToFreq(60), 5);
+	});
+
+	it('warns when freq appears in ev.params', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		buildOscParams({ note: 69, params: { freq: 999 } }, undefined);
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it('throws for negative note values (sentinel -1 for rests)', () => {
+		expect(() => buildOscParams({ note: -1 }, undefined)).toThrow();
+	});
+
+	it('throws for NaN note', () => {
+		expect(() => buildOscParams({ note: NaN }, undefined)).toThrow();
+	});
+
+	it('throws for Infinity note', () => {
+		expect(() => buildOscParams({ note: Infinity }, undefined)).toThrow();
 	});
 });

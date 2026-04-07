@@ -1373,7 +1373,7 @@ function expandSlot(
 	if (p.scaleCtx.cent !== 0) event.cent = p.scaleCtx.cent;
 	if (p.offsetMs !== undefined && p.offsetMs !== 0) event.offsetMs = p.offsetMs;
 	if (p.mono) event.mono = true;
-	if (p.loopId) event.loopId = p.loopId;
+	if (p.loopId !== undefined) event.loopId = p.loopId;
 	if (p.cycleOff !== 0) event.cycleOffset = p.cycleOff;
 	if (p.synthdef !== null) event.synthdef = p.synthdef;
 	if (p.noteParams !== undefined) event.params = p.noteParams;

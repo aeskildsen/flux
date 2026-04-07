@@ -45,6 +45,9 @@ export function buildOscParams(
 	ev: Pick<ScheduledEvent, 'note' | 'cent' | 'params'>,
 	synthdefMeta: SynthDefMeta | undefined
 ): Record<string, number> {
+	if (!Number.isFinite(ev.note) || ev.note < 0) {
+		throw new Error(`buildOscParams: invalid note value ${ev.note}`);
+	}
 	const defaults: Record<string, number> = {};
 	if (synthdefMeta?.specs) {
 		for (const [key, spec] of Object.entries(synthdefMeta.specs)) {
@@ -52,5 +55,8 @@ export function buildOscParams(
 		}
 	}
 	const freq = noteToFreq(ev.note, ev.cent);
+	if (ev.params && 'freq' in ev.params) {
+		console.warn('[flux] "freq" in params is ignored — freq is always computed from note + cent');
+	}
 	return { ...defaults, ...(ev.params ?? {}), freq };
 }

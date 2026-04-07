@@ -81,7 +81,15 @@
 			}
 
 			// Load the CDN synthdef used for playback
-			await sc.loadSynthDef('sonic-pi-prophet');
+			try {
+				await sc.loadSynthDef('sonic-pi-prophet');
+			} catch (e) {
+				console.error('[handleBoot] sonic-pi-prophet load failed:', e);
+				appendLog(
+					'CDN synth "sonic-pi-prophet" failed to load — default synth unavailable. Check network.',
+					'error'
+				);
+			}
 
 			// Instantiate master bus FX in chain order on the master group.
 			// ReplaceOut reads from + replaces the output bus, so order matters.
@@ -255,8 +263,9 @@
 		}
 
 		// Per-loop mono node ID map: loopId → active SC node ID.
-		// On the first event for a mono loop, a new node is spawned and stored here.
-		// Subsequent events for the same loop send /n_set instead of /s_new.
+		// Scoped to a single run() invocation — a fresh map is created each time the
+		// user triggers playback. Stale entries (from stopped patterns) are cleared
+		// when the pattern stops producing events; full lifecycle cleanup deferred to #19.
 		const monoNodes = new Map<string, number>();
 
 		type GenEvent =
@@ -318,7 +327,12 @@
 					}
 					// No gate-close for mono — voice persists until pattern stops (#19)
 				} else {
-					// Polyphonic: spawn a new node and schedule a gate close
+					if (ev.mono) {
+						console.warn('[flux] mono event has no loopId — falling back to polyphonic', ev);
+					}
+					// Polyphonic: spawn a new node and schedule a gate close.
+					// Gate closes gateDurationSeconds after the adjusted note-on time,
+					// so offsetMs shifts both the note-on and the gate-close together.
 					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
 					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
 				}
