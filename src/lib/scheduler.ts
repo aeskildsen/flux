@@ -108,7 +108,16 @@ export function run<T>(
 			// the AudioContext was created. Adding them converts a scheduled beat to the absolute
 			// NTP timestamp required by SuperSonic's OSC bundle prescheduler.
 			const ntpTime = sonic.initTime + clock.beatToAudioTime(nextBeat);
-			callback(value, ntpTime);
+			try {
+				callback(value, ntpTime);
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
+				console.error(errMsg, e);
+				onError?.(errMsg);
+				active = false;
+				return;
+			}
 			nextBeat += dur;
 			try {
 				beatTime = clock.beatToAudioTime(nextBeat);
@@ -142,6 +151,20 @@ export function run<T>(
 // ---------------------------------------------------------------------------
 
 /**
+ * Flatten SynthParams to an interleaved [key, value, ...] array, skipping any
+ * non-finite values (NaN, Infinity) that would produce malformed OSC bundles.
+ */
+function flatFiniteParams(params: SynthParams, caller: string): (string | number)[] {
+	return Object.entries(params).flatMap(([k, v]) => {
+		if (typeof v !== 'number' || !Number.isFinite(v)) {
+			console.error(`[sc.${caller}] dropping non-finite param "${k}":`, v);
+			return [];
+		}
+		return [k, v];
+	});
+}
+
+/**
  * Lazy proxy over the live SuperCollider server.
  * Import `sc` at module load time; the server need not be booted yet.
  */
@@ -150,6 +173,7 @@ export const sc: Pick<
 	'synth' | 'set' | 'free' | 'loadSynthDef'
 > & {
 	synthAt(ntpTime: number, name: string, group?: GroupName, params?: SynthParams): number;
+	setAt(ntpTime: number, nodeId: number, params: SynthParams): void;
 } = {
 	synth: (name: string, group?: GroupName, params?: SynthParams) =>
 		getServer()!.synth(name, group, params),
@@ -167,13 +191,33 @@ export const sc: Pick<
 		group: GroupName = 'source',
 		params: SynthParams = {}
 	): number {
-		const sonic = getInstance()!;
-		const osc = getOsc()!;
+		const sonic = getInstance();
+		const osc = getOsc();
+		if (!sonic || !osc) {
+			console.error('[sc.synthAt] engine not ready — dropped event', { ntpTime, name });
+			return -1;
+		}
 		const id = sonic.nextNodeId();
-		const flat = Object.entries(params).flat();
+		const flat = flatFiniteParams(params, 'synthAt');
 		const bytes = osc.encodeSingleBundle(ntpTime, '/s_new', [name, id, 0, GROUPS[group], ...flat]);
 		sonic.sendOSC(bytes);
 		return id;
+	},
+
+	/**
+	 * Send a timed /n_set bundle to update a running node's parameters.
+	 * Use from scheduler callbacks for gate-close and mono voice updates.
+	 */
+	setAt(ntpTime: number, nodeId: number, params: SynthParams): void {
+		const sonic = getInstance();
+		const osc = getOsc();
+		if (!sonic || !osc) {
+			console.error('[sc.setAt] engine not ready — dropped event', { ntpTime, nodeId });
+			return;
+		}
+		const flat = flatFiniteParams(params, 'setAt');
+		const bytes = osc.encodeSingleBundle(ntpTime, '/n_set', [nodeId, ...flat]);
+		sonic.sendOSC(bytes);
 	}
 };
 

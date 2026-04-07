@@ -2171,3 +2171,36 @@ describe('derived generator — produces parallel events', () => {
 		expect(sorted).toEqual([60, 62, 64, 64, 65, 65, 67, 69]);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// loopId — pattern name threaded through to ScheduledEvent (issue #18)
+// ---------------------------------------------------------------------------
+
+describe('loopId — pattern name on ScheduledEvent', () => {
+	it('note events carry the pattern name as loopId', () => {
+		for (const e of eval0('note lead [0 1 2]')) {
+			expect(e.loopId).toBe('lead');
+		}
+	});
+
+	it('mono events carry the pattern name as loopId', () => {
+		for (const e of eval0('mono bass [0 2 4]')) {
+			expect(e.loopId).toBe('bass');
+		}
+	});
+
+	it('rest events do not carry loopId', () => {
+		const events = eval0('note x [_ 0]');
+		const rest = events.find((e) => e.type === 'rest');
+		expect(rest).toBeDefined();
+		expect(rest!.loopId).toBeUndefined();
+	});
+
+	it('multiple patterns each carry their own loopId', () => {
+		const events = eval0('note lead [0]\nnote bass [4]');
+		const leadEvs = events.filter((e) => e.loopId === 'lead');
+		const bassEvs = events.filter((e) => e.loopId === 'bass');
+		expect(leadEvs).toHaveLength(1);
+		expect(bassEvs).toHaveLength(1);
+	});
+});
