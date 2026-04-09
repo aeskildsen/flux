@@ -68,6 +68,52 @@ export function eventBeatPosition(
 }
 
 /**
+ * For a sorted list of events in one cycle, compute the pre-event gap (gap
+ * before the event fires) and the post-event stride (how far the scheduler
+ * advances after dispatching it).
+ *
+ * The scheduler uses `stride` as its beat advancement after dispatching each
+ * event — it must always be > 0. `preGap` is used to emit a `skip: true` stub
+ * that parks the scheduler cursor at the event's target beat before the event
+ * fires; when preGap === 0 no stub is needed.
+ *
+ * For the last event in the cycle, `stride` is the distance to the cycle
+ * boundary (`cycleBoundaryBeat`). For earlier events it is the distance to the
+ * next event's target beat.
+ *
+ * `cursorBeat` is the scheduler cursor position at the start of this call
+ * (typically the cycle-start beat for the first cycle, or the boundary of the
+ * previous cycle for subsequent ones).
+ */
+export function genEventStrides(
+	events: Array<Pick<ScheduledEvent, 'beatOffset' | 'cycleOffset'>>,
+	cycleNumber: number,
+	startBeat: number,
+	CYCLE_BEATS: number,
+	cursorBeat: number
+): Array<{ preGap: number; stride: number }> {
+	const cycleBoundaryBeat = startBeat + (cycleNumber + 1) * CYCLE_BEATS;
+	const targets = events.map((ev) => eventBeatPosition(ev, cycleNumber, startBeat, CYCLE_BEATS));
+
+	const result: Array<{ preGap: number; stride: number }> = [];
+	let cursor = cursorBeat;
+
+	for (let i = 0; i < events.length; i++) {
+		const target = targets[i];
+		const preGap = Math.max(0, target - cursor);
+		// Stride: distance from this event to the next dispatch point.
+		const nextTarget = i + 1 < targets.length ? targets[i + 1] : cycleBoundaryBeat;
+		const stride = Math.max(0, nextTarget - target);
+		result.push({ preGap, stride });
+		// Advance cursor to the next dispatch point so subsequent preGap
+		// calculations are correct — events at consecutive targets have preGap=0.
+		cursor = Math.max(cursor, nextTarget);
+	}
+
+	return result;
+}
+
+/**
  * Build the OSC parameter object for a note event.
  *
  * Priority (lowest → highest):

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { noteToFreq, buildOscParams, eventBeatPosition } from './dispatch.js';
+import { noteToFreq, buildOscParams, eventBeatPosition, genEventStrides } from './dispatch.js';
 
 // ---------------------------------------------------------------------------
 // noteToFreq
@@ -247,5 +247,91 @@ describe('eventBeatPosition', () => {
 		expect(() => eventBeatPosition({ beatOffset: NaN }, 0, 0, CB)).toThrow(
 			'eventBeatPosition: beatOffset is not finite'
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// genEventStrides — regression: zero-duration first event bug
+// ---------------------------------------------------------------------------
+
+describe('genEventStrides', () => {
+	const CB = 4; // CYCLE_BEATS
+	const START = 100; // arbitrary startBeat
+
+	// The core regression: `note x [0 1 2 3]` — 4 events evenly spaced,
+	// first event at beatOffset=0. preGap for first event must be 0 (no stub
+	// needed), stride must be > 0 (distance to next event, not 0).
+	it('first event at beatOffset=0 gets preGap=0 and stride > 0 (regression)', () => {
+		const events = [
+			{ beatOffset: 0 },
+			{ beatOffset: 0.25 },
+			{ beatOffset: 0.5 },
+			{ beatOffset: 0.75 }
+		];
+		const strides = genEventStrides(events, 0, START, CB, START);
+		expect(strides[0].preGap).toBe(0);
+		expect(strides[0].stride).toBeGreaterThan(0);
+	});
+
+	it('4-event uniform list: all strides equal CB/4', () => {
+		const events = [
+			{ beatOffset: 0 },
+			{ beatOffset: 0.25 },
+			{ beatOffset: 0.5 },
+			{ beatOffset: 0.75 }
+		];
+		const strides = genEventStrides(events, 0, START, CB, START);
+		expect(strides).toHaveLength(4);
+		for (const s of strides) {
+			expect(s.stride).toBeCloseTo(CB / 4);
+		}
+	});
+
+	it('last event stride reaches cycle boundary', () => {
+		const events = [{ beatOffset: 0 }, { beatOffset: 0.5 }];
+		const strides = genEventStrides(events, 0, START, CB, START);
+		// last event at START + 0.5*CB; boundary at START + CB → stride = 0.5*CB
+		expect(strides[1].stride).toBeCloseTo(CB * 0.5);
+	});
+
+	it('single event: preGap=0, stride=distance to boundary', () => {
+		const events = [{ beatOffset: 0 }];
+		const strides = genEventStrides(events, 0, START, CB, START);
+		expect(strides[0].preGap).toBe(0);
+		expect(strides[0].stride).toBeCloseTo(CB);
+	});
+
+	it("event with cycleOffset ('at): preGap absorbs the offset", () => {
+		// 'at(0.5) shifts event to mid-cycle; cursor starts at cycle boundary
+		const events = [{ beatOffset: 0, cycleOffset: 0.5 }];
+		const strides = genEventStrides(events, 0, START, CB, START);
+		// target = START + 0.5*CB; cursor = START → preGap = 0.5*CB
+		expect(strides[0].preGap).toBeCloseTo(CB * 0.5);
+		// stride = boundary(START + CB) - target(START + 0.5*CB) = 0.5*CB
+		expect(strides[0].stride).toBeCloseTo(CB * 0.5);
+	});
+
+	it('stride is never 0 for a non-degenerate uniform list', () => {
+		const events = [{ beatOffset: 0 }, { beatOffset: 0.25 }, { beatOffset: 0.5 }];
+		const strides = genEventStrides(events, 0, START, CB, START);
+		for (const s of strides) {
+			expect(s.stride).toBeGreaterThan(0);
+		}
+	});
+
+	it('cycleNumber=1 shifts all targets by one cycle', () => {
+		// Same as cycleNumber=0 but targets are offset by CB; cursor starts at
+		// START + CB (the boundary of cycle 0).
+		const events = [{ beatOffset: 0 }, { beatOffset: 0.5 }];
+		const strides0 = genEventStrides(events, 0, START, CB, START);
+		const strides1 = genEventStrides(events, 1, START, CB, START + CB);
+		// Gaps and strides should be identical regardless of cycle number
+		expect(strides1[0].preGap).toBeCloseTo(strides0[0].preGap);
+		expect(strides1[0].stride).toBeCloseTo(strides0[0].stride);
+		expect(strides1[1].stride).toBeCloseTo(strides0[1].stride);
+	});
+
+	it('returns empty array for empty event list', () => {
+		expect(genEventStrides([], 0, START, CB, START)).toEqual([]);
 	});
 });
