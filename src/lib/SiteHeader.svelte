@@ -19,9 +19,9 @@
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		padding-bottom: 12px;
+		padding-bottom: var(--space-3);
 		gap: 1.1em;
-		font-size: 1rem;
+		font-size: var(--text-base);
 	}
 
 	.site-header-left {
@@ -31,8 +31,8 @@
 	}
 
 	.site-header-left h1 {
-		font-size: 1.5rem;
-		margin: 0 0 4px 0;
+		font-size: var(--text-lg);
+		margin: 0 0 var(--space-1) 0;
 		letter-spacing: 0.05em;
 		display: inline;
 	}
@@ -43,27 +43,27 @@
 	}
 
 	.site-header-left h1 a:hover {
-		color: var(--color-text);
+		color: var(--text-primary);
 	}
 
 	.site-header-left p {
-		color: var(--color-text-faint);
+		color: var(--text-muted);
 		margin: 0;
 		display: inline;
 	}
 
 	.site-nav {
 		display: flex;
-		gap: 16px;
+		gap: var(--space-4);
 		flex-shrink: 0;
 	}
 
 	.site-nav a {
-		color: var(--color-text-dim);
+		color: var(--text-secondary);
 		text-decoration: none;
 	}
 
 	.site-nav a:hover {
-		color: var(--color-text);
+		color: var(--text-primary);
 	}
 </style>

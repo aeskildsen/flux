@@ -1,0 +1,257 @@
+/* =============================================================================
+   FLUX — Design Tokens
+   Import once at app root. All components consume variables from this file.
+   Never use raw values in component styles.
+   =============================================================================
+
+   Structure:
+     1. Primitive hues         — raw hue angles only, never used directly
+     2. Surfaces               — three depth levels
+     3. Semantic colours       — role-named, reference primitives
+     4. DSL content types      — one colour per layer type
+     5. DSL syntax roles       — for Monaco theme + any syntax-mirroring UI
+     6. Audio-reactive states  — VU, trigger flash, active/running
+     7. Typography             — families, scale, weights
+     8. Spacing                — 4px base grid
+     9. Motion                 — easing + duration tokens
+    10. Borders & radius
+
+   Monaco theme registration lives in monaco-style.css (section A).
+   The createFluxTheme() helper reads computed CSS variable values at runtime,
+   so there is no separate colour table to keep in sync with this file.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   1. PRIMITIVE HUES
+   Change a hue here and the derived semantic colours update everywhere.
+   ----------------------------------------------------------------------------- */
+
+:root {
+	--hue-violet: 260;
+	--hue-indigo: 230;
+	--hue-cyan: 185;
+	--hue-teal: 165;
+	--hue-amber: 38;
+	--hue-rose: 345;
+	--hue-lime: 88;
+	--hue-orange: 25;
+	--hue-ui: 220; /* neutral blue-grey — surfaces, borders, comments */
+}
+
+/* -----------------------------------------------------------------------------
+   2. SURFACES  (three depth levels)
+   ----------------------------------------------------------------------------- */
+
+:root {
+	/* Page background — deepest */
+	--surface-0: hsl(var(--hue-ui) 15% 7%);
+
+	/* Editor, FX panels, menus — mid level */
+	--surface-1: hsl(var(--hue-ui) 13% 12%);
+
+	/* Hover states, tooltips, dropdowns — raised */
+	--surface-2: hsl(var(--hue-ui) 12% 18%);
+
+	/* Borders, dividers — just enough to delineate */
+	--border: hsl(var(--hue-ui) 10% 24%);
+	--border-subtle: hsl(var(--hue-ui) 10% 16%);
+}
+
+/* -----------------------------------------------------------------------------
+   3. SEMANTIC COLOURS — UI chrome
+   ----------------------------------------------------------------------------- */
+
+:root {
+	/* Text hierarchy */
+	--text-primary: hsl(var(--hue-ui) 8% 92%);
+	--text-secondary: hsl(var(--hue-ui) 10% 60%);
+	--text-muted: hsl(var(--hue-ui) 10% 38%);
+	--text-inverse: hsl(var(--hue-ui) 15% 8%);
+
+	/* Interactive — buttons, links, focus rings */
+	--interactive: hsl(var(--hue-violet) 70% 62%);
+	--interactive-hover: hsl(var(--hue-violet) 72% 68%);
+	--interactive-active: hsl(var(--hue-violet) 75% 55%);
+	--focus-ring: hsl(var(--hue-cyan) 80% 60% / 0.6);
+
+	/* Feedback */
+	--color-error: hsl(0 75% 58%);
+	--color-warning: hsl(45 90% 55%);
+	--color-success: hsl(140 55% 48%);
+}
+
+/* -----------------------------------------------------------------------------
+   4. DSL CONTENT TYPES
+   Each layer type gets one hue. Used in: syntax highlighting, layer indicators,
+   fader fills, trigger flashes, documentation callouts — everywhere that colour
+   carries semantic meaning about which type of layer is active.
+   ----------------------------------------------------------------------------- */
+
+:root {
+	--color-note: hsl(var(--hue-violet) 70% 62%);
+	--color-mono: hsl(var(--hue-indigo) 65% 65%);
+	--color-sample: hsl(var(--hue-cyan) 70% 55%);
+	--color-cloud: hsl(var(--hue-teal) 65% 52%);
+
+	/* Dimmed variants — for inactive/muted layers */
+	--color-note-dim: hsl(var(--hue-violet) 40% 35%);
+	--color-mono-dim: hsl(var(--hue-indigo) 35% 35%);
+	--color-sample-dim: hsl(var(--hue-cyan) 40% 30%);
+	--color-cloud-dim: hsl(var(--hue-teal) 38% 28%);
+}
+
+/* -----------------------------------------------------------------------------
+   5. DSL SYNTAX ROLES
+   These are the colours used in Monaco token colouring. They also apply to
+   any UI element that mirrors DSL syntax (e.g. inline docs, hover hints).
+   ----------------------------------------------------------------------------- */
+
+:root {
+	/* Content type keywords — inherit from layer type colours */
+	--syntax-keyword-note: var(--color-note);
+	--syntax-keyword-mono: var(--color-mono);
+	--syntax-keyword-sample: var(--color-sample);
+	--syntax-keyword-cloud: var(--color-cloud);
+
+	/* Structural keywords (loop, line, fx, set) — neutral, slightly warm white */
+	--syntax-keyword-structural: hsl(var(--hue-ui) 5% 80%);
+
+	/* Generators (rand, gau, exp, bro, step, lin, geo, …) */
+	--syntax-generator: hsl(var(--hue-amber) 85% 58%);
+
+	/* Modifiers (after ') — rose */
+	--syntax-modifier: hsl(var(--hue-rose) 72% 62%);
+
+	/* Decorators + param keys (after @ or set) — lime */
+	--syntax-property: hsl(var(--hue-lime) 60% 54%);
+
+	/* Numbers (integer, float) — orange */
+	--syntax-number: hsl(var(--hue-orange) 88% 60%);
+
+	/* Identifiers — synth names, scale names, bare words */
+	--syntax-identifier: hsl(var(--hue-ui) 10% 75%);
+
+	/* Operators and punctuation — dim, structural */
+	--syntax-operator: hsl(var(--hue-ui) 8% 52%);
+	--syntax-delimiter: hsl(var(--hue-ui) 8% 44%);
+
+	/* Comments */
+	--syntax-comment: hsl(var(--hue-ui) 15% 42%);
+
+	/* String literals (if retained) */
+	--syntax-string: hsl(var(--hue-teal) 50% 58%);
+}
+
+/* -----------------------------------------------------------------------------
+   6. AUDIO-REACTIVE STATES
+   ----------------------------------------------------------------------------- */
+
+:root {
+	/* Generator trigger flash — bright, instant */
+	--color-triggered: hsl(60 100% 72%);
+
+	/* Running/playing state — sustained green */
+	--color-active: hsl(135 60% 48%);
+	--color-active-dim: hsl(135 40% 28%);
+
+	/* VU meter — three zones */
+	--color-vu-low: hsl(138 58% 44%);
+	--color-vu-mid: hsl(52 88% 52%);
+	--color-vu-high: hsl(4 78% 54%);
+
+	/* Engine states */
+	--color-engine-booting: hsl(45 85% 52%);
+	--color-engine-running: var(--color-active);
+	--color-engine-stopped: hsl(var(--hue-ui) 10% 38%);
+	--color-engine-error: var(--color-error);
+}
+
+/* -----------------------------------------------------------------------------
+   7. TYPOGRAPHY
+   ----------------------------------------------------------------------------- */
+
+:root {
+	--font-sans: 'Inter', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+	/* Scale — 4px base grid compatible line-heights */
+	--text-xs: 11px; /* line-height: 16px */
+	--text-sm: 12px; /* line-height: 16px */
+	--text-base: 14px; /* line-height: 20px */
+	--text-md: 16px; /* line-height: 24px */
+	--text-lg: 20px; /* line-height: 28px */
+	--text-xl: 24px; /* line-height: 32px */
+
+	--leading-tight: 1.25;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.75; /* documentation prose */
+
+	--weight-normal: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+
+	/* Mono-specific — slightly tighter */
+	--font-mono-size: 13px;
+	--font-mono-leading: 1.4;
+}
+
+/* Rule: --font-sans in menus, labels, docs prose, tooltips
+         --font-mono in editor, parameter values, layer names, numeric readouts */
+
+/* -----------------------------------------------------------------------------
+   8. SPACING  (4px base grid)
+   --space-N means N × 4px.
+   Components should not use values outside this scale.
+   ----------------------------------------------------------------------------- */
+
+:root {
+	--space-px: 1px; /* hairlines only */
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 20px;
+	--space-6: 24px;
+	--space-8: 32px;
+	--space-10: 40px;
+	--space-12: 48px;
+	--space-16: 64px;
+}
+
+/* Density guide:
+   Dense (audio controls, parameter rows):            --space-1 / --space-2
+   Standard (buttons, menu items, panel padding):     --space-2 / --space-3 / --space-4
+   Spacious (docs prose, section gaps):               --space-6 / --space-8 / --space-12 */
+
+/* -----------------------------------------------------------------------------
+   9. MOTION
+   Audio-shaped easings: fast attack, slower release — mimics envelope curves.
+   ----------------------------------------------------------------------------- */
+
+:root {
+	/* Easings */
+	--ease-trigger: cubic-bezier(0, 0, 0.15, 1); /* near-instant in */
+	--ease-release: cubic-bezier(0.4, 0, 0.8, 1); /* fast decay */
+	--ease-smooth: cubic-bezier(0.4, 0, 0.2, 1); /* standard UI */
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* slight overshoot — hover */
+
+	/* Durations */
+	--duration-instant: 60ms; /* trigger flash attack */
+	--duration-fast: 120ms; /* hover states */
+	--duration-normal: 200ms; /* standard transitions */
+	--duration-slow: 400ms; /* release tails, panel open/close */
+	--duration-flash-release: 500ms; /* generator flash decay */
+}
+
+/* -----------------------------------------------------------------------------
+   10. BORDERS & RADIUS
+   ----------------------------------------------------------------------------- */
+
+:root {
+	--radius-sm: 3px; /* inputs, small badges */
+	--radius-md: 4px; /* buttons, panels — keep it tight */
+	--radius-lg: 6px; /* modals, floating panels */
+
+	--border-width: 1px;
+	--border-focus-width: 2px;
+}

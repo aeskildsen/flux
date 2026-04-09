@@ -27,6 +27,71 @@ import { getCompletions, type CompletionItemKind } from '$lib/lang/completions.j
 import { getHover } from '$lib/lang/hover.js';
 
 // ---------------------------------------------------------------------------
+// Monaco theme — reads CSS variables from :root at registration time so there
+// is no separate colour table to keep in sync with tokens.css.
+// ---------------------------------------------------------------------------
+
+function cssVar(name: string): string {
+	return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function resolveColor(cssVarName: string): string {
+	const value = cssVar(cssVarName);
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = 1;
+	const ctx = canvas.getContext('2d')!;
+	ctx.fillStyle = value;
+	ctx.fillRect(0, 0, 1, 1);
+	const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+	return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+function resolveColorAlpha(cssVarName: string, alpha: number): string {
+	const hex = resolveColor(cssVarName);
+	const a = Math.round(alpha * 255)
+		.toString(16)
+		.padStart(2, '0');
+	return hex + a;
+}
+
+export function createFluxTheme(monaco: typeof Monaco): void {
+	monaco.editor.defineTheme('flux-dark', {
+		base: 'vs-dark',
+		inherit: false,
+		rules: [
+			{ token: 'keyword', foreground: resolveColor('--syntax-keyword-structural') },
+			{ token: 'keyword.operator', foreground: resolveColor('--syntax-generator') },
+			{ token: 'function', foreground: resolveColor('--syntax-modifier') },
+			{ token: 'property', foreground: resolveColor('--syntax-property') },
+			{ token: 'number', foreground: resolveColor('--syntax-number') },
+			{ token: 'variable', foreground: resolveColor('--syntax-identifier') },
+			{ token: 'operator', foreground: resolveColor('--syntax-operator') },
+			{ token: 'delimiter', foreground: resolveColor('--syntax-delimiter') },
+			{ token: 'delimiter.bracket', foreground: resolveColor('--syntax-delimiter') },
+			{ token: 'delimiter.parenthesis', foreground: resolveColor('--syntax-delimiter') },
+			{ token: 'comment', foreground: resolveColor('--syntax-comment'), fontStyle: 'italic' },
+			{ token: 'string', foreground: resolveColor('--syntax-string') }
+		],
+		colors: {
+			'editor.background': resolveColor('--surface-1'),
+			'editor.foreground': resolveColor('--text-primary'),
+			'editorLineNumber.foreground': resolveColor('--text-muted'),
+			'editorLineNumber.activeForeground': resolveColor('--text-secondary'),
+			'editor.selectionBackground': resolveColorAlpha('--color-note', 0.25),
+			'editor.inactiveSelectionBackground': resolveColorAlpha('--color-note', 0.15),
+			'editor.lineHighlightBackground': resolveColorAlpha('--surface-2', 0.6),
+			'editorCursor.foreground': resolveColor('--color-note'),
+			'editorIndentGuide.background1': resolveColor('--border-subtle'),
+			'editorIndentGuide.activeBackground1': resolveColor('--border'),
+			'editorBracketMatch.background': resolveColorAlpha('--border', 0.0),
+			'editorBracketMatch.border': resolveColor('--border'),
+			'editorError.foreground': resolveColor('--color-error'),
+			'editorWarning.foreground': resolveColor('--color-warning')
+		}
+	});
+}
+
+// ---------------------------------------------------------------------------
 // Token name → Monaco scope string
 //
 // Standard scope names map to Monaco's built-in themes (vs-dark etc.) with no
@@ -147,6 +212,7 @@ const KIND_MAP: Record<CompletionItemKind, number> = {
  * Call this once, before creating the editor instance.
  */
 export function registerFluxLanguage(monaco: typeof Monaco): void {
+	createFluxTheme(monaco);
 	monaco.languages.register({ id: 'flux' });
 
 	// ------------------------------------------------------------------
