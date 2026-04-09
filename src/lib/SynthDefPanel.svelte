@@ -79,15 +79,15 @@
 
 <style>
 	details {
-		font-size: 0.78rem;
-		color: var(--color-text-dim);
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
 	}
 
 	summary {
 		cursor: pointer;
 		user-select: none;
-		color: var(--color-text-dim);
-		padding: 2px 0;
+		color: var(--text-secondary);
+		padding: var(--space-px) 0;
 		list-style: none;
 	}
 
@@ -102,65 +102,65 @@
 	}
 
 	.card {
-		margin-top: 8px;
-		padding: 8px;
-		background: var(--color-bg-dark);
-		border: 1px solid var(--color-bg-border);
-		border-radius: 3px;
+		margin-top: var(--space-2);
+		padding: var(--space-2);
+		background: var(--surface-0);
+		border: var(--border-width) solid var(--border-subtle);
+		border-radius: var(--radius-sm);
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
+		gap: var(--space-1);
 	}
 
 	.card-name {
-		color: var(--color-text-muted);
-		font-weight: bold;
-		font-size: 0.8rem;
+		color: var(--text-secondary);
+		font-weight: var(--weight-semibold);
+		font-size: var(--text-sm);
 	}
 
 	.description {
 		margin: 0;
-		font-size: 0.72rem;
-		color: var(--color-text-muted);
-		line-height: 1.45;
+		font-size: 11px;
+		color: var(--text-secondary);
+		line-height: var(--leading-normal);
 	}
 
 	.params {
 		width: 100%;
 		border-collapse: collapse;
-		font-size: 0.7rem;
+		font-size: 11px;
 	}
 
 	.params th {
 		text-align: left;
-		color: var(--color-text-hint);
-		font-weight: normal;
-		padding: 2px 4px 2px 0;
-		border-bottom: 1px solid var(--color-bg-border);
+		color: var(--text-muted);
+		font-weight: var(--weight-normal);
+		padding: 2px var(--space-1) 2px 0;
+		border-bottom: var(--border-width) solid var(--border-subtle);
 	}
 
 	.params td {
-		padding: 2px 4px 2px 0;
-		color: var(--color-text-dim);
+		padding: 2px var(--space-1) 2px 0;
+		color: var(--text-secondary);
 		vertical-align: top;
 	}
 
 	.params .param-name {
-		color: var(--color-text-muted);
+		color: var(--text-secondary);
 		font-style: italic;
 	}
 
 	.params .unit {
-		color: var(--color-text-hint);
+		color: var(--text-muted);
 	}
 
 	.credit {
-		font-size: 0.68rem;
-		margin-top: 2px;
+		font-size: 10px;
+		margin-top: var(--space-px);
 	}
 
 	.credit a {
-		color: var(--color-link);
+		color: var(--interactive);
 		text-decoration: none;
 	}
 

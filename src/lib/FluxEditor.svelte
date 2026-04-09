@@ -38,11 +38,39 @@
 			editor = monaco.editor.create(container, {
 				value,
 				language: 'flux',
-				theme: 'vs-dark',
-				minimap: { enabled: false },
-				fontSize: 14,
-				fontFamily: "'Source Code Pro', monospace",
+				theme: 'flux-dark',
+				// Typography
+				fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+				fontSize: 13,
+				fontLigatures: true,
+				lineHeight: 22,
+				letterSpacing: 0.3,
+				// Canvas padding
+				padding: { top: 12, bottom: 32 },
+				// Line numbers
 				lineNumbers: 'on',
+				lineNumbersMinChars: 3,
+				lineDecorationsWidth: 8,
+				// Scrollbar
+				scrollbar: {
+					vertical: 'auto',
+					horizontal: 'auto',
+					verticalScrollbarSize: 6,
+					horizontalScrollbarSize: 6,
+					useShadows: false
+				},
+				// Suggest widget
+				suggestFontSize: 12,
+				suggestLineHeight: 20,
+				// Minimap
+				minimap: { enabled: false },
+				// Misc
+				renderLineHighlight: 'line',
+				cursorBlinking: 'smooth',
+				cursorSmoothCaretAnimation: 'on',
+				smoothScrolling: true,
+				fixedOverflowWidgets: true,
+				overviewRulerLanes: 0,
 				scrollBeyondLastLine: false,
 				automaticLayout: true,
 				// Flux completions are trigger-character-driven (' [ ( |); suppress
@@ -99,12 +127,11 @@
 	});
 </script>
 
-<div bind:this={container} class="editor"></div>
+<div bind:this={container} class="editor flux-editor"></div>
 
 <style>
 	.editor {
 		width: 100%;
 		height: 100%;
-		border: 1px solid #222;
 	}
 </style>

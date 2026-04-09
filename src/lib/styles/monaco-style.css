@@ -1,0 +1,229 @@
+/* -----------------------------------------------------------------------------
+   Editor canvas
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-editor {
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.flux-editor .monaco-editor .view-lines {
+	font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Gutter / line number margin
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-editor .margin {
+	background-color: var(--surface-1) !important;
+}
+
+.flux-editor .monaco-editor .line-numbers {
+	color: var(--text-muted) !important;
+	font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+	font-size: 11px !important;
+}
+
+.flux-editor .monaco-editor .line-numbers.active-line-number {
+	color: var(--text-secondary) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Line highlight — border suppression
+   (background is set via theme 'editor.lineHighlightBackground')
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-editor .view-overlays .current-line,
+.flux-editor .monaco-editor .current-line {
+	border: none !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Selection
+   (background set via theme 'editor.selectionBackground')
+   The CSS rule here handles the unfocused/inactive selection state only.
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-editor .selected-text {
+	background-color: hsl(var(--hue-violet) 40% 40% / 0.2) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Scrollbars
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-scrollable-element > .scrollbar > .slider {
+	background: var(--border) !important;
+	border-radius: 3px !important;
+}
+
+.flux-editor .monaco-scrollable-element > .scrollbar > .slider:hover {
+	background: var(--text-muted) !important;
+}
+
+.flux-editor .monaco-scrollable-element .arrow-background {
+	display: none !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Hover widget  (token hover — DSL parameter docs)
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-hover {
+	background-color: var(--surface-2) !important;
+	border: 1px solid var(--border) !important;
+	border-radius: var(--radius-md) !important;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.4) !important;
+	padding: 0 !important;
+}
+
+.flux-editor .monaco-hover .hover-contents {
+	padding: var(--space-2) var(--space-3) !important;
+	font-family: var(--font-sans) !important;
+	font-size: 12px !important;
+	line-height: 1.5 !important;
+	color: var(--text-primary) !important;
+	max-width: 360px;
+}
+
+.flux-editor .monaco-hover .hover-contents code {
+	font-family: var(--font-mono) !important;
+	font-size: 11px !important;
+	background: var(--surface-1) !important;
+	border-radius: var(--radius-sm) !important;
+	padding: 1px 4px !important;
+	color: var(--syntax-identifier) !important;
+}
+
+.flux-editor .monaco-hover .hover-row.status-bar {
+	border-top: 1px solid var(--border-subtle) !important;
+	padding: var(--space-1) var(--space-3) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Suggest widget  (autocomplete dropdown)
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .suggest-widget {
+	background-color: var(--surface-2) !important;
+	border: 1px solid var(--border) !important;
+	border-radius: var(--radius-md) !important;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.4) !important;
+}
+
+.flux-editor .suggest-widget .monaco-list .monaco-list-row {
+	padding: 0 var(--space-2) !important;
+	border-radius: 0 !important;
+}
+
+.flux-editor .suggest-widget .monaco-list .monaco-list-row.focused {
+	background-color: var(--surface-1) !important;
+}
+
+.flux-editor .suggest-widget .monaco-list .monaco-list-row .label-name {
+	font-family: var(--font-mono) !important;
+	font-size: 12px !important;
+	color: var(--text-primary) !important;
+}
+
+.flux-editor .suggest-widget .monaco-list .monaco-list-row .label-description {
+	font-family: var(--font-sans) !important;
+	font-size: 11px !important;
+	color: var(--text-secondary) !important;
+}
+
+.flux-editor .suggest-widget .details {
+	background-color: var(--surface-1) !important;
+	border-left: 1px solid var(--border-subtle) !important;
+	padding: var(--space-2) var(--space-3) !important;
+	font-family: var(--font-sans) !important;
+	font-size: 12px !important;
+	color: var(--text-secondary) !important;
+}
+
+.flux-editor .suggest-widget .details .details-label {
+	color: var(--text-primary) !important;
+	font-weight: 500 !important;
+	margin-bottom: var(--space-1) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Context menu  (right-click)
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-menu .monaco-menu-container {
+	background-color: var(--surface-2) !important;
+	border: 1px solid var(--border) !important;
+	border-radius: var(--radius-md) !important;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.4) !important;
+	padding: var(--space-1) 0 !important;
+	font-family: var(--font-sans) !important;
+	font-size: 12px !important;
+}
+
+.flux-editor .monaco-menu .action-item .action-label {
+	color: var(--text-primary) !important;
+	padding: var(--space-1) var(--space-3) !important;
+}
+
+.flux-editor .monaco-menu .action-item.focused .action-label,
+.flux-editor .monaco-menu .action-item:hover .action-label {
+	background-color: var(--interactive) !important;
+	color: var(--text-inverse) !important;
+	border-radius: var(--radius-sm) !important;
+}
+
+.flux-editor .monaco-menu .action-item.disabled .action-label {
+	color: var(--text-muted) !important;
+}
+
+.flux-editor .monaco-menu .separator {
+	border-color: var(--border-subtle) !important;
+	margin: var(--space-1) 0 !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Find/replace widget  (Ctrl+F)
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-editor .find-widget {
+	background-color: var(--surface-2) !important;
+	border: 1px solid var(--border) !important;
+	border-radius: var(--radius-md) !important;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.4) !important;
+}
+
+.flux-editor .monaco-editor .find-widget .monaco-inputbox {
+	background-color: var(--surface-1) !important;
+	border: 1px solid var(--border) !important;
+	border-radius: var(--radius-sm) !important;
+	color: var(--text-primary) !important;
+	font-family: var(--font-mono) !important;
+	font-size: 12px !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Bracket match highlight
+   (background transparent — border set via theme 'editorBracketMatch.border')
+   ----------------------------------------------------------------------------- */
+
+.flux-editor .monaco-editor .bracket-match {
+	background-color: transparent !important;
+	border-radius: 2px !important;
+}
+
+/* =============================================================================
+   DOCS EDITOR INSTANCES
+   Use class="flux-editor flux-editor--docs" for interactive documentation
+   examples. Overrides the main editor styles where appropriate.
+   ============================================================================= */
+
+.flux-editor--docs .monaco-editor .margin {
+	background-color: transparent !important;
+}
+
+.flux-editor--docs .monaco-editor {
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}

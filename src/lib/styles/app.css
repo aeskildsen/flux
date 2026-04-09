@@ -1,0 +1,221 @@
+/* =============================================================================
+   FLUX — App global styles
+   Depends on tokens.css being imported first.
+   ============================================================================= */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	background: var(--surface-0);
+	color: var(--text-primary);
+	font-family: var(--font-sans);
+	font-size: var(--text-base);
+	line-height: var(--leading-normal);
+}
+
+/* -----------------------------------------------------------------------------
+   Full-viewport page grid
+   - header row (auto height)
+   - editor + sidebar row (fills remaining space)
+   Two columns: editor (1fr) | sidebar (220px)
+   ----------------------------------------------------------------------------- */
+
+.page {
+	display: grid;
+	grid-template-columns: 1fr 220px;
+	grid-template-rows: auto 1fr;
+	height: 100dvh;
+	padding: var(--space-5) var(--space-5) 0 var(--space-5);
+	gap: 0 var(--space-4);
+}
+
+/* SiteHeader spans full width in row 1 */
+.page > :global(header) {
+	grid-column: 1 / -1;
+	grid-row: 1;
+}
+
+.editor-area {
+	grid-column: 1 / 2;
+	grid-row: 2;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	padding-bottom: var(--space-5);
+}
+
+.hint {
+	font-size: var(--text-sm);
+	color: var(--text-muted);
+	margin: var(--space-1) 0 0;
+}
+
+.sidebar {
+	grid-column: 2 / 3;
+	grid-row: 1 / 3;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding-bottom: var(--space-5);
+	padding-top: var(--space-1);
+}
+
+/* -----------------------------------------------------------------------------
+   Buttons
+   ----------------------------------------------------------------------------- */
+
+button {
+	width: 100%;
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-sans);
+	font-size: var(--text-sm);
+	background: var(--surface-1);
+	color: var(--text-secondary);
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	text-align: left;
+	transition:
+		background var(--duration-fast) var(--ease-smooth),
+		color var(--duration-fast) var(--ease-smooth);
+}
+
+button:hover:not(:disabled) {
+	background: var(--surface-2);
+	color: var(--text-primary);
+}
+
+button:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+}
+
+/* -----------------------------------------------------------------------------
+   Status
+   ----------------------------------------------------------------------------- */
+
+.status {
+	font-size: var(--text-xs);
+	color: var(--text-muted);
+	min-height: 1.2em;
+	padding: 0 var(--space-px);
+}
+
+.status.ok {
+	color: var(--color-success);
+}
+
+.status.error {
+	color: var(--color-error);
+}
+
+/* -----------------------------------------------------------------------------
+   Links
+   ----------------------------------------------------------------------------- */
+
+a {
+	color: var(--interactive);
+}
+
+a:hover {
+	color: var(--interactive-hover);
+}
+
+/* -----------------------------------------------------------------------------
+   Feedback log
+   ----------------------------------------------------------------------------- */
+
+.feedback-log {
+	flex: 1;
+	overflow-y: auto;
+	background: var(--surface-0);
+	border: var(--border-width) solid var(--border-subtle);
+	border-radius: var(--radius-sm);
+	padding: var(--space-2);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	line-height: var(--leading-normal);
+	min-height: 0;
+}
+
+.feedback-log .log-entry {
+	color: var(--text-secondary);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.feedback-log .log-entry.error {
+	color: var(--color-error);
+}
+
+.feedback-log .log-entry.info {
+	color: var(--color-sample);
+}
+
+/* -----------------------------------------------------------------------------
+   Docs prose
+   ----------------------------------------------------------------------------- */
+
+.prose {
+	font-family: var(--font-sans);
+	font-size: var(--text-md);
+	line-height: var(--leading-relaxed);
+	color: var(--text-primary);
+	max-width: 72ch;
+}
+
+.prose pre.flux-code,
+.prose pre:not(.flux-code) {
+	background: var(--surface-0);
+	border: var(--border-width) solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	padding: var(--space-3) var(--space-4);
+	margin: 0 0 1.2em;
+	overflow-x: auto;
+	font-family: var(--font-mono);
+	font-size: var(--font-mono-size);
+	line-height: var(--leading-normal);
+}
+
+/* Don't double-style inline code inside a pre */
+.prose pre code {
+	background: none;
+	border: none;
+	padding: 0;
+	font-size: inherit;
+}
+
+/* -----------------------------------------------------------------------------
+   Syntax token colours (used by highlighter.ts)
+   ----------------------------------------------------------------------------- */
+
+.tok-keyword {
+	color: var(--syntax-keyword-structural);
+}
+.tok-number {
+	color: var(--syntax-number);
+}
+.tok-string {
+	color: var(--syntax-string);
+}
+.tok-comment {
+	color: var(--syntax-comment);
+	font-style: italic;
+}
+.tok-variable {
+	color: var(--syntax-identifier);
+}
+.tok-operator {
+	color: var(--syntax-operator);
+}
+.tok-delimiter {
+	color: var(--syntax-delimiter);
+}

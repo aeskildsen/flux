@@ -166,15 +166,15 @@
 
 <style>
 	details {
-		font-size: 0.78rem;
-		color: var(--color-text-dim);
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
 	}
 
 	summary {
 		cursor: pointer;
 		user-select: none;
-		color: var(--color-text-dim);
-		padding: 2px 0;
+		color: var(--text-secondary);
+		padding: var(--space-px) 0;
 		list-style: none;
 	}
 
@@ -191,15 +191,15 @@
 	.chain {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
-		margin-top: 8px;
+		gap: var(--space-1);
+		margin-top: var(--space-2);
 	}
 
 	.slot {
-		padding: 4px 8px;
-		background: var(--color-bg-dark);
-		border: 1px solid var(--color-bg-border);
-		border-radius: 3px;
+		padding: var(--space-1) var(--space-2);
+		background: var(--surface-0);
+		border: var(--border-width) solid var(--border-subtle);
+		border-radius: var(--radius-sm);
 	}
 
 	.slot.disabled {
@@ -209,36 +209,36 @@
 	.slot-header {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-1);
 		cursor: pointer;
 		width: 100%;
 	}
 
 	.fx-name {
-		font-size: 0.78rem;
-		color: var(--color-text-muted);
+		font-size: var(--text-xs);
+		color: var(--text-secondary);
 	}
 
 	.params {
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
-		margin-top: 6px;
-		padding-top: 4px;
-		border-top: 1px solid var(--color-bg-border);
+		margin-top: var(--space-1);
+		padding-top: var(--space-1);
+		border-top: var(--border-width) solid var(--border-subtle);
 	}
 
 	.param-row {
 		display: grid;
 		grid-template-columns: 5rem 1fr 3.5rem;
 		align-items: center;
-		gap: 6px;
+		gap: var(--space-1);
 		cursor: default;
 	}
 
 	.param-name {
-		font-size: 0.68rem;
-		color: var(--color-text-hint);
+		font-size: 11px;
+		color: var(--text-muted);
 		font-style: italic;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -248,12 +248,12 @@
 	input[type='range'] {
 		width: 100%;
 		height: 2px;
-		accent-color: var(--color-text-dim);
+		accent-color: var(--text-secondary);
 	}
 
 	.param-value {
-		font-size: 0.65rem;
-		color: var(--color-text-hint);
+		font-size: 10px;
+		color: var(--text-muted);
 		text-align: right;
 		white-space: nowrap;
 	}
