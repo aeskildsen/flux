@@ -294,7 +294,7 @@ describe('FluxLexer', () => {
 	});
 
 	describe('Question operator', () => {
-		it('tokenizes ? for wran weights: 3?2', () => {
+		it("tokenizes ? for 'pick weights: 3?2", () => {
 			const { tokens, errors } = FluxLexer.tokenize('3?2');
 			expect(errors).toHaveLength(0);
 			expect(tokens[1].tokenType).toBe(Question);

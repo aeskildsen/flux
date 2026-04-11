@@ -550,17 +550,19 @@ function repeatCountFromElem(elem: CstNode): number {
  * @param inherited The EagerMode propagated from the containing list.
  */
 function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | null {
+	const weight = weightFromElem(elem);
+
 	// Check for a rest token (_)
 	const restToks = (elem.children.Rest as IToken[]) ?? [];
 	if (restToks.length > 0) {
-		return { kind: 'rest', weight: makeRunner(() => 1, { kind: 'lock' }) };
+		return { kind: 'rest', weight };
 	}
 
 	// Check for \symbol buffer ref (for sample lists)
 	const symTok = ((elem.children.Symbol as IToken[]) ?? [])[0];
 	if (symTok) {
 		const name = symTok.image.slice(1); // strip leading \
-		return { kind: 'symbol', name, weight: makeRunner(() => 1, { kind: 'lock' }) };
+		return { kind: 'symbol', name, weight };
 	}
 
 	let accidentalOffset = 0;
@@ -578,7 +580,6 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		for (const f of flats) accidentalOffset -= f.image.length; // 'b' = -1, 'bb' = -2
 		// Degree literal has no modifiers — uses inherited mode
 		const poll: PollFn = () => degree;
-		const weight = makeRunner(() => 1, { kind: 'lock' });
 		return { kind: 'scalar', runner: makeRunner(poll, inherited), accidentalOffset, weight };
 	}
 
@@ -604,9 +605,7 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		let subTraversal: TraversalMode = 'seq';
 		if (hasModifier(subListMods, 'shuf')) subTraversal = 'shuf';
 		else if (hasModifier(subListMods, 'pick')) subTraversal = 'pick';
-		if (subTraversal !== 'pick' && listHasExplicitWeights(seqGen)) {
-			console.warn("[flux] `?` weight ignored: weights are only meaningful on lists with 'pick");
-		}
+		if (subTraversal !== 'pick') warnIgnoredWeights(seqGen);
 		const subElemNodes = (seqGen.children.sequenceElement as CstNode[]) ?? [];
 		const subElements: CompiledElement[] = [];
 		for (const se of subElemNodes) {
@@ -616,11 +615,12 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 			for (let k = 0; k < n; k++) subElements.push(ce);
 		}
 		if (subElements.length === 0) return null;
+		if (subTraversal === 'pick') warnIfAllZeroWeights(seqGen);
 		return {
 			kind: 'sequence',
 			elements: subElements,
 			traversal: subTraversal,
-			weight: makeRunner(() => 1, { kind: 'lock' })
+			weight
 		};
 	}
 
@@ -630,26 +630,32 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 	const poll = numGenToPollFn(numGen);
 	if (!poll) return null;
 
-	// Weight from `?n` suffix. `n` must be a non-negative numeric literal,
-	// enforced by the parser's `weightLiteral` rule (no Minus, no generator).
-	const weight = weightFromElem(elem);
-
 	return { kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
 }
 
 /**
  * Extract the `?n` weight from a sequenceElement CST node. Defaults to 1 when
- * no `?` is present. `n` is guaranteed to be a non-negative numeric literal
- * (the parser's `weightLiteral` rule rejects negatives and generator forms).
+ * no `?` is present. When `?` is present, the parser's `weightLiteral` rule
+ * guarantees a non-negative Integer or Float token — any other shape is a
+ * parser/evaluator contract violation.
  */
 function weightFromElem(elem: CstNode): RunnerState {
 	const questionToks = (elem.children.Question as IToken[]) ?? [];
 	if (questionToks.length === 0) return makeRunner(() => 1, { kind: 'lock' });
 	const wLit = ((elem.children.weightLiteral as CstNode[]) ?? [])[0];
-	if (!wLit) return makeRunner(() => 1, { kind: 'lock' });
+	if (!wLit) {
+		throw new Error(
+			'[flux] weightFromElem: `?` without weightLiteral — parser/evaluator contract violation'
+		);
+	}
 	const intTok = ((wLit.children.Integer as IToken[]) ?? [])[0];
 	const floatTok = ((wLit.children.Float as IToken[]) ?? [])[0];
-	const value = intTok ? parseInt(intTok.image, 10) : floatTok ? parseFloat(floatTok.image) : 1;
+	if (!intTok && !floatTok) {
+		throw new Error(
+			'[flux] weightFromElem: weightLiteral missing Integer/Float token — parser/evaluator contract violation'
+		);
+	}
+	const value = intTok ? parseInt(intTok.image, 10) : parseFloat(floatTok.image);
 	return makeRunner(() => value, { kind: 'lock' });
 }
 
@@ -660,6 +666,48 @@ function listHasExplicitWeights(seqNode: CstNode): boolean {
 		if (((el.children.Question as IToken[]) ?? []).length > 0) return true;
 	}
 	return false;
+}
+
+/** Find the first `?` token in a list and return its `line:column` for warnings. */
+function firstWeightLocation(seqNode: CstNode): string {
+	const elems = (seqNode.children.sequenceElement as CstNode[]) ?? [];
+	for (const el of elems) {
+		const q = ((el.children.Question as IToken[]) ?? [])[0];
+		if (q) return `${q.startLine ?? '?'}:${q.startColumn ?? '?'}`;
+	}
+	return '?:?';
+}
+
+function warnIgnoredWeights(seqNode: CstNode): void {
+	if (!listHasExplicitWeights(seqNode)) return;
+	const loc = firstWeightLocation(seqNode);
+	console.warn(
+		`[flux] ${loc}: \`?\` weight ignored — weights are only meaningful on lists with 'pick`
+	);
+}
+
+/**
+ * Compile-time check: if every element of a `'pick` list carries a literal
+ * `?0` weight, the slot will always be silent. That is almost certainly a
+ * user mistake, so surface it as a warning (the runtime still emits rests).
+ */
+function warnIfAllZeroWeights(seqNode: CstNode): void {
+	const elems = (seqNode.children.sequenceElement as CstNode[]) ?? [];
+	if (elems.length === 0) return;
+	for (const el of elems) {
+		const q = ((el.children.Question as IToken[]) ?? [])[0];
+		if (!q) return; // unweighted element defaults to weight 1
+		const wLit = ((el.children.weightLiteral as CstNode[]) ?? [])[0];
+		if (!wLit) return;
+		const intTok = ((wLit.children.Integer as IToken[]) ?? [])[0];
+		const floatTok = ((wLit.children.Float as IToken[]) ?? [])[0];
+		const value = intTok ? parseInt(intTok.image, 10) : floatTok ? parseFloat(floatTok.image) : 1;
+		if (value !== 0) return;
+	}
+	const loc = firstWeightLocation(seqNode);
+	console.warn(
+		`[flux] ${loc}: all weights are zero on this 'pick list — the slot will always be silent`
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -1138,10 +1186,9 @@ function compilePattern(
 	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
 	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
 
-	// Warn when `?` weights are present on a list without 'pick — the weight
-	// is meaningless there and silently ignored. Matches spec truth table 4.
-	if (traversal !== 'pick' && seqNode && listHasExplicitWeights(seqNode)) {
-		console.warn("[flux] `?` weight ignored: weights are only meaningful on lists with 'pick");
+	if (seqNode) {
+		if (traversal !== 'pick') warnIgnoredWeights(seqNode);
+		else warnIfAllZeroWeights(seqNode);
 	}
 
 	const compiled: CompiledElement[] = [];
@@ -1430,9 +1477,6 @@ function orderedSubElements(
 	cycle: number
 ): CompiledElement[] {
 	if (traversal === 'pick') {
-		// Unified weighted selection: unweighted elements default to weight 1,
-		// so a plain [a b c]'pick behaves exactly like uniform random. When all
-		// weights are zero the slot is silent (rest event).
 		const weights = elements.map((el) => sampleRunner(el.weight, cycle));
 		const total = weights.reduce((a, b) => a + b, 0);
 		if (total <= 0) return elements.map(() => ZERO_WEIGHT_REST);

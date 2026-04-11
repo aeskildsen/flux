@@ -8,7 +8,7 @@
  *   4. rand / tilde — float bound semantics
  *   5. Pitch context — @root, @octave, @scale, @cent, @key, set, scoping
  *   6. Generators × non-default pitch contexts
- *   7. List modifiers — 'stut, 'wran, 'pick, 'shuf, 'maybe, 'legato, 'offset
+ *   7. List modifiers — 'stut, 'pick, 'shuf, 'maybe, 'legato, 'offset
  *   8. Pitch modifiers — accidentals, transposition
  *   9. Structural — note'n statement, continuation modifier lines
  *  10. FX pipe
@@ -1007,7 +1007,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 });
 
 // ---------------------------------------------------------------------------
-// 7. List modifiers — 'stut, 'wran, 'pick, 'shuf, 'maybe, 'legato, 'offset
+// 7. List modifiers — 'stut, 'pick, 'shuf, 'maybe, 'legato, 'offset
 // ---------------------------------------------------------------------------
 
 describe("'stut — stutter (truth table 3)", () => {
@@ -1108,7 +1108,9 @@ describe("'pick — random element selection (truth table 4)", () => {
 			if (note === 60) counts.n0++;
 			else if (note === 67) counts.n4++;
 		}
-		expect(counts.n0).toBeGreaterThan(counts.n4);
+		// Expected ratio 3:1 → ~150 vs ~50. Use a safe margin (>1.5×) to avoid
+		// CI flakes on the tail of the binomial while still catching regressions.
+		expect(counts.n0).toBeGreaterThan(counts.n4 * 1.5);
 	});
 
 	it('mixed weights: unweighted elements default to weight 1 ([1 2?2 3]pick)', () => {
@@ -1126,9 +1128,10 @@ describe("'pick — random element selection (truth table 4)", () => {
 				else if (note === 67) counts.n4++;
 			}
 		}
-		// 2 (the double-weighted one) should dominate
-		expect(counts.n2).toBeGreaterThan(counts.n0);
-		expect(counts.n2).toBeGreaterThan(counts.n4);
+		// Expected ratio 1:2:1 → the double-weighted element should dominate
+		// comfortably. Use a safe 1.3× margin to avoid CI flakes.
+		expect(counts.n2).toBeGreaterThan(counts.n0 * 1.3);
+		expect(counts.n2).toBeGreaterThan(counts.n4 * 1.3);
 	});
 
 	it('zero weight: element is never picked', () => {
@@ -1182,6 +1185,92 @@ describe("'pick — random element selection (truth table 4)", () => {
 		// traverse sequentially (default).
 		const evs = eval0("note x [0 2 4]'wran");
 		expect(evs.map((e) => (e as any).note)).toEqual([60, 64, 67]);
+	});
+
+	it('? on inner list WITH pick: inner pick honours weight, outer seq does not warn', () => {
+		// Symmetric positive case to the inner-without-pick test above:
+		// the inner `'pick` consumes the `?3`, so no warning should fire.
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const i = inst("note x [[0 2?3]'pick 5]");
+		for (let c = 0; c < 5; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+		}
+		expect(warnSpy).not.toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	it('sub-sequence element carries weight: [[1 2]?3 [4 5]]pick', () => {
+		// The heavy sub-sequence (weight 3) should be picked ~3× as often as the
+		// light one (weight 1). Each slot expands to 2 notes from the chosen sublist.
+		vi.spyOn(Math, 'random').mockRestore();
+		const i = inst("note x [[0 1]?3 [4 5]]'pick");
+		const counts = { heavy: 0, light: 0 };
+		for (let c = 0; c < 200; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const firstNote = (r.events[0] as any).note;
+			if (firstNote === 60)
+				counts.heavy++; // degree 0 → MIDI 60
+			else if (firstNote === 67) counts.light++; // degree 4 → MIDI 67
+		}
+		// 3:1 ratio. Safe 1.5× margin.
+		expect(counts.heavy).toBeGreaterThan(counts.light * 1.5);
+	});
+
+	it('float weight is honoured: [0?0.5 4?1]pick picks 4 more often', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		const i = inst("note x [0?0.5 4?1]'pick");
+		const counts = { n0: 0, n4: 0 };
+		for (let c = 0; c < 300; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const note = (r.events[0] as any).note;
+			if (note === 60) counts.n0++;
+			else if (note === 67) counts.n4++;
+		}
+		// 0.5 : 1 → n4 should appear ~2× as often as n0.
+		expect(counts.n4).toBeGreaterThan(counts.n0 * 1.3);
+	});
+
+	it('rest slot with explicit weight: [_?3 0?1]pick picks rest more often', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		const i = inst("note x [_?3 0?1]'pick");
+		let rests = 0;
+		let notes = 0;
+		for (let c = 0; c < 200; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			for (const e of r.events) {
+				if (e.contentType === 'rest') rests++;
+				else notes++;
+			}
+		}
+		// 3:1 rest:note ratio. Safe 1.5× margin.
+		expect(rests).toBeGreaterThan(notes * 1.5);
+	});
+
+	it('all-literal-zero weights warns at compile time', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const i = inst("note x [0?0 4?0]'pick");
+		// Compile-time warning, before any evaluate call
+		expect(warnSpy).toHaveBeenCalled();
+		const msg = warnSpy.mock.calls.map((c) => String(c[0])).join(' ');
+		expect(msg).toMatch(/all weights are zero/i);
+		// Behaviour still: silent rest slots
+		const r = i.evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		for (const e of r.events) expect(e.contentType).toBe('rest');
+		warnSpy.mockRestore();
+	});
+
+	it('? warning includes source location (line:column)', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		inst('note x [0 2?5 4]');
+		const msg = warnSpy.mock.calls.map((c) => String(c[0])).join(' ');
+		// Should contain a line:column coordinate
+		expect(msg).toMatch(/\d+:\d+/);
+		warnSpy.mockRestore();
 	});
 });
 

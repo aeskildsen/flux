@@ -77,21 +77,22 @@ How stutter counts are sampled. Applies to all content types.
 
 How `?` weights on a `'pick` list are interpreted.
 
-| Code               | Interpretation                      | Evaluation                                    | Result                          |
-| ------------------ | ----------------------------------- | --------------------------------------------- | ------------------------------- |
-| `[1 2 3]'pick`     | No weights.                         | All weights default to 1; uniform random.     | Uniform random.                 |
-| `[1 2?2 3]'pick`   | Mixed explicit and default weights. | Weights 1/2/1 → probs 0.25/0.5/0.25.          | 2 appears half the time.        |
-| `[1?3 2?1]'pick`   | Explicit weights.                   | Weighted selection.                           | 1 appears 3× as often as 2.     |
-| `[x?0 y?1]'pick`   | Zero weight.                        | x is never picked.                            | y only.                         |
-| `[x?0 y?0]'pick`   | All weights zero.                   | No element can be selected; emit rest.        | Silent slot (rest event).       |
-| `[[1 2?3]'pick 5]` | `?` on inner `'pick` list.          | Inner list picks 2 with weight 3, else 1.     | Valid per-level check.          |
-| `[[1 2?3] 5]'pick` | `?` on inner list without `'pick`.  | Inner `?3` ignored with warning; outer picks. | Warning logged; weight ignored. |
+| Code                   | Interpretation                      | Evaluation                                    | Result                          |
+| ---------------------- | ----------------------------------- | --------------------------------------------- | ------------------------------- |
+| `[1 2 3]'pick`         | No weights.                         | All weights default to 1; uniform random.     | Uniform random.                 |
+| `[1 2?2 3]'pick`       | Mixed explicit and default weights. | Weights 1/2/1 → probs 0.25/0.5/0.25.          | 2 appears half the time.        |
+| `[1?3 2?1]'pick`       | Explicit weights.                   | Weighted selection.                           | 1 appears 3× as often as 2.     |
+| `[x?0 y?1]'pick`       | Zero weight.                        | x is never picked.                            | y only.                         |
+| `[x?0 y?0]'pick`       | All weights zero.                   | No element can be selected; emit rest.        | Silent slot (rest + warning).   |
+| `[[1 2]?3 [4 5]]'pick` | Weight on a sub-sequence element.   | Inner list picked with weight 3 vs default 1. | Weight honoured on sublists.    |
+| `[[1 2?3]'pick 5]`     | `?` on inner `'pick` list.          | Inner list picks 2 with weight 3, else 1.     | Valid per-level check.          |
+| `[[1 2?3] 5]'pick`     | `?` on inner list without `'pick`.  | Inner `?3` ignored with warning; outer picks. | Warning logged; weight ignored. |
 
 **Error cases**
 
 | Code                | Failure Type | Why                                                                       |
 | ------------------- | ------------ | ------------------------------------------------------------------------- |
-| `[a?invalid]`       | Parse error  | Weight must be a non-negative numeric literal.                            |
+| `[1?invalid]'pick`  | Parse error  | Weight must be a non-negative numeric literal.                            |
 | `[a?-1]'pick`       | Parse error  | Negative weights are not meaningful.                                      |
 | `[a?(1rand3)]'pick` | Parse error  | Generator expressions are not valid as weights; weight must be a literal. |
 
@@ -424,7 +425,7 @@ Direct SynthDef argument access. Valid wherever modifiers are valid.
 | `note [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.                    |
 | `'stut` alone         | Parse error    | No preceding target.                                |
 | `note` ↵ `  'stut`    | Parse error    | No generator on previous line.                      |
-| `[a?invalid]`         | Parse error    | Weight must be literal or generator.                |
+| `[1?invalid]'pick`    | Parse error    | Weight must be a non-negative numeric literal.      |
 | `note [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.           |
 | `note[0]`             | Parse error    | Missing space between content type keyword and `[`. |
 | `0 rand 4`            | Parse error    | Whitespace inside generator expression.             |

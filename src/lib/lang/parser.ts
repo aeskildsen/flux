@@ -579,7 +579,7 @@ class FluxParser extends CstParser {
 
 	sequenceElement = this.RULE('sequenceElement', () => {
 		// A degree literal (possibly with accidentals), a rest (_), a \symbol buffer ref,
-		// or a generator expression, with an optional `?weight` for 'wran lists and an
+		// or a generator expression, with an optional `?weight` for 'pick lists and an
 		// optional `!n` repeat count.
 		this.OR([
 			// rest: a silent slot — no pitch, no synth

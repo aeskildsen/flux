@@ -439,7 +439,7 @@ export const Tilde = createToken({
 	// Monaco scope: 'operator'
 });
 
-/** `?` — weight operator in `'wran` lists: `[1 2 3?2]`. */
+/** `?` — weight operator in `'pick` lists: `[1 2 3?2]'pick`. */
 export const Question = createToken({
 	name: 'Question',
 	pattern: /\?/
