@@ -1,3 +1,4 @@
+import { asset } from '$app/paths';
 import type { PageLoad } from './$types';
 
 export type ParamSpec = {
@@ -20,7 +21,7 @@ type SynthDefMeta = {
 
 export const load: PageLoad = async ({ fetch }) => {
 	try {
-		const res = await fetch('/compiled_synthdefs/metadata.json');
+		const res = await fetch(asset('/compiled_synthdefs/metadata.json'));
 		if (res.ok) {
 			const synthdefs: Record<string, SynthDefMeta> = await res.json();
 			return { synthdefs };

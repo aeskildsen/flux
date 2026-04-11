@@ -80,6 +80,8 @@ jobs:
         run: sclang scripts/compile_synthdefs.scd
         
       - name: Build SvelteKit app
+        env:
+          BASE_PATH: /flux
         run: pnpm build
 
       - name: Upload Pages artifact

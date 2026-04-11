@@ -6,6 +6,9 @@ import { highlightFlux } from './src/lib/lang/highlighter.ts';
 const config: Config = {
 	kit: {
 		adapter: adapter({ pages: 'build', assets: 'build', fallback: undefined }),
+		paths: {
+			base: process.env.BASE_PATH ?? ''
+		},
 		alias: {
 			'svelte-supersonic': './svelte-supersonic/src/lib/index.ts',
 			$docs: './docs'
