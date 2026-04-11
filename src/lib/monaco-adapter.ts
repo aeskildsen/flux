@@ -204,6 +204,22 @@ const KIND_MAP: Record<CompletionItemKind, number> = {
 };
 
 // ---------------------------------------------------------------------------
+// Ctrl+K comment-toggle dispatch
+//
+// Selections touching up to 3 lines → line comment (`//`).
+// Selections touching 4+ lines       → block comment (`/* */`).
+// A bare cursor counts as 1 line.
+// ---------------------------------------------------------------------------
+
+export function chooseCommentAction(
+	startLineNumber: number,
+	endLineNumber: number
+): 'line' | 'block' {
+	const lineCount = endLineNumber - startLineNumber + 1;
+	return lineCount <= 3 ? 'line' : 'block';
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -214,6 +230,16 @@ const KIND_MAP: Record<CompletionItemKind, number> = {
 export function registerFluxLanguage(monaco: typeof Monaco): void {
 	createFluxTheme(monaco);
 	monaco.languages.register({ id: 'flux' });
+
+	// Language configuration — comment tokens power the built-in
+	// `editor.action.commentLine` / `editor.action.blockComment` actions
+	// that FluxEditor binds to Ctrl+K.
+	monaco.languages.setLanguageConfiguration('flux', {
+		comments: {
+			lineComment: '//',
+			blockComment: ['/*', '*/']
+		}
+	});
 
 	// ------------------------------------------------------------------
 	// 1. Syntax highlighting — lexer-driven ITokensProvider
