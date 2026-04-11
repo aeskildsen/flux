@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type * as Monaco from 'monaco-editor';
-	import { registerFluxLanguage } from '$lib/monaco-adapter.js';
+	import { registerFluxLanguage, chooseCommentAction } from '$lib/monaco-adapter.js';
 
 	interface Props {
 		value?: string;
@@ -118,6 +118,17 @@
 			// Swallow Ctrl+R, Cmd+R, F5 — prevent page reload mid-performance
 			editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR, () => {});
 			editor.addCommand(monaco.KeyCode.F5, () => {});
+
+			// Ctrl+K / Cmd+K — toggle comment. Up to 3 lines toggles `//`,
+			// more uses the built-in block-comment action (`/* */`).
+			editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
+				const sel = editor!.getSelection();
+				const action =
+					sel === null ? 'line' : chooseCommentAction(sel.startLineNumber, sel.endLineNumber);
+				const actionId =
+					action === 'line' ? 'editor.action.commentLine' : 'editor.action.blockComment';
+				editor!.getAction(actionId)?.run();
+			});
 		});
 
 		return () => {
