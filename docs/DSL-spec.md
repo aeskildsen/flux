@@ -33,18 +33,24 @@ Inside `[...]` sequence generators, elements are separated by spaces. Commas are
 
 ### Sequence generators
 
-> _See truth tables [4 (Weighted random / `'wran`)](DSL-truthtables.md#4-weighted-random-wran-truth-table)._
+> _See truth table [4 (Weighted random / `'pick`)](DSL-truthtables.md#4-weighted-random-pick-truth-table)._
 
 `[...]` is the fundamental generator type. By default it yields its elements in order, cycling back to the start. Modifiers change the traversal strategy:
 
 ```flux
-[1 2 3]         // yields 1, 2, 3, 1, 2, 3, ... — like Pseq([1, 2, 3])
-[1 2 3]'shuf    // shuffle then traverse, like Pshuf
-[1 2 3]'pick    // pick a random element each time, like Prand
-[1 2 3?2]'wran  // pick stochastically, like Pwrand
+[1 2 3]            // yields 1, 2, 3, 1, 2, 3, ... — like Pseq([1, 2, 3])
+[1 2 3]'shuf       // shuffle then traverse, like Pshuf
+[1 2 3]'pick       // uniform random element each time, like Prand
+[1 2?2 3]'pick     // weighted random — like Pwrand with weights 1/2/1
 ```
 
-Specifically for `'wran`: weight for each element is 1 by default. The weight can be overridden with the `?` operator. The `?` weight syntax is only meaningful when `'wran` is present — using `?` without `'wran` is a semantic error.
+`'pick` supports optional per-element weights via the `?` operator. Unweighted elements default to weight 1; when no weights are present, `'pick` is uniform random. When any weights are present, selection is proportional to the weights (normalised to sum to 1).
+
+- `?n` — `n` must be a non-negative numeric literal (integer or float). `?0` means the element is never picked.
+- If every element has weight 0, the slot is silent (rest event), the same as `_`.
+- Negative weights (e.g. `?-1`) are a parse error.
+- Generator expressions are not valid as weights — `?` must be followed by a numeric literal.
+- The `?` weight syntax is only meaningful on a list whose own modifiers include `'pick`. Using `?` on a list without `'pick` is not an error, but the weight is ignored and a warning is logged. This rule applies per list level: `[[1 2?3]'pick 5]` is fine, but `[[1 2?3] 5]'pick` ignores the inner `?3` because the inner list has no `'pick`.
 
 ### Rests
 

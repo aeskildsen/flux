@@ -1084,10 +1084,10 @@ describe("'stut — stutter (truth table 3)", () => {
 	});
 });
 
-describe("'wran — weighted random pick (truth table 4)", () => {
-	it('uniform weights: all three values appear across many samples', () => {
+describe("'pick — random element selection (truth table 4)", () => {
+	it('unweighted: picks a random element each cycle (at least 2 distinct values over 50 cycles)', () => {
 		vi.spyOn(Math, 'random').mockRestore();
-		const i = inst("note x [0 2 4]'wran");
+		const i = inst("note x [0 2 4]'pick");
 		const seen = new Set<number>();
 		for (let c = 0; c < 50; c++) {
 			const r = i.evaluate({ cycleNumber: c });
@@ -1097,10 +1097,11 @@ describe("'wran — weighted random pick (truth table 4)", () => {
 		expect(seen.size).toBeGreaterThanOrEqual(2);
 	});
 
-	it('element with weight 3 appears more often than element with weight 1', () => {
-		const i = inst("note x [0?3 4?1]'wran");
+	it('explicit weights: element with weight 3 appears more often than element with weight 1', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		const i = inst("note x [0?3 4?1]'pick");
 		const counts = { n0: 0, n4: 0 };
-		for (let c = 0; c < 100; c++) {
+		for (let c = 0; c < 200; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
 			const note = (r.events[0] as any).note;
@@ -1110,8 +1111,28 @@ describe("'wran — weighted random pick (truth table 4)", () => {
 		expect(counts.n0).toBeGreaterThan(counts.n4);
 	});
 
-	it('zero weight removes element: only the non-zero-weight element appears', () => {
-		const i = inst("note x [0?0 4?1]'wran");
+	it('mixed weights: unweighted elements default to weight 1 ([1 2?2 3]pick)', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// Expected probs 0.25 / 0.5 / 0.25
+		const i = inst("note x [0 2?2 4]'pick");
+		const counts = { n0: 0, n2: 0, n4: 0 };
+		for (let c = 0; c < 400; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			for (const e of r.events) {
+				const note = (e as any).note;
+				if (note === 60) counts.n0++;
+				else if (note === 64) counts.n2++;
+				else if (note === 67) counts.n4++;
+			}
+		}
+		// 2 (the double-weighted one) should dominate
+		expect(counts.n2).toBeGreaterThan(counts.n0);
+		expect(counts.n2).toBeGreaterThan(counts.n4);
+	});
+
+	it('zero weight: element is never picked', () => {
+		const i = inst("note x [0?0 4?1]'pick");
 		const seen = new Set<number>();
 		for (let c = 0; c < 20; c++) {
 			const r = i.evaluate({ cycleNumber: c });
@@ -1121,18 +1142,46 @@ describe("'wran — weighted random pick (truth table 4)", () => {
 		expect(seen.has(60)).toBe(false); // degree 0, weight 0
 		expect(seen.has(67)).toBe(true); // degree 4, weight 1
 	});
-});
 
-describe("'pick — random element selection", () => {
-	it('picks a random element each cycle (at least 2 distinct values over 50 cycles)', () => {
-		const i = inst("note x [0 2 4]'pick");
-		const seen = new Set<number>();
-		for (let c = 0; c < 50; c++) {
+	it('all-zero weights: slots are silent (rest events)', () => {
+		const i = inst("note x [0?0 4?0]'pick");
+		for (let c = 0; c < 5; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			r.events.forEach((e) => seen.add((e as any).note));
+			// All events should be rests — no note events
+			for (const e of r.events) {
+				expect(e.contentType).toBe('rest');
+			}
 		}
-		expect(seen.size).toBeGreaterThanOrEqual(2);
+	});
+
+	it('? without pick: weights ignored, list traverses sequentially', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const evs = eval0('note x [0 2?5 4]');
+		// Sequence, not weighted — still emits all three in order
+		expect(evs.map((e) => (e as any).note)).toEqual([60, 64, 67]);
+		expect(warnSpy).toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	it('? on inner list without pick: inner weight ignored; outer pick still works', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		// Outer list picks from either the inner seq list or degree 5.
+		// Inner [0 2?3] has no 'pick, so the ?3 is ignored (warning).
+		const i = inst("note x [[0 2?3] 5]'pick");
+		for (let c = 0; c < 5; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+		}
+		expect(warnSpy).toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	it("'wran is removed — silently ignored (falls back to seq traversal)", () => {
+		// 'wran is no longer a recognised traversal modifier. The list should
+		// traverse sequentially (default).
+		const evs = eval0("note x [0 2 4]'wran");
+		expect(evs.map((e) => (e as any).note)).toEqual([60, 64, 67]);
 	});
 });
 
@@ -1714,27 +1763,20 @@ describe("'n edge cases", () => {
 	});
 });
 
-describe("'wran edge cases", () => {
-	it('negative weight is clamped to 0 — only positive-weight element is selected', () => {
-		// [0?-1 1?1]'wran — weight for 0 clamped to 0, so only degree 1 ever fires
-		// Run 20 cycles to confirm degree 1 (D5=62) always wins
-		const i = inst("note x [0?-1 1?1]'wran");
-		for (let c = 0; c < 20; c++) {
-			const r = i.evaluate({ cycleNumber: c });
-			if (!r.ok) throw new Error(r.error);
-			// Exactly 2 slots drawn; both should be degree 1 (= MIDI 62)
-			for (const e of r.events) expect((e as any).note).toBe(62);
-		}
+describe("'pick weight edge cases", () => {
+	it('negative weights are rejected at parse time', () => {
+		const i = createInstance("note x [0?-1 1?1]'pick");
+		expect(i.ok).toBe(false);
 	});
 
-	it('all-zero weights fall back to first element', () => {
-		// Evaluator fallback: if total weight = 0, return elements[0]
-		const i = inst("note x [0?0 4?0]'wran");
-		for (let c = 0; c < 10; c++) {
+	it('all-zero weights produce only rest events', () => {
+		const i = inst("note x [0?0 4?0]'pick");
+		for (let c = 0; c < 5; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			// Both slots pick elements[0] → degree 0 = C5 = MIDI 60
-			for (const e of r.events) expect((e as any).note).toBe(60);
+			for (const e of r.events) {
+				expect(e.contentType).toBe('rest');
+			}
 		}
 	});
 });
