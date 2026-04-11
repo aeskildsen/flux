@@ -37,14 +37,30 @@ function realEvents(events: GenEvent[]): Extract<GenEvent, { skip: false }>[] {
 }
 
 /** Build a minimal ScheduledEvent with defaults. */
-function makeEvent(overrides: Partial<ScheduledEvent> = {}): ScheduledEvent {
+function makeEvent(overrides: Partial<ScheduledEvent> & { type?: string } = {}): ScheduledEvent {
+	const { type, ...rest } = overrides;
+	// Map legacy 'type' field to 'contentType' for backwards compat in tests
+	const contentType = (type ?? 'note') as
+		| 'note'
+		| 'mono'
+		| 'sample'
+		| 'slice'
+		| 'cloud'
+		| 'rest'
+		| 'fx';
+	if (contentType === 'rest') {
+		return { contentType: 'rest', beatOffset: 0, duration: 0.25, ...rest } as ScheduledEvent;
+	}
+	if (contentType === 'fx') {
+		return { contentType: 'fx', beatOffset: 0, duration: 0.25, ...rest } as ScheduledEvent;
+	}
 	return {
+		contentType: 'note',
 		note: 60,
 		beatOffset: 0,
 		duration: 0.25,
-		type: 'note',
-		...overrides
-	};
+		...rest
+	} as ScheduledEvent;
 }
 
 /** Build a fake EvalInstance that returns the given events for each cycle call. */
@@ -137,7 +153,7 @@ describe('createGen() — basic emission', () => {
 		const gen = createGen(makeDeps(inst));
 		const events = take(gen, 5);
 		const real = realEvents(events);
-		expect(real[0].ev.note).toBe(64);
+		expect((real[0].ev as any).note).toBe(64);
 	});
 
 	it('gateDurationSeconds = ev.duration * cycleBeatCount * beatsToSeconds', () => {

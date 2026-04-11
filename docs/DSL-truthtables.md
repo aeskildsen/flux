@@ -274,16 +274,18 @@ Defines where whitespace is required, forbidden, or irrelevant.
 
 # 13. **`'legato` Truth Table**
 
-How legato values control note duration.
+How legato values control note duration. Default legato for `note` is **0.8**. `'legato` has no effect on `mono`.
 
-| Code                                       | Interpretation         | Evaluation                         | Result                               |
-| ------------------------------------------ | ---------------------- | ---------------------------------- | ------------------------------------ |
-| `note [0 2 4]'legato(0.8)`                 | Fixed legato.          | Gate closed at 0.8 × event slot.   | Slightly detached notes.             |
-| `note [0 2 4]'legato(1.0)`                 | Full legato.           | Gate closed exactly at next event. | Notes touch without overlap.         |
-| `note [0 2 4]'legato(1.5)`                 | Overlapping legato.    | Gate held past next event onset.   | Notes overlap (pad/drone effect).    |
-| `note [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1).  | Value drawn once per cycle.        | Consistent legato within a cycle.    |
-| `note [0 2 4]'legato(0.5rand1.2'eager(2))` | Redraw every 2 cycles. | New value drawn every 2 cycles.    | Slowly varying articulation.         |
-| `note [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.         | Value drawn once, frozen forever.  | Same articulation for whole session. |
+| Code                                       | Interpretation         | Evaluation                           | Result                                 |
+| ------------------------------------------ | ---------------------- | ------------------------------------ | -------------------------------------- |
+| `note [0 2 4]`                             | Default legato.        | Gate closed at 0.8 × event slot.     | Slightly detached notes (default).     |
+| `note [0 2 4]'legato(0.8)`                 | Fixed legato.          | Gate closed at 0.8 × event slot.     | Same as default.                       |
+| `note [0 2 4]'legato(1.0)`                 | Full legato.           | Gate closed exactly at next event.   | Notes touch without overlap.           |
+| `note [0 2 4]'legato(1.5)`                 | Overlapping legato.    | Gate held past next event onset.     | Notes overlap (pad/drone effect).      |
+| `note [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1).  | Value drawn once per cycle.          | Consistent legato within a cycle.      |
+| `note [0 2 4]'legato(0.5rand1.2'eager(2))` | Redraw every 2 cycles. | New value drawn every 2 cycles.      | Slowly varying articulation.           |
+| `note [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.         | Value drawn once, frozen forever.    | Same articulation for whole session.   |
+| `mono x [0 2 4]'legato(0.8)`               | Legato on mono.        | Modifier accepted, silently ignored. | No effect — mono uses persistent node. |
 
 **Error cases**
 
@@ -336,13 +338,55 @@ How accidentals modify degree literals.
 
 # 16. **`mono` Content Type Truth Table**
 
-Monophonic mode via the `mono` content type keyword.
+Monophonic mode via the `mono` content type keyword. Single persistent synth node per named generator.
 
-| Code             | Interpretation      | Evaluation                                 | Result                                     |
-| ---------------- | ------------------- | ------------------------------------------ | ------------------------------------------ |
-| `mono [0 1 2]`   | Monophonic pattern. | Single synth node; events send `set` msgs. | Legato pitch changes, no re-instantiation. |
-| `mono [0 2 4]'n` | Monophonic, once.   | Same single-node behaviour, plays once.    | Pitch sequence plays through once.         |
-| `note [0 1 2]`   | Default polyphonic. | New synth per event.                       | Each note is a fresh synth instance.       |
+| Code                         | Interpretation      | Evaluation                                       | Result                                     |
+| ---------------------------- | ------------------- | ------------------------------------------------ | ------------------------------------------ |
+| `mono x [0 1 2]`             | Monophonic pattern. | First cycle: spawn node. Subsequent: `.set` msg. | Legato pitch changes, no re-instantiation. |
+| `mono x [0 2 4]'n`           | Monophonic, once.   | Same single-node behaviour, plays once.          | Pitch sequence plays through once.         |
+| `mono x [0 2]'stut`          | Stutter on mono.    | 2 repeated `.set` messages per slot.             | Each pitch change sent twice.              |
+| `mono x [0 2 4]'legato(0.8)` | Legato on mono.     | Modifier accepted, silently ignored.             | No effect — mono uses persistent node.     |
+| `note x [0 1 2]`             | Default polyphonic. | New synth per event.                             | Each note is a fresh synth instance.       |
+
+---
+
+# 19. **Buffer-backed Content Types Truth Table**
+
+How `sample`, `slice`, and `cloud` interpret their event lists and select SynthDefs.
+
+| Code                                    | Interpretation                   | Evaluation                                   | Result                                      |
+| --------------------------------------- | -------------------------------- | -------------------------------------------- | ------------------------------------------- |
+| `sample drums [\kick \hat \snare]`      | Buffer playback, by name.        | Each event picks buffer by `\symbol` name.   | `samplePlayer` triggered with buffer param. |
+| `sample(\mySampler) drums [\kick \hat]` | Custom SynthDef.                 | `\mySampler` used instead of `samplePlayer`. | User SynthDef triggered.                    |
+| `slice drums [0 2 4 8]`                 | Beat-sliced playback.            | Each event emits a slice index.              | `slicePlayer` triggered with slice index.   |
+| `slice drums [0 2 4]'numSlices(16)`     | Slice with grid size.            | `numSlices=16` passed to SynthDef.           | Correct playback position.                  |
+| `@buf(\myloop) slice drums [0 2 4]`     | Slice from named buffer.         | Buffer name attached to each slice event.    | `slicePlayer` uses `myloop` buffer.         |
+| `cloud grain []`                        | Granular synth, persistent node. | Empty list; one CloudEvent per cycle.        | `grainCloud` node spawned / updated.        |
+| `@buf(\recording) cloud grain []`       | Granular from named buffer.      | Buffer name on cloud event.                  | `grainCloud` uses `recording` buffer.       |
+
+**Error cases**
+
+| Code                            | Failure Type   | Why                                                 |
+| ------------------------------- | -------------- | --------------------------------------------------- |
+| `@buf(\x) sample drums [\kick]` | Semantic error | `@buf` is invalid on `sample`; buffer is per-event. |
+
+---
+
+# 20. **`@buf` Decorator Truth Table**
+
+Pattern-level buffer selection for `slice` and `cloud`.
+
+| Code                                        | Interpretation             | Evaluation                          | Result                                |
+| ------------------------------------------- | -------------------------- | ----------------------------------- | ------------------------------------- |
+| `@buf(\myloop) slice drums [0 2 4]`         | Static buffer.             | `\myloop` attached to all events.   | All slice events use `myloop` buffer. |
+| `@buf([\loopA \loopB]'pick) slice drums []` | Dynamic buffer, per-cycle. | Generator polled at cycle boundary. | Buffer alternates randomly per cycle. |
+| `@buf(\x) cloud grain []`                   | Buffer for cloud.          | `\x` attached to cloud event.       | `grainCloud` uses `x` buffer.         |
+
+**Error cases**
+
+| Code                            | Failure Type   | Why                                                   |
+| ------------------------------- | -------------- | ----------------------------------------------------- |
+| `@buf(\x) sample drums [\kick]` | Semantic error | `sample` selects buffer per-event; `@buf` is invalid. |
 
 ---
 
