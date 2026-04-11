@@ -163,9 +163,9 @@ The primary keyword specifies the _content type_ — what kind of events are gen
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `note`   | Polyphonic pitched events. New synth instance per event.                                                                                               |
 | `mono`   | Monophonic pitched events. Single persistent synth node; events send `set` messages instead of spawning new instances. Rough equivalent of SC's Pmono. |
-| `sample` | Buffer playback. (Behaviour defined in issue #14.)                                                                                                     |
-| `slice`  | Beat-sliced buffer playback. (Behaviour defined in issue #14.)                                                                                         |
-| `cloud`  | Granular synthesis. (Behaviour defined in issue #14.)                                                                                                  |
+| `sample` | Buffer playback. Event list contains `\symbol` buffer refs; each event picks a buffer by name.                                                         |
+| `slice`  | Beat-sliced buffer playback. Event list contains integer slice indices into a fixed buffer.                                                            |
+| `cloud`  | Granular synthesis. Persistent granular synth node, modulated via `.set` messages. No event list — use `[]`.                                           |
 
 A name is required between the content type keyword and the generator expression (see "Generator naming" below). A space is required between the name and `[`.
 
@@ -203,17 +203,71 @@ note lead [0 1 2]'offset(-10)   // all events 10 ms early
 
 `note` spawns new self-releasing synth instances per event (not persistent nodes). Gate is closed via a scheduled `set` message after each event's time slot, scaled by a legato factor. This conforms to standard SC synthdef conventions (gate input + ADSR).
 
+The default legato for `note` is **0.8**, matching SuperCollider's `Pbind` convention. Overridable per-pattern via `'legato(n)`.
+
 Legato is a modifier, patternisable like any other stochastic argument:
 
 ```flux
-note lead [0 2 4 7]'legato(0.8)                  // fixed legato
+note lead [0 2 4 7]'legato(0.8)                  // fixed legato (same as default)
 note lead [0 2 4 7]'legato(0.5rand1.2)            // stochastic legato, eager(1) by default
 note lead [0 2 4 7]'legato(0.5rand1.2'eager(4))  // new legato value every 4 cycles
 ```
 
 Legato values > 1.0 produce overlap (useful for pads/drones).
 
+`'legato` has no effect on `mono` — `mono` uses a persistent node and legato as note-overlap control is undefined there.
+
 The scheduler must therefore track two times per event: note-on time and gate-close time.
+
+### `mono` lifecycle
+
+`mono` maintains a single persistent synth node per named generator:
+
+- **First evaluation:** a new synth node is spawned.
+- **Subsequent evaluations (same name, new cycle):** `.set` messages are sent to the existing node — no re-spawn.
+- **Stop or removal:** the runtime closes the gate automatically. Release duration is governed entirely by the SynthDef envelope; there is no DSL `'release` modifier.
+- **`'stut(n)` on `mono`:** sends n repeated `.set` messages to the persistent node within the event slot. Audibility is SynthDef-dependent.
+- **`'legato` has no effect on `mono`** — legato as note-overlap control is undefined for persistent nodes.
+
+```flux
+mono bass [0 1 2 3]       // single persistent node, pitch updated each event
+mono bass [0 1 2 3]'stut  // each pitch change sent twice
+```
+
+### Buffer-backed content types
+
+`sample`, `slice`, and `cloud` operate on audio buffers loaded into the engine at boot.
+
+| Content type | List contents                                             | Default SynthDef | Default buffer          |
+| ------------ | --------------------------------------------------------- | ---------------- | ----------------------- |
+| `sample`     | `\symbol` buffer refs — each event picks a buffer by name | `samplePlayer`   | bundled one-shot kit    |
+| `slice`      | integer slice indices into a fixed buffer                 | `slicePlayer`    | bundled amen-style loop |
+| `cloud`      | no list — use `[]`                                        | `grainCloud`     | bundled voice recording |
+
+**SynthDef override:** `sample(\name)`, `slice(\name)`, `cloud(\name)` follow the same convention as `note(\name)`: the argument replaces the default SynthDef entirely.
+
+**Channel-count-based SynthDef variant selection:** At event dispatch time, the channel count of the active buffer is looked up from the buffer registry. The SynthDef name is resolved to `samplePlayer_mono` or `samplePlayer_stereo` (and similarly for `slicePlayer`). If no variant exists for the detected channel count, the event is skipped with a logged error. `grainCloud` SynthDefs only exist as `_mono` variants — if a stereo buffer is selected, a warning is logged and the mono variant is used.
+
+**`@buf` decorator:** `@buf(\name)` specifies which buffer a `slice` or `cloud` pattern operates on. Accepts generator expressions for per-cycle buffer selection:
+
+```flux
+@buf(\myloop) slice drums [0 2 4 8]'numSlices(16)
+@buf([\loopA \loopB]'pick) slice drums [0 4 8 12]
+```
+
+`@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.
+
+**`'numSlices(n)`** is a pattern-level modifier on `slice` that tells the SynthDef how many slices the buffer has been divided into:
+
+```flux
+slice drums [0 2 4 8]'numSlices(16)   // 16-slice grid
+```
+
+**`cloud` persistent node:** `cloud` works like `mono` — it spawns a single persistent granular synth node and sends `.set` messages each cycle. The event list is empty (`[]`). Parameters are controlled via `"param` notation:
+
+```flux
+@buf(\recording) cloud grain []"density(8)"pos(0.5rand0.8)
+```
 
 ### Determination of length
 
@@ -380,6 +434,23 @@ For single-expression use, decorators may appear inline on the same line:
 **Indentation:** block scope uses fixed indentation (2 spaces). Variable indentation is not supported — indentation level is determined by the number of leading 2-space units. This keeps the parser simple and the code visually consistent.
 
 **Stochastic decorator arguments** follow the same `'lock`/`'eager(n)` semantics as everything else. `@root(3rand7)` with `'eager(4)` redraws every 4 cycles; with `'lock` the value is drawn once when the block is first entered and frozen thereafter. `'lock` is the sensible default for decorators — a randomly wandering root is an opt-in, not the default.
+
+### `@buf` — buffer selection for `slice` and `cloud`
+
+`@buf(\name)` is a pattern-level decorator that specifies which buffer a `slice` or `cloud` pattern operates on. It is written inline before the content type keyword:
+
+```flux
+@buf(\myloop) slice drums [0 2 4 8]
+@buf(\recording) cloud grain []
+```
+
+`@buf` accepts a `\symbol` argument or a generator expression that produces `\symbol` values:
+
+```flux
+@buf([\loopA \loopB]'pick) slice drums [0 4 8 12]  // per-cycle buffer selection
+```
+
+`@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.
 
 ---
 

@@ -98,7 +98,7 @@ export function* createGen(deps: GenDeps): Generator<GenEvent> {
 				yield { duration: preGap, skip: true };
 			}
 
-			if (ev.type === 'fx' || ev.type === 'rest') {
+			if (ev.contentType === 'fx' || ev.contentType === 'rest') {
 				// FX routing not yet wired. Rest slots advance the clock but produce no sound.
 				yield { duration: stride, skip: true };
 			} else {

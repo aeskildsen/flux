@@ -279,32 +279,72 @@
 			}),
 			(event, ntpTime) => {
 				if (event.skip) return;
-				const { ev, gateDurationSeconds } = event;
+				const { ev: rawEv, gateDurationSeconds } = event;
+				// rest/fx are filtered to skip:true in gen.ts — rawEv is always a BaseEvent here
+				const ev = rawEv as Extract<typeof rawEv, { synthdef?: unknown; offsetMs?: unknown }>;
 				const synthdef = ev.synthdef ?? 'sonic-pi-prophet';
 				const adjustedTime = ntpTime + (ev.offsetMs ?? 0) / 1000;
-				const oscParams = buildOscParams(ev, data.synthdefs[synthdef]);
 
-				if (ev.mono && ev.loopId) {
-					const existing = monoNodes.get(ev.loopId);
-					if (existing !== undefined) {
-						// Mono voice already running — update pitch and params in place
-						scProxy.setAt(adjustedTime, existing, oscParams);
+				if (ev.contentType === 'mono') {
+					// Monophonic: single persistent node per loopId, updated via .set
+					const oscParams = buildOscParams(ev, data.synthdefs[synthdef]);
+					if (ev.loopId) {
+						const existing = monoNodes.get(ev.loopId);
+						if (existing !== undefined) {
+							scProxy.setAt(adjustedTime, existing, oscParams);
+						} else {
+							const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+							monoNodes.set(ev.loopId, nodeId);
+						}
 					} else {
-						// First event for this mono loop — spawn a new node
-						const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
-						monoNodes.set(ev.loopId, nodeId);
-					}
-					// No gate-close for mono — voice persists until pattern stops (#19)
-				} else {
-					if (ev.mono) {
 						console.warn('[flux] mono event has no loopId — falling back to polyphonic', ev);
+						const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+						scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
 					}
-					// Polyphonic: spawn a new node and schedule a gate close.
-					// Gate closes gateDurationSeconds after the adjusted note-on time,
-					// so offsetMs shifts both the note-on and the gate-close together.
+				} else if (ev.contentType === 'sample') {
+					// Buffer playback: trigger samplePlayer (or custom synthdef) with buffer params
+					// Channel-count SynthDef variant resolution happens here when buffer registry is wired.
+					// For now, use the synthdef name as-is and pass bufferName as a param.
+					const oscParams: Record<string, number> = { ...(ev.params ?? {}) };
+					console.info('[flux] sample event — bufferName:', ev.bufferName, 'synthdef:', synthdef);
+					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
+				} else if (ev.contentType === 'slice') {
+					// Beat-sliced buffer playback
+					const oscParams: Record<string, number> = {
+						...(ev.params ?? {}),
+						sliceIndex: ev.sliceIndex,
+						...(ev.numSlices !== undefined ? { numSlices: ev.numSlices } : {})
+					};
+					console.info(
+						'[flux] slice event — index:',
+						ev.sliceIndex,
+						'buffer:',
+						ev.bufferName,
+						'synthdef:',
+						synthdef
+					);
+					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
+				} else if (ev.contentType === 'cloud') {
+					// Granular synthesis: persistent node per loopId, updated via .set
+					const oscParams: Record<string, number> = { ...(ev.params ?? {}) };
+					if (ev.loopId) {
+						const existing = monoNodes.get(ev.loopId);
+						if (existing !== undefined) {
+							scProxy.setAt(adjustedTime, existing, oscParams);
+						} else {
+							const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+							monoNodes.set(ev.loopId, nodeId);
+						}
+					}
+				} else if (ev.contentType === 'note') {
+					// note (default): polyphonic — spawn a new node and schedule a gate close
+					const oscParams = buildOscParams(ev, data.synthdefs[synthdef]);
 					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
 					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
 				}
+				// rest and fx are filtered to skip:true in gen.ts and never reach here
 			},
 			CYCLE_BEATS,
 			nextCycleBeat,

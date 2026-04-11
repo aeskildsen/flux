@@ -24,7 +24,34 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createInstance } from './evaluator.js';
+import {
+	createInstance,
+	type ScheduledEvent,
+	type NoteEvent,
+	type MonoEvent,
+	type SampleEvent,
+	type SliceEvent,
+	type CloudEvent
+} from './evaluator.js';
+
+/** Cast a ScheduledEvent to a pitched event (NoteEvent | MonoEvent) for test assertions. */
+function pitched(e: ScheduledEvent): NoteEvent | MonoEvent {
+	return e as NoteEvent | MonoEvent;
+}
+
+/**
+ * Evaluate a given cycle on an instance, returning events cast to `any[]`.
+ * Convenience wrapper for tests that access note/cent/synthdef/loopId directly.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function evalCycle(
+	i: Extract<ReturnType<typeof createInstance>, { ok: true }>,
+	cycleNumber: number
+): any[] {
+	const r = i.evaluate({ cycleNumber });
+	if (!r.ok) throw new Error(`Eval error cycle ${cycleNumber}: ${r.error}`);
+	return r.events;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -38,16 +65,17 @@ function inst(source: string) {
 }
 
 /** Evaluate cycle 0, throw on error, return events. */
-function eval0(source: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function eval0(source: string): any[] {
 	const i = inst(source);
 	const r = i.evaluate({ cycleNumber: 0 });
 	if (!r.ok) throw new Error(`Eval error: ${r.error}`);
 	return r.events;
 }
 
-/** Notes from cycle 0. */
+/** Notes from cycle 0 (only valid for note/mono patterns). */
 function notes(source: string) {
-	return eval0(source).map((e) => e.note);
+	return eval0(source).map((e) => pitched(e).note);
 }
 
 /** Beat offsets from cycle 0. */
@@ -69,7 +97,8 @@ function collectNotes(source: string, numCycles: number): number[][] {
 	return Array.from({ length: numCycles }, (_, c) => {
 		const r = i.evaluate({ cycleNumber: c });
 		if (!r.ok) throw new Error(`Eval error cycle ${c}: ${r.error}`);
-		return r.events.map((e) => e.note);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		return r.events.map((e: any) => e.note as number);
 	});
 }
 
@@ -103,7 +132,7 @@ describe('instance.evaluate — per-cycle output', () => {
 		const res = inst('note x [0 2 4]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
 		for (const ev of res.events) {
-			expect(typeof ev.note).toBe('number');
+			expect(typeof (ev as any).note).toBe('number');
 			expect(typeof ev.beatOffset).toBe('number');
 			expect(typeof ev.duration).toBe('number');
 		}
@@ -141,7 +170,7 @@ describe('eager(1) — resample at each cycle boundary (default)', () => {
 		const res0a = i.evaluate({ cycleNumber: 0 });
 		const res0b = i.evaluate({ cycleNumber: 0 });
 		if (!res0a.ok || !res0b.ok) throw new Error('eval failed');
-		expect(res0a.events[0].note).toBe(res0b.events[0].note);
+		expect((res0a.events[0] as any).note).toBe((res0b.events[0] as any).note);
 	});
 });
 
@@ -243,7 +272,7 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has(res.events[0].note)).toBe(true);
+			expect(valid.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -260,8 +289,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(res.events[0].note).toBeGreaterThanOrEqual(62);
-			expect(res.events[0].note).toBeLessThanOrEqual(72);
+			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(62);
+			expect((res.events[0] as any).note).toBeLessThanOrEqual(72);
 		}
 	});
 
@@ -270,8 +299,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(res.events[0].note).toBeGreaterThanOrEqual(60);
-			expect(res.events[0].note).toBeLessThanOrEqual(71);
+			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(60);
+			expect((res.events[0] as any).note).toBeLessThanOrEqual(71);
 		}
 	});
 
@@ -337,8 +366,8 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(Number.isInteger(res.events[0].note)).toBe(true);
-			expect(res.events[0].cent).toBeUndefined();
+			expect(Number.isInteger((res.events[0] as any).note)).toBe(true);
+			expect((res.events[0] as any).cent).toBeUndefined();
 		}
 	});
 
@@ -366,7 +395,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has(res.events[0].note)).toBe(true);
+			expect(valid.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -385,7 +414,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has(res.events[0].note)).toBe(true);
+			expect(valid.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -429,7 +458,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has(res.events[0].note)).toBe(true);
+			expect(valid.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -441,7 +470,7 @@ describe('rand / tilde — float bound semantics', () => {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
 			// degree 2.5 rounds to 3 → F5 = MIDI 65
-			expect(res.events[0].note).toBe(65);
+			expect((res.events[0] as any).note).toBe(65);
 		}
 	});
 
@@ -451,7 +480,7 @@ describe('rand / tilde — float bound semantics', () => {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
 			// degree 3 → F5 = MIDI 65
-			expect(res.events[0].note).toBe(65);
+			expect((res.events[0] as any).note).toBe(65);
 		}
 	});
 
@@ -471,7 +500,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has(res.events[0].note)).toBe(true);
+			expect(valid.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -484,8 +513,8 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validFirst.has(res.events[0].note)).toBe(true);
-			expect(validSecond.has(res.events[1].note)).toBe(true);
+			expect(validFirst.has((res.events[0] as any).note)).toBe(true);
+			expect(validSecond.has((res.events[1] as any).note)).toBe(true);
 		}
 	});
 });
@@ -631,20 +660,20 @@ describe('@cent — pitch deviation in cents', () => {
 	it('@cent(50) stores a non-zero cent offset on events', () => {
 		const res = inst('@cent(50) note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
-		expect(res.events[0].note).toBe(60);
-		expect(res.events[0].cent).toBe(50);
+		expect((res.events[0] as any).note).toBe(60);
+		expect((res.events[0] as any).cent).toBe(50);
 	});
 
 	it('@cent(-50) stores a negative cent offset', () => {
 		const res = inst('@cent(-50) note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
-		expect(res.events[0].cent).toBe(-50);
+		expect((res.events[0] as any).cent).toBe(-50);
 	});
 
 	it('no @cent decorator → cent defaults to 0', () => {
 		const res = inst('note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
-		expect(res.events[0].cent ?? 0).toBe(0);
+		expect((res.events[0] as any).cent ?? 0).toBe(0);
 	});
 });
 
@@ -835,7 +864,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return res.events[0].note;
+			return (res.events[0] as any).note;
 		});
 		expect(cycleNotes).toEqual([60, 64, 67, 71].map((n) => n + SHIFT));
 	});
@@ -845,7 +874,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return res.events[0].note;
+			return (res.events[0] as any).note;
 		});
 		expect(cycleNotes).toEqual([62, 64, 67, 74].map((n) => n + SHIFT));
 	});
@@ -855,7 +884,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return res.events[0].note;
+			return (res.events[0] as any).note;
 		});
 		expect(cycleNotes).toEqual([60, 64, 67].map((n) => n + SHIFT));
 	});
@@ -865,7 +894,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return res.events[0].note;
+			return (res.events[0] as any).note;
 		});
 		expect(cycleNotes).toEqual([62, 64, 67, 74].map((n) => n + SHIFT));
 	});
@@ -876,7 +905,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validInG.has(res.events[0].note)).toBe(true);
+			expect(validInG.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -886,7 +915,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			seen.add(res.events[0].note);
+			seen.add((res.events[0] as any).note);
 		}
 		expect(seen.size).toBeGreaterThan(1);
 	});
@@ -897,7 +926,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validInG.has(res.events[0].note)).toBe(true);
+			expect(validInG.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -907,7 +936,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			seen.add(res.events[0].note);
+			seen.add((res.events[0] as any).note);
 		}
 		const median = [...seen].sort((a, b) => a - b)[Math.floor(seen.size / 2)];
 		expect(median).toBeLessThan(65); // below C/5 mean (F5)
@@ -920,8 +949,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(res.events[0].note).toBeGreaterThanOrEqual(57);
-			expect(res.events[0].note).toBeLessThanOrEqual(67);
+			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(57);
+			expect((res.events[0] as any).note).toBeLessThanOrEqual(67);
 		}
 	});
 
@@ -930,8 +959,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(res.events[0].note).toBeGreaterThanOrEqual(55);
-			expect(res.events[0].note).toBeLessThanOrEqual(66);
+			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(55);
+			expect((res.events[0] as any).note).toBeLessThanOrEqual(66);
 		}
 	});
 
@@ -942,7 +971,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return res.events[0].note;
+			return (res.events[0] as any).note;
 		});
 		expect(cycleNotes).toEqual([69, 71, 72]);
 	});
@@ -955,7 +984,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validDDorian.has(res.events[0].note)).toBe(true);
+			expect(validDDorian.has((res.events[0] as any).note)).toBe(true);
 		}
 	});
 
@@ -971,7 +1000,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return res.events[0].note;
+			return (res.events[0] as any).note;
 		});
 		expect(cycleNotes).toEqual([69, 71, 73]);
 	});
@@ -995,10 +1024,10 @@ describe("'stut — stutter (truth table 3)", () => {
 	});
 
 	it('each stutter event gets 1/(N×k) of the cycle as duration', () => {
-		// note [0 2]'stut(2) → 4 events, each 1/4
+		// note [0 2]'stut(2) → 4 events, each 1/4 slot × 0.8 default legato
 		const ds = durations("note x [0 2]'stut(2)");
 		expect(ds).toHaveLength(4);
-		for (const d of ds) expect(d).toBeCloseTo(0.25);
+		for (const d of ds) expect(d).toBeCloseTo(0.25 * 0.8);
 	});
 
 	it('beat offsets are evenly spaced across full cycle', () => {
@@ -1063,7 +1092,7 @@ describe("'wran — weighted random pick (truth table 4)", () => {
 		for (let c = 0; c < 50; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			r.events.forEach((e) => seen.add(e.note));
+			r.events.forEach((e) => seen.add((e as any).note));
 		}
 		expect(seen.size).toBeGreaterThanOrEqual(2);
 	});
@@ -1074,7 +1103,7 @@ describe("'wran — weighted random pick (truth table 4)", () => {
 		for (let c = 0; c < 100; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			const note = r.events[0].note;
+			const note = (r.events[0] as any).note;
 			if (note === 60) counts.n0++;
 			else if (note === 67) counts.n4++;
 		}
@@ -1087,7 +1116,7 @@ describe("'wran — weighted random pick (truth table 4)", () => {
 		for (let c = 0; c < 20; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			r.events.forEach((e) => seen.add(e.note));
+			r.events.forEach((e) => seen.add((e as any).note));
 		}
 		expect(seen.has(60)).toBe(false); // degree 0, weight 0
 		expect(seen.has(67)).toBe(true); // degree 4, weight 1
@@ -1101,7 +1130,7 @@ describe("'pick — random element selection", () => {
 		for (let c = 0; c < 50; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			r.events.forEach((e) => seen.add(e.note));
+			r.events.forEach((e) => seen.add((e as any).note));
 		}
 		expect(seen.size).toBeGreaterThanOrEqual(2);
 	});
@@ -1115,7 +1144,7 @@ describe("'shuf — shuffle traversal", () => {
 			if (!r.ok) throw new Error(r.error);
 			expect(r.events).toHaveLength(3);
 			// All three degrees must be present (60=C5, 64=E5, 67=G5)
-			const ns = new Set(r.events.map((e) => e.note));
+			const ns = new Set(r.events.map((e) => (e as any).note));
 			expect(ns.has(60)).toBe(true);
 			expect(ns.has(64)).toBe(true);
 			expect(ns.has(67)).toBe(true);
@@ -1175,8 +1204,8 @@ describe("'legato — duration scaling (truth table 13)", () => {
 		for (const d of durations("note x [0 2 4]'legato(1.5)")) expect(d).toBeCloseTo((1 / 3) * 1.5);
 	});
 
-	it("default legato is 1.0 when no 'legato modifier", () => {
-		for (const d of durations('note x [0 2 4]')) expect(d).toBeCloseTo(1 / 3);
+	it('default legato for note is 0.8 (SC Pbind convention)', () => {
+		for (const d of durations('note x [0 2 4]')) expect(d).toBeCloseTo((1 / 3) * 0.8);
 	});
 
 	it("'legato(0.5rand1.2) draws once per cycle — all events in cycle share same duration", () => {
@@ -1234,25 +1263,25 @@ describe("'offset — ms timing shift (truth table 14)", () => {
 });
 
 describe('mono content type (truth table 16)', () => {
-	it('mono x [0 1 2] — all events have mono:true', () => {
-		for (const e of eval0('mono x [0 1 2]')) expect((e as { mono?: boolean }).mono).toBe(true);
+	it("mono x [0 1 2] — all events have contentType:'mono'", () => {
+		for (const e of eval0('mono x [0 1 2]')) expect(e.contentType).toBe('mono');
 	});
 
-	it('note x [0 1 2] without mono — mono field absent or false', () => {
-		for (const e of eval0('note x [0 1 2]')) {
-			const m = (e as { mono?: boolean }).mono;
-			expect(m === undefined || m === false).toBe(true);
-		}
+	it("note x [0 1 2] without mono — contentType is 'note'", () => {
+		for (const e of eval0('note x [0 1 2]')) expect(e.contentType).toBe('note');
 	});
 
-	it('mono x [0 2 4] — all events have mono:true', () => {
-		for (const e of eval0('mono x [0 2 4]')) expect((e as { mono?: boolean }).mono).toBe(true);
+	it("mono x [0 2 4] — all events have contentType:'mono'", () => {
+		for (const e of eval0('mono x [0 2 4]')) expect(e.contentType).toBe('mono');
 	});
 
 	it('mono content type does not affect note or timing', () => {
 		const normal = eval0('note x [0 2 4]');
 		const mono = eval0('mono x [0 2 4]');
-		expect(mono.map((e) => e.note)).toEqual(normal.map((e) => e.note));
+		// Both note and mono events carry a note field — narrow to access it
+		const noteNotes = normal.map((e) => ('note' in e ? e.note : -1));
+		const monoNotes = mono.map((e) => ('note' in e ? e.note : -1));
+		expect(monoNotes).toEqual(noteNotes);
 		expect(mono.map((e) => e.beatOffset)).toEqual(normal.map((e) => e.beatOffset));
 	});
 });
@@ -1318,8 +1347,8 @@ describe('transposition (truth table 10)', () => {
 		const r1 = i.evaluate({ cycleNumber: 1 });
 		const r2 = i.evaluate({ cycleNumber: 2 });
 		if (!r0.ok || !r1.ok || !r2.ok) throw new Error('eval failed');
-		expect(r0.events[0].note).toBe(r1.events[0].note);
-		expect(r0.events[0].note).toBe(r2.events[0].note);
+		expect((r0.events[0] as any).note).toBe((r1.events[0] as any).note);
+		expect((r0.events[0] as any).note).toBe((r2.events[0] as any).note);
 	});
 
 	it('transposition participates in full pitch chain', () => {
@@ -1468,43 +1497,36 @@ describe('FX pipe (truth table 9)', () => {
 		const r = inst('note x [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
-		const fxEvents = r.events.filter((e) => (e as { type?: string }).type === 'fx');
+		const fxEvents = r.events.filter((e) => e.contentType === 'fx');
 		expect(fxEvents).toHaveLength(1);
-		expect((fxEvents[0] as { synthdef?: string }).synthdef).toBe('lpf');
+		expect(fxEvents[0].synthdef).toBe('lpf');
 	});
 
 	it('note x [0] | fx(\\lpf) — note events are still present', () => {
 		const r = inst('note x [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const noteEvents = r.events.filter((e) => (e as { type?: string }).type !== 'fx');
+		const noteEvents = r.events.filter((e) => e.contentType !== 'fx');
 		expect(noteEvents).toHaveLength(1);
-		expect(noteEvents[0].note).toBe(60);
+		expect('note' in noteEvents[0] ? noteEvents[0].note : -1).toBe(60);
 	});
 
-	it("fx event has type:'fx', synthdef, params, cycleOffset", () => {
+	it("fx event has contentType:'fx', synthdef, params, cycleOffset", () => {
 		const r = inst('note x [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			type: string;
-			synthdef: string;
-			params: Record<string, number>;
-			cycleOffset: number;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.type).toBe('fx');
-		expect(fxEv.synthdef).toBe('lpf');
-		expect(typeof fxEv.params).toBe('object');
-		expect(typeof fxEv.cycleOffset).toBe('number');
+		expect(fxEv!.contentType).toBe('fx');
+		expect(fxEv!.synthdef).toBe('lpf');
+		expect(typeof fxEv!.params).toBe('object');
+		expect(typeof fxEv!.cycleOffset).toBe('number');
 	});
 
 	it('fx modifier params are included in fx event params', () => {
 		const r = inst("note x [0] | fx(\\lpf)'cutoff(1200)").evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			params: Record<string, number>;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.params.cutoff).toBe(1200);
+		expect(fxEv!.params!.cutoff).toBe(1200);
 	});
 
 	it("fx modifier params respect 'lock semantics", () => {
@@ -1512,71 +1534,58 @@ describe('FX pipe (truth table 9)', () => {
 		const r0 = i.evaluate({ cycleNumber: 0 });
 		const r1 = i.evaluate({ cycleNumber: 1 });
 		if (!r0.ok || !r1.ok) throw new Error('eval failed');
-		const fx = (ev: typeof r0) => {
+		const getFx = (ev: typeof r0) => {
 			if (!ev.ok) return null;
-			return ev.events.find((e) => (e as { type?: string }).type === 'fx') as {
-				params: Record<string, number>;
-			};
+			return ev.events.find((e) => e.contentType === 'fx');
 		};
-		expect(fx(r0)!.params.cutoff).toBe(fx(r1)!.params.cutoff);
+		expect(getFx(r0)!.params!.cutoff).toBe(getFx(r1)!.params!.cutoff);
 	});
 
 	it('fx without wet/dry has wetDry undefined (100% wet by default)', () => {
 		const r = inst('note x [0] | fx(\\lpf)').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			wetDry?: number;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.wetDry).toBeUndefined();
+		expect(fxEv!.wetDry).toBeUndefined();
 	});
 
 	it('fx with 70% wet/dry emits wetDry: 70', () => {
 		const r = inst('note x [0] | fx(\\lpf) 70%').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			wetDry?: number;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.wetDry).toBe(70);
+		expect(fxEv!.wetDry).toBe(70);
 	});
 
 	it("fx with params and wet/dry: fx(\\lpf)'cutoff(800) 50% emits wetDry: 50", () => {
 		const r = inst("note x [0] | fx(\\lpf)'cutoff(800) 50%").evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			wetDry?: number;
-			params: Record<string, number>;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.wetDry).toBe(50);
-		expect(fxEv.params.cutoff).toBe(800);
+		expect(fxEv!.wetDry).toBe(50);
+		expect(fxEv!.params!.cutoff).toBe(800);
 	});
 
 	it('fx with 0% wet/dry emits wetDry: 0 (fully dry — distinct from undefined)', () => {
 		const r = inst('note x [0] | fx(\\lpf) 0%').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			wetDry?: number;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.wetDry).toBe(0); // not undefined — 0 means fully dry
+		expect(fxEv!.wetDry).toBe(0); // not undefined — 0 means fully dry
 	});
 
 	it('fx with 100% wet/dry emits wetDry: 100', () => {
 		const r = inst('note x [0] | fx(\\lpf) 100%').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const fxEv = r.events.find((e) => (e as { type?: string }).type === 'fx') as {
-			wetDry?: number;
-		};
+		const fxEv = r.events.find((e) => e.contentType === 'fx');
 		expect(fxEv).toBeDefined();
-		expect(fxEv.wetDry).toBe(100);
+		expect(fxEv!.wetDry).toBe(100);
 	});
 
 	it('note events emitted alongside fx do not carry wetDry', () => {
 		const r = inst('note x [0] | fx(\\lpf) 70%').evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
-		const noteEv = r.events.find((e) => (e as { type?: string }).type !== 'fx');
+		const noteEv = r.events.find((e) => e.contentType !== 'fx');
 		expect(noteEv).toBeDefined();
 		expect((noteEv as { wetDry?: number }).wetDry).toBeUndefined();
 	});
@@ -1714,7 +1723,7 @@ describe("'wran edge cases", () => {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
 			// Exactly 2 slots drawn; both should be degree 1 (= MIDI 62)
-			for (const e of r.events) expect(e.note).toBe(62);
+			for (const e of r.events) expect((e as any).note).toBe(62);
 		}
 	});
 
@@ -1725,7 +1734,7 @@ describe("'wran edge cases", () => {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
 			// Both slots pick elements[0] → degree 0 = C5 = MIDI 60
-			for (const e of r.events) expect(e.note).toBe(60);
+			for (const e of r.events) expect((e as any).note).toBe(60);
 		}
 	});
 });
@@ -1929,16 +1938,16 @@ describe('accidentals in non-default pitch contexts', () => {
 // ---------------------------------------------------------------------------
 
 describe('rests (_) — structural slot count', () => {
-	it('note x [0 2 _ 4] emits 4 events, 3rd is type:rest', () => {
+	it('note x [0 2 _ 4] emits 4 events, 3rd is contentType:rest', () => {
 		const evs = eval0('note x [0 2 _ 4]');
 		expect(evs).toHaveLength(4);
-		expect(evs[2].type).toBe('rest');
+		expect(evs[2].contentType).toBe('rest');
 	});
 
-	it('rest event has no note pitch (note is -1 or absent)', () => {
+	it('rest event has no note field (RestEvent has no pitch)', () => {
 		const evs = eval0('note x [0 2 _ 4]');
-		// note is -1 for rests — no synth should be spawned
-		expect(evs[2].note).toBe(-1);
+		// RestEvent has no note field — only beatOffset/duration/contentType
+		expect('note' in evs[2]).toBe(false);
 	});
 
 	it('rest occupies the correct beat offset (uniformly spaced, 1/4 cycle each)', () => {
@@ -1948,25 +1957,25 @@ describe('rests (_) — structural slot count', () => {
 
 	it('rest at start: note [_ 2 4] — first event is rest', () => {
 		const evs = eval0('note x [_ 2 4]');
-		expect(evs[0].type).toBe('rest');
-		expect(evs[1].note).toBe(notes('note x [2]')[0]);
+		expect(evs[0].contentType).toBe('rest');
+		expect(evs[1].contentType).toBe('note');
 	});
 
 	it('rest at end: note [0 2 _] — last event is rest', () => {
 		const evs = eval0('note x [0 2 _]');
-		expect(evs[2].type).toBe('rest');
+		expect(evs[2].contentType).toBe('rest');
 	});
 
-	it('all rests: note [_ _ _] — 3 events all type:rest', () => {
+	it('all rests: note [_ _ _] — 3 events all contentType:rest', () => {
 		const evs = eval0('note x [_ _ _]');
 		expect(evs).toHaveLength(3);
-		expect(evs.every((e) => e.type === 'rest')).toBe(true);
+		expect(evs.every((e) => e.contentType === 'rest')).toBe(true);
 	});
 
-	it('note events are type:note (or undefined) — not type:rest', () => {
+	it('note events have contentType:note — not rest', () => {
 		const evs = eval0('note x [0 2 4]');
 		for (const e of evs) {
-			expect(e.type).not.toBe('rest');
+			expect(e.contentType).toBe('note');
 		}
 	});
 
@@ -2134,12 +2143,12 @@ describe('generator naming — reinit()', () => {
 		if (!i.ok) throw new Error(i.error);
 		const before = i.evaluate({ cycleNumber: 0 });
 		if (!before.ok) throw new Error(before.error);
-		expect(before.events[0].note).toBe(60); // degree 0 = C5
+		expect((before.events[0] as any).note).toBe(60); // degree 0 = C5
 
 		i.reinit('note lead [4]'); // degree 4 = G5
 		const after = i.evaluate({ cycleNumber: 1 });
 		if (!after.ok) throw new Error(after.error);
-		expect(after.events[0].note).toBe(67); // G5
+		expect((after.events[0] as any).note).toBe(67); // G5
 	});
 
 	it('reinit preserves runner state for unchanged named generators (lock survives reinit)', () => {
@@ -2149,13 +2158,13 @@ describe('generator naming — reinit()', () => {
 		if (!i.ok) throw new Error(i.error);
 		const r1 = i.evaluate({ cycleNumber: 0 });
 		if (!r1.ok) throw new Error(r1.error);
-		const noteBefore = r1.events[0].note;
+		const noteBefore = (r1.events[0] as any).note;
 
 		i.reinit("note lead [0rand7]'lock");
 		const r2 = i.evaluate({ cycleNumber: 1 });
 		if (!r2.ok) throw new Error(r2.error);
 		// Same locked value should be used
-		expect(r2.events[0].note).toBe(noteBefore);
+		expect((r2.events[0] as any).note).toBe(noteBefore);
 	});
 });
 
@@ -2167,7 +2176,7 @@ describe('derived generator — produces parallel events', () => {
 		// lead: degrees 0,1,2,3 → C5,D5,E5,F5 = 60,62,64,65
 		// over: same degrees + 2 → 2,3,4,5 → E5,F5,G5,A5 = 64,65,67,69
 		expect(r.events).toHaveLength(8);
-		const sorted = r.events.map((e) => e.note).sort((a, b) => a - b);
+		const sorted = r.events.map((e) => (e as any).note).sort((a, b) => a - b);
 		expect(sorted).toEqual([60, 62, 64, 64, 65, 65, 67, 69]);
 	});
 });
@@ -2191,9 +2200,9 @@ describe('loopId — pattern name on ScheduledEvent', () => {
 
 	it('rest events do not carry loopId', () => {
 		const events = eval0('note x [_ 0]');
-		const rest = events.find((e) => e.type === 'rest');
+		const rest = events.find((e) => e.contentType === 'rest');
 		expect(rest).toBeDefined();
-		expect(rest!.loopId).toBeUndefined();
+		expect((rest as { loopId?: unknown }).loopId).toBeUndefined();
 	});
 
 	it('multiple patterns each carry their own loopId', () => {
@@ -2202,5 +2211,146 @@ describe('loopId — pattern name on ScheduledEvent', () => {
 		const bassEvs = events.filter((e) => e.loopId === 'bass');
 		expect(leadEvs).toHaveLength(1);
 		expect(bassEvs).toHaveLength(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Content types — mono, sample, slice, cloud (issue #19)
+// ---------------------------------------------------------------------------
+
+describe('mono content type', () => {
+	it('mono events have contentType: mono', () => {
+		for (const e of eval0('mono bass [0 2 4]')) {
+			expect(e.contentType).toBe('mono');
+		}
+	});
+
+	it('mono ignores legato — duration equals full slot', () => {
+		// mono: no legato scaling, duration = slot = 1/3
+		const ds = eval0('mono x [0 2 4]').map((e) => e.duration);
+		for (const d of ds) expect(d).toBeCloseTo(1 / 3);
+	});
+
+	it("mono with 'legato modifier still uses full slot (legato ignored)", () => {
+		const ds = eval0("mono x [0 2 4]'legato(0.5)").map((e) => e.duration);
+		for (const d of ds) expect(d).toBeCloseTo(1 / 3);
+	});
+
+	it('mono events carry note field', () => {
+		const evs = eval0('mono x [0]');
+		expect(evs[0].contentType).toBe('mono');
+		expect((evs[0] as { note: number }).note).toBeGreaterThanOrEqual(0);
+	});
+});
+
+describe('sample content type', () => {
+	it('sample events have contentType: sample', () => {
+		for (const e of eval0('sample drums [\\kick \\hat]')) {
+			expect(e.contentType).toBe('sample');
+		}
+	});
+
+	it('sample list [\\kick \\hat] emits bufferName per event', () => {
+		const evs = eval0('sample drums [\\kick \\hat]') as SampleEvent[];
+		expect(evs[0].bufferName).toBe('kick');
+		expect(evs[1].bufferName).toBe('hat');
+	});
+
+	it('sample emits correct number of events', () => {
+		expect(eval0('sample drums [\\kick \\hat \\snare]')).toHaveLength(3);
+	});
+
+	it('sample events carry loopId', () => {
+		for (const e of eval0('sample drums [\\kick]')) {
+			expect(e.loopId).toBe('drums');
+		}
+	});
+
+	it('sample events are evenly spaced', () => {
+		const evs = eval0('sample drums [\\kick \\hat]');
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.5);
+	});
+
+	it('@buf on sample is a semantic error', () => {
+		const inst = createInstance('@buf(\\x) sample drums [\\kick]');
+		expect(inst.ok).toBe(false);
+	});
+});
+
+describe('slice content type', () => {
+	it('slice events have contentType: slice', () => {
+		for (const e of eval0('slice drums [0 2 4]')) {
+			expect(e.contentType).toBe('slice');
+		}
+	});
+
+	it('slice list [0 2 4] emits sliceIndex per event', () => {
+		const evs = eval0('slice drums [0 2 4]') as SliceEvent[];
+		expect(evs[0].sliceIndex).toBe(0);
+		expect(evs[1].sliceIndex).toBe(2);
+		expect(evs[2].sliceIndex).toBe(4);
+	});
+
+	it("'numSlices sets numSlices on all events", () => {
+		const evs = eval0("slice drums [0 2]'numSlices(16)") as SliceEvent[];
+		expect(evs[0].numSlices).toBe(16);
+		expect(evs[1].numSlices).toBe(16);
+	});
+
+	it('@buf(\\myloop) sets bufferName on slice events', () => {
+		const evs = eval0('@buf(\\myloop) slice drums [0 2]') as SliceEvent[];
+		expect(evs[0].bufferName).toBe('myloop');
+		expect(evs[1].bufferName).toBe('myloop');
+	});
+
+	it('slice without @buf has undefined bufferName', () => {
+		const evs = eval0('slice drums [0 2]') as SliceEvent[];
+		expect(evs[0].bufferName).toBeUndefined();
+	});
+
+	it('slice events carry loopId', () => {
+		for (const e of eval0('slice drums [0 4]')) {
+			expect(e.loopId).toBe('drums');
+		}
+	});
+});
+
+describe('cloud content type', () => {
+	it('cloud emits one CloudEvent per cycle', () => {
+		const evs = eval0('cloud atmos []');
+		expect(evs).toHaveLength(1);
+		expect(evs[0].contentType).toBe('cloud');
+	});
+
+	it('cloud event has beatOffset 0 and duration 1', () => {
+		const ev = eval0('cloud atmos []')[0] as CloudEvent;
+		expect(ev.beatOffset).toBeCloseTo(0);
+		expect(ev.duration).toBeCloseTo(1);
+	});
+
+	it('@buf(\\myloop) sets bufferName on cloud event', () => {
+		const evs = eval0('@buf(\\myloop) cloud atmos []') as CloudEvent[];
+		expect(evs[0].bufferName).toBe('myloop');
+	});
+
+	it('cloud without @buf has undefined bufferName', () => {
+		const ev = eval0('cloud atmos []')[0] as CloudEvent;
+		expect(ev.bufferName).toBeUndefined();
+	});
+
+	it('cloud events carry loopId', () => {
+		const ev = eval0('cloud atmos []')[0];
+		expect(ev.loopId).toBe('atmos');
+	});
+
+	it('cloud emits one event per cycle across multiple cycles', () => {
+		const i = inst('cloud atmos []');
+		for (let c = 0; c < 4; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			expect(r.events).toHaveLength(1);
+			expect(r.events[0].contentType).toBe('cloud');
+		}
 	});
 });

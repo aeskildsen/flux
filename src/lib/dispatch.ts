@@ -6,7 +6,7 @@
  */
 
 import { midiToFreq } from '$lib/scales';
-import type { ScheduledEvent } from '$lib/lang/evaluator';
+import type { ScheduledEvent, NoteEvent, MonoEvent } from '$lib/lang/evaluator';
 
 export type ParamSpec = {
 	min?: number;
@@ -18,6 +18,13 @@ export type ParamSpec = {
 
 export type SynthDefMeta = {
 	specs?: Record<string, ParamSpec>;
+};
+
+/** Metadata for a loaded audio buffer. */
+export type BufferEntry = {
+	bufferId: number;
+	channels: 1 | 2;
+	name: string;
 };
 
 /**
@@ -114,7 +121,7 @@ export function genEventStrides(
 }
 
 /**
- * Build the OSC parameter object for a note event.
+ * Build the OSC parameter object for a pitched event (note or mono).
  *
  * Priority (lowest → highest):
  *   1. SynthDef metadata defaults (from specs[param].default)
@@ -124,7 +131,7 @@ export function genEventStrides(
  * The legacy `note` key is never sent; `freq` is the correct SC convention.
  */
 export function buildOscParams(
-	ev: Pick<ScheduledEvent, 'note' | 'cent' | 'params'>,
+	ev: Pick<NoteEvent | MonoEvent, 'note' | 'cent' | 'params'>,
 	synthdefMeta: SynthDefMeta | undefined
 ): Record<string, number> {
 	if (!Number.isFinite(ev.note) || ev.note < 0) {
