@@ -24,7 +24,7 @@ Boot the engine first (browser autoplay policy requires a user interaction), the
 - [SuperSonic](https://github.com/samaaron/supersonic) loaded from CDN at runtime
   - `supersonic-scsynth` — client API
   - `supersonic-scsynth-core` — WASM engine + AudioWorklet (GPL-3.0)
-  - `supersonic-scsynth-synthdefs` — 127 Sonic Pi synth definitions
+- Flux-authored synthdefs in `synthdefs/*.scd`, compiled to `static/compiled_synthdefs/`
 
 ## Developing
 

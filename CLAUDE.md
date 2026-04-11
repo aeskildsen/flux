@@ -10,7 +10,7 @@ Key SuperSonic concepts:
 
 - `supersonic-scsynth` — Client API, workers, and metrics web component (MIT)
 - `supersonic-scsynth-core` — WASM engine + AudioWorklet (GPL-3.0)
-- `supersonic-scsynth-synthdefs` — 127 Sonic Pi synth definitions (MIT)
+- Flux ships its own synth definitions from `synthdefs/*.scd`, compiled to `static/compiled_synthdefs/` by `scripts/compile_synthdefs.scd`. The Sonic Pi synthdef CDN bundle is not used.
 - Audio can only start after a user interaction (browser autoplay policy); always call `supersonic.init()` from a click/keypress handler.
 
 ## Commands
