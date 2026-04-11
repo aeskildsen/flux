@@ -85,7 +85,7 @@ Stop here and wait for the user's response. Only apply the mechanical additions 
 
 ### Step 4: Show the user what will be filed
 
-Present the issue title and body in the conversation before running `gh issue create`. Ask for confirmation if anything was changed or added during the quality gate step.
+Present the issue title and body in the conversation before running `gh issue create`. Use AskUserQuestion to ask for confirmation if anything was changed or added during the quality gate step.
 
 ### Step 5: File it
 
