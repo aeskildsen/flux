@@ -102,23 +102,26 @@ describe('setStatement', () => {
 });
 
 describe('name conventions — \\symbol vs bare identifier', () => {
-	// Scale/key positions take bare identifiers only (closed, built-in vocabulary).
-	// \\symbol is reserved for SynthDef/FX names (open, runtime registry).
+	// Scale/key positions conventionally take bare identifiers (closed, built-in vocabulary).
+	// \\symbol is used by @buf(\name) for buffer selection (open, runtime registry).
+	// The parser accepts \\symbol in any decorator arg position; the evaluator enforces semantics.
 
 	it('set scale(minor) — bare identifier is accepted', () => {
 		expect(parse('set scale(minor)').parseErrors).toHaveLength(0);
 	});
 
-	it('set scale(\\minor) — symbol is a parse error in scale position', () => {
-		expect(parse('set scale(\\minor)').parseErrors.length).toBeGreaterThan(0);
+	it('set scale(\\minor) — symbol parses without error (evaluator rejects semantically)', () => {
+		// Grammar accepts \symbol in all decorator positions; semantic validation is evaluator's job.
+		expect(parse('set scale(\\minor)').parseErrors).toHaveLength(0);
 	});
 
 	it('@scale(minor) — bare identifier is accepted inline', () => {
 		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
 	});
 
-	it('@scale(\\minor) — symbol is a parse error in @scale position', () => {
-		expect(parse('@scale(\\minor) note lead [0 1 2]').parseErrors.length).toBeGreaterThan(0);
+	it('@scale(\\minor) — symbol parses without error (evaluator rejects semantically)', () => {
+		// Grammar accepts \symbol in all decorator positions; semantic validation is evaluator's job.
+		expect(parse('@scale(\\minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
 	});
 
 	it('@scale(dorian) — other scale names work as bare identifiers', () => {

@@ -427,14 +427,16 @@ class FluxParser extends CstParser {
 	});
 
 	decoratorArg = this.RULE('decoratorArg', () => {
-		// pitchClass (e.g. g#, Ab), bare identifier (e.g. minor, lydian), or numeric generator.
-		// \symbol is intentionally NOT accepted here — scale/key names are closed, built-in vocabulary.
+		// pitchClass (e.g. g#, Ab), bare identifier (e.g. minor, lydian), \symbol (e.g. \myloop),
+		// or numeric generator.
 		this.OR([
 			// pitchClass: a single-char identifier [a-gA-G] optionally followed by Sharp/Flat
 			{
 				GATE: () => this.isPitchClass(),
 				ALT: () => this.SUBRULE(this.pitchClass)
 			},
+			// \symbol — for @buf(\myloop) and similar buffer-selection decorators
+			{ ALT: () => this.CONSUME(Symbol) },
 			// Scale names and other bare identifiers (e.g. lydian, minor, dorian)
 			{ ALT: () => this.CONSUME(Identifier) },
 			// Numeric generator expressions: @root(3rand7), set tempo(120)
@@ -576,9 +578,9 @@ class FluxParser extends CstParser {
 	});
 
 	sequenceElement = this.RULE('sequenceElement', () => {
-		// A degree literal (possibly with accidentals), a rest (_), or a generator
-		// expression, with an optional `?weight` for 'wran lists and an optional
-		// `!n` repeat count.
+		// A degree literal (possibly with accidentals), a rest (_), a \symbol buffer ref,
+		// or a generator expression, with an optional `?weight` for 'wran lists and an
+		// optional `!n` repeat count.
 		this.OR([
 			// rest: a silent slot — no pitch, no synth
 			{ ALT: () => this.CONSUME(Rest) },
@@ -587,6 +589,8 @@ class FluxParser extends CstParser {
 				GATE: () => this.hasDegreeAccidental(),
 				ALT: () => this.SUBRULE(this.degreeLiteral)
 			},
+			// \symbol buffer ref — for sample lists [\kick \hat \snare]
+			{ ALT: () => this.CONSUME(Symbol) },
 			// plain generator expression
 			{ ALT: () => this.SUBRULE(this.generatorExpr) }
 		]);

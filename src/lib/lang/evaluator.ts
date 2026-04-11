@@ -75,20 +75,73 @@ export type CycleContext = {
 	cycleNumber: number;
 };
 
-export type ScheduledEvent = {
-	note: number;
+/** Shared fields present on all audio-producing events. */
+type BaseEvent = {
 	beatOffset: number; // position within the cycle in beats (0 = cycle start)
-	duration: number; // gate-close time in beats (legato × slot)
-	cent?: number; // pitch deviation in cents (0 = none)
+	duration: number; // gate-close time in beats (legato × slot, or 1/n for buffer events)
 	cycleOffset?: number; // cycle-level offset (for 'at)
 	offsetMs?: number; // ms shift (positive = late, negative = early)
-	mono?: boolean; // if true, send set instead of new synth
-	loopId?: string; // source pattern name — used by mono dispatch to track per-loop node state
-	type?: 'note' | 'fx' | 'rest'; // 'fx' for FX events, 'rest' for silent slots
-	synthdef?: string; // SynthDef name: set on note events by loop(\name)/line(\name), and on FX events
-	params?: Record<string, number>; // SynthDef params: from "param modifiers (note events) or FX pipe (fx events)
-	wetDry?: number; // wet/dry mix 0–100 (only for type:'fx'; undefined = 100% wet)
+	loopId?: string; // source pattern name — used by mono/cloud dispatch to track per-loop node state
+	synthdef?: string; // SynthDef name override from note(\name) / sample(\name) etc.
+	params?: Record<string, number>; // SynthDef params from "param modifiers
 };
+
+/** Polyphonic pitched event — new synth instance per event. */
+export type NoteEvent = BaseEvent & {
+	contentType: 'note';
+	note: number; // MIDI note number
+	cent?: number; // pitch deviation in cents
+};
+
+/** Monophonic pitched event — single persistent synth node, updated via .set. */
+export type MonoEvent = BaseEvent & {
+	contentType: 'mono';
+	note: number; // MIDI note number
+	cent?: number; // pitch deviation in cents
+};
+
+/** Buffer playback event — triggers a one-shot sample by buffer name. */
+export type SampleEvent = BaseEvent & {
+	contentType: 'sample';
+	bufferName: string; // \symbol name of the buffer (without leading \)
+};
+
+/** Beat-sliced buffer playback event. */
+export type SliceEvent = BaseEvent & {
+	contentType: 'slice';
+	sliceIndex: number; // integer index into the slice grid
+	bufferName?: string; // buffer override from @buf; undefined = use default
+	numSlices?: number; // grid size from 'numSlices modifier
+};
+
+/** Granular synthesis event — single persistent node, updated via .set. */
+export type CloudEvent = BaseEvent & {
+	contentType: 'cloud';
+	bufferName?: string; // buffer override from @buf; undefined = use default
+};
+
+/** Silent rest slot — advances the clock but produces no sound. */
+export type RestEvent = {
+	contentType: 'rest';
+	beatOffset: number;
+	duration: number;
+	cycleOffset?: number;
+};
+
+/** Insert FX routing event. */
+export type FxEvent = BaseEvent & {
+	contentType: 'fx';
+	wetDry?: number; // wet/dry mix 0–100; undefined = 100% wet
+};
+
+export type ScheduledEvent =
+	| NoteEvent
+	| MonoEvent
+	| SampleEvent
+	| SliceEvent
+	| CloudEvent
+	| RestEvent
+	| FxEvent;
 
 export type EvalCycleResult =
 	| { ok: true; events: ScheduledEvent[]; done: boolean }
@@ -468,7 +521,16 @@ type CompiledRest = {
 	weight: RunnerState;
 };
 
-type CompiledElement = CompiledScalar | CompiledSubsequence | CompiledRest;
+/** A \symbol element in a sample list — carries a buffer name. */
+type CompiledSymbol = {
+	kind: 'symbol';
+	name: string; // buffer name without leading \
+	/** Per-element weight for parent 'wran selection (default: 1). */
+	weight: RunnerState;
+	beatOverride?: number;
+};
+
+type CompiledElement = CompiledScalar | CompiledSubsequence | CompiledRest | CompiledSymbol;
 
 /**
  * Read the `!n` inline-repetition count from a sequenceElement CST node.
@@ -493,6 +555,13 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 	const restToks = (elem.children.Rest as IToken[]) ?? [];
 	if (restToks.length > 0) {
 		return { kind: 'rest', weight: makeRunner(() => 1, { kind: 'lock' }) };
+	}
+
+	// Check for \symbol buffer ref (for sample lists)
+	const symTok = ((elem.children.Symbol as IToken[]) ?? [])[0];
+	if (symTok) {
+		const name = symTok.image.slice(1); // strip leading \
+		return { kind: 'symbol', name, weight: makeRunner(() => 1, { kind: 'lock' }) };
 	}
 
 	let accidentalOffset = 0;
@@ -969,6 +1038,8 @@ function compileTransposition(patternNode: CstNode): CompiledTransposition {
 /** List-level traversal modifier. */
 type TraversalMode = 'seq' | 'shuf' | 'pick' | 'wran';
 
+type ContentType = 'note' | 'mono' | 'sample' | 'slice' | 'cloud';
+
 type CompiledPattern = {
 	name: string; // generator name (mandatory since issue #2)
 	parentName: string | null; // parent name for derived (child:parent) generators; null = plain
@@ -977,9 +1048,11 @@ type CompiledPattern = {
 	traversal: TraversalMode;
 	stutRunner: RunnerState | null; // null = no stutter
 	maybeRunner: RunnerState | null; // null = no maybe filter
-	legatoRunner: RunnerState | null; // null = default legato (1.0)
+	legatoRunner: RunnerState | null; // null = default legato (0.8 for note)
 	offsetRunner: RunnerState | null; // null = no offset
-	mono: boolean;
+	contentType: ContentType; // content type keyword
+	bufName: string | null; // buffer name from @buf decorator; null = use default
+	numSlicesRunner: RunnerState | null; // 'numSlices modifier (slice only); null = not set
 	atOffset: number; // cycle offset from 'at modifier
 	repeat: number | null; // null = loop indefinitely, n = finite play count
 	transposition: CompiledTransposition;
@@ -1011,9 +1084,30 @@ function collectPatternModifiers(patternNode: CstNode): CstNode[] {
 	return [...seqMods, ...directMods, ...contMods];
 }
 
+/**
+ * Extract a \symbol argument from a @buf decorator in the given decorator layers.
+ * Returns the buffer name (without leading \) if found, or null.
+ */
+function extractBufName(decoratorLayers: CstNode[][]): string | null {
+	for (const layer of decoratorLayers) {
+		for (const dec of layer) {
+			const idToks = (dec.children.Identifier as IToken[]) ?? [];
+			if (idToks[0]?.image !== 'buf') continue;
+			// Found @buf — extract the \symbol argument
+			const args = (dec.children.decoratorArg as CstNode[]) ?? [];
+			for (const arg of args) {
+				const symTok = ((arg.children.Symbol as IToken[]) ?? [])[0];
+				if (symTok) return symTok.image.slice(1); // strip leading \
+			}
+		}
+	}
+	return null;
+}
+
 function compilePattern(
 	patternNode: CstNode,
-	parentPattern?: CompiledPattern
+	parentPattern?: CompiledPattern,
+	decoratorLayers?: CstNode[][]
 ): CompiledPattern | string {
 	const seqNode = (
 		(patternNode.children.sequenceExpr ?? patternNode.children.sequenceGenerator) as
@@ -1069,7 +1163,9 @@ function compilePattern(
 		traversal = parentPattern.traversal;
 	}
 
-	if (compiled.length === 0) return 'pattern sequence is empty';
+	// cloud uses an empty list [] — its events are generated per cycle without a sequence
+	const isCloud = ((patternNode.children.Cloud as IToken[]) ?? [])[0] !== undefined;
+	if (compiled.length === 0 && !isCloud) return 'pattern sequence is empty';
 
 	// Pattern-level modifiers (direct + continuation)
 	const allMods = collectPatternModifiers(patternNode);
@@ -1089,7 +1185,7 @@ function compilePattern(
 	// 'legato
 	let legatoRunner: RunnerState | null = null;
 	if (hasModifier(allMods, 'legato')) {
-		legatoRunner = extractModifierScalar(allMods, 'legato', 1.0, 0);
+		legatoRunner = extractModifierScalar(allMods, 'legato', 0.8, 0);
 	}
 
 	// 'offset
@@ -1098,9 +1194,28 @@ function compilePattern(
 		offsetRunner = extractModifierScalar(allMods, 'offset', 0, 0);
 	}
 
-	// mono: detected from content type keyword token on the patternStatement node
-	const monoTok = ((patternNode.children.Mono as IToken[]) ?? [])[0];
-	const mono = monoTok !== undefined;
+	// Content type: detected from content type keyword token on the patternStatement node
+	const contentType: ContentType = ((patternNode.children.Mono as IToken[]) ?? [])[0]
+		? 'mono'
+		: ((patternNode.children.Sample as IToken[]) ?? [])[0]
+			? 'sample'
+			: ((patternNode.children.Slice as IToken[]) ?? [])[0]
+				? 'slice'
+				: ((patternNode.children.Cloud as IToken[]) ?? [])[0]
+					? 'cloud'
+					: 'note';
+
+	// @buf decorator: valid on slice and cloud; semantic error on sample
+	const bufName = decoratorLayers ? extractBufName(decoratorLayers) : null;
+	if (bufName !== null && contentType === 'sample') {
+		return '@buf is not valid on sample — buffer selection in sample is per-event inside the list';
+	}
+
+	// 'numSlices modifier (slice only)
+	let numSlicesRunner: RunnerState | null = null;
+	if (hasModifier(allMods, 'numSlices')) {
+		numSlicesRunner = extractModifierScalar(allMods, 'numSlices', 1, 0);
+	}
 
 	// 'at
 	const atOffset = extractAtOffset(allMods);
@@ -1159,7 +1274,9 @@ function compilePattern(
 		maybeRunner,
 		legatoRunner,
 		offsetRunner,
-		mono,
+		contentType,
+		bufName,
+		numSlicesRunner,
 		atOffset,
 		repeat,
 		transposition,
@@ -1265,16 +1382,15 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 	return { synthdef, paramRunners, wetDry };
 }
 
-function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number): ScheduledEvent {
+function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number): FxEvent {
 	const params: Record<string, number> = {};
 	for (const { name, runner } of compiledFx.paramRunners) {
 		params[name] = sampleRunner(runner, cycle);
 	}
 	return {
-		note: 0,
+		contentType: 'fx',
 		beatOffset: 0,
 		duration: 0,
-		type: 'fx',
 		synthdef: compiledFx.synthdef,
 		params,
 		wetDry: compiledFx.wetDry,
@@ -1322,12 +1438,14 @@ type SlotParams = {
 	cycle: number;
 	scaleCtx: ScaleContext;
 	transposeDelta: number;
-	mono: boolean;
+	contentType: ContentType;
 	loopId: string;
 	offsetMs: number | undefined;
 	cycleOff: number;
 	synthdef: string | null;
 	noteParams: Record<string, number> | undefined;
+	bufName: string | null;
+	numSlices: number | undefined;
 };
 
 /**
@@ -1341,15 +1459,13 @@ function expandSlot(
 	p: SlotParams
 ): ScheduledEvent[] {
 	if (el.kind === 'rest') {
-		return [
-			{
-				note: -1,
-				beatOffset: slotStart,
-				duration: slotDuration,
-				type: 'rest',
-				...(p.cycleOff !== 0 ? { cycleOffset: p.cycleOff } : {})
-			}
-		];
+		const ev: RestEvent = {
+			contentType: 'rest',
+			beatOffset: slotStart,
+			duration: slotDuration
+		};
+		if (p.cycleOff !== 0) ev.cycleOffset = p.cycleOff;
+		return [ev];
 	}
 	if (el.kind === 'sequence') {
 		const ordered = orderedSubElements(el.elements, el.traversal, p.cycle);
@@ -1361,28 +1477,84 @@ function expandSlot(
 		}
 		return out;
 	}
-	// scalar
+
+	if (el.kind === 'symbol') {
+		// \symbol element — only valid in sample lists
+		const beatOffset = el.beatOverride !== undefined ? el.beatOverride : slotStart;
+		const ev: SampleEvent = {
+			contentType: 'sample',
+			bufferName: el.name,
+			beatOffset,
+			duration: slotDuration,
+			loopId: p.loopId
+		};
+		if (p.offsetMs !== undefined && p.offsetMs !== 0) ev.offsetMs = p.offsetMs;
+		if (p.cycleOff !== 0) ev.cycleOffset = p.cycleOff;
+		if (p.synthdef !== null) ev.synthdef = p.synthdef;
+		if (p.noteParams !== undefined) ev.params = p.noteParams;
+		return [ev];
+	}
+
+	// scalar — pitch-bearing element for note, mono, slice
 	const rawDegree = sampleRunner(el.runner, p.cycle);
-	const note = degreeToMidiCtx(rawDegree + p.transposeDelta, p.scaleCtx) + el.accidentalOffset;
 	const beatOffset = el.beatOverride !== undefined ? el.beatOverride : slotStart;
-	const event: ScheduledEvent = {
+
+	if (p.contentType === 'slice') {
+		const ev: SliceEvent = {
+			contentType: 'slice',
+			sliceIndex: Math.round(rawDegree),
+			beatOffset,
+			duration: slotDuration,
+			loopId: p.loopId
+		};
+		if (p.bufName !== null) ev.bufferName = p.bufName;
+		if (p.numSlices !== undefined) ev.numSlices = p.numSlices;
+		if (p.offsetMs !== undefined && p.offsetMs !== 0) ev.offsetMs = p.offsetMs;
+		if (p.cycleOff !== 0) ev.cycleOffset = p.cycleOff;
+		if (p.synthdef !== null) ev.synthdef = p.synthdef;
+		if (p.noteParams !== undefined) ev.params = p.noteParams;
+		return [ev];
+	}
+
+	// note or mono — pitched events
+	const note = degreeToMidiCtx(rawDegree + p.transposeDelta, p.scaleCtx) + el.accidentalOffset;
+	const duration = slotDuration * p.legato;
+
+	if (p.contentType === 'mono') {
+		const ev: MonoEvent = {
+			contentType: 'mono',
+			note,
+			beatOffset,
+			duration,
+			loopId: p.loopId
+		};
+		if (p.scaleCtx.cent !== 0) ev.cent = p.scaleCtx.cent;
+		if (p.offsetMs !== undefined && p.offsetMs !== 0) ev.offsetMs = p.offsetMs;
+		if (p.cycleOff !== 0) ev.cycleOffset = p.cycleOff;
+		if (p.synthdef !== null) ev.synthdef = p.synthdef;
+		if (p.noteParams !== undefined) ev.params = p.noteParams;
+		return [ev];
+	}
+
+	// default: note
+	const ev: NoteEvent = {
+		contentType: 'note',
 		note,
 		beatOffset,
-		duration: slotDuration * p.legato
+		duration
 	};
-	if (p.scaleCtx.cent !== 0) event.cent = p.scaleCtx.cent;
-	if (p.offsetMs !== undefined && p.offsetMs !== 0) event.offsetMs = p.offsetMs;
-	if (p.mono) event.mono = true;
-	if (p.loopId !== undefined) event.loopId = p.loopId;
-	if (p.cycleOff !== 0) event.cycleOffset = p.cycleOff;
-	if (p.synthdef !== null) event.synthdef = p.synthdef;
-	if (p.noteParams !== undefined) event.params = p.noteParams;
-	return [event];
+	if (p.scaleCtx.cent !== 0) ev.cent = p.scaleCtx.cent;
+	if (p.offsetMs !== undefined && p.offsetMs !== 0) ev.offsetMs = p.offsetMs;
+	if (p.loopId !== undefined) ev.loopId = p.loopId;
+	if (p.cycleOff !== 0) ev.cycleOffset = p.cycleOff;
+	if (p.synthdef !== null) ev.synthdef = p.synthdef;
+	if (p.noteParams !== undefined) ev.params = p.noteParams;
+	return [ev];
 }
 
 /**
  * Produce ScheduledEvent[] from a compiled pattern for a given cycle.
- * Handles 'stut, 'maybe, traversal, 'legato, 'offset, 'mono, transposition, accidentals, FX.
+ * Handles 'stut, 'maybe, traversal, 'legato, 'offset, contentType, transposition, accidentals, FX.
  */
 function evaluateCompiledPattern(
 	compiled: CompiledPattern,
@@ -1396,7 +1568,9 @@ function evaluateCompiledPattern(
 		maybeRunner,
 		legatoRunner,
 		offsetRunner,
-		mono,
+		contentType,
+		bufName,
+		numSlicesRunner,
 		atOffset,
 		repeat,
 		paramRunners
@@ -1405,8 +1579,15 @@ function evaluateCompiledPattern(
 	// Sample stutter count once per cycle
 	const stutCount = stutRunner ? Math.max(1, Math.round(sampleRunner(stutRunner, cycle))) : 1;
 
-	// Sample legato once per cycle
-	const legato = legatoRunner ? sampleRunner(legatoRunner, cycle) : 1.0;
+	// Sample legato once per cycle — note defaults to 0.8 (SC Pbind convention); mono ignores it entirely
+	const legato =
+		contentType === 'mono'
+			? 1.0
+			: legatoRunner
+				? sampleRunner(legatoRunner, cycle)
+				: contentType === 'note'
+					? 0.8
+					: 1.0;
 
 	// Sample offset once per cycle
 	const offsetMs = offsetRunner ? sampleRunner(offsetRunner, cycle) : undefined;
@@ -1459,27 +1640,52 @@ function evaluateCompiledPattern(
 		return { events: [], done: true };
 	}
 
-	for (let rep = 0; rep < (isFinite ? Math.min(repeatCount, 999) : 1); rep++) {
-		const cycleOff = atOffset + rep;
-		for (let i = 0; i < n; i++) {
-			// Apply 'maybe filter
-			if (maybeProb !== null && Math.random() >= maybeProb) continue;
+	// Sample numSlices once per cycle (slice only)
+	const numSlices = numSlicesRunner
+		? Math.max(1, Math.round(sampleRunner(numSlicesRunner, cycle)))
+		: undefined;
 
-			const el = expandedElements[i];
-			events.push(
-				...expandSlot(el, i * slotDuration, slotDuration, {
-					legato,
-					cycle,
-					scaleCtx,
-					transposeDelta,
-					mono,
-					loopId,
-					offsetMs,
-					cycleOff,
-					synthdef: compiled.synthdef,
-					noteParams
-				})
-			);
+	// cloud: emit one persistent-node event per cycle regardless of list contents
+	if (contentType === 'cloud') {
+		for (let rep = 0; rep < (isFinite ? Math.min(repeatCount, 999) : 1); rep++) {
+			const cycleOff = atOffset + rep;
+			const ev: CloudEvent = {
+				contentType: 'cloud',
+				beatOffset: 0,
+				duration: 1,
+				loopId
+			};
+			if (bufName !== null) ev.bufferName = bufName;
+			if (cycleOff !== 0) ev.cycleOffset = cycleOff;
+			if (compiled.synthdef !== null) ev.synthdef = compiled.synthdef;
+			if (noteParams !== undefined) ev.params = noteParams;
+			events.push(ev);
+		}
+	} else {
+		for (let rep = 0; rep < (isFinite ? Math.min(repeatCount, 999) : 1); rep++) {
+			const cycleOff = atOffset + rep;
+			for (let i = 0; i < n; i++) {
+				// Apply 'maybe filter
+				if (maybeProb !== null && Math.random() >= maybeProb) continue;
+
+				const el = expandedElements[i];
+				events.push(
+					...expandSlot(el, i * slotDuration, slotDuration, {
+						legato,
+						cycle,
+						scaleCtx,
+						transposeDelta,
+						contentType,
+						loopId,
+						offsetMs,
+						cycleOff,
+						synthdef: compiled.synthdef,
+						noteParams,
+						bufName,
+						numSlices
+					})
+				);
+			}
 		}
 	}
 
@@ -1522,7 +1728,7 @@ function compileDecoratorBlock(
 
 	const patternNodes = (blockNode.children.patternStatement as CstNode[]) ?? [];
 	for (const pn of patternNodes) {
-		const compiled = compilePattern(pn);
+		const compiled = compilePattern(pn, undefined, layers);
 		if (typeof compiled !== 'string') {
 			results.push({ compiled, decoratorLayers: layers });
 		}
@@ -1736,8 +1942,9 @@ function makeEvaluator(
 					? resolveDecoratorContext(entry.decoratorLayers, globalCtx, cycleNumber)
 					: globalCtx;
 
-			const { elements } = compiled;
-			if (elements.length === 0) continue;
+			const { elements, contentType } = compiled;
+			// cloud patterns have an empty list [] by convention — don't skip them
+			if (elements.length === 0 && contentType !== 'cloud') continue;
 
 			const { events, done } = evaluateCompiledPattern(compiled, scaleCtx, cycleNumber);
 			allEvents.push(...events);
