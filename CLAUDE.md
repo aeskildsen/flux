@@ -58,7 +58,7 @@ E2e tests live in `e2e/` and use Playwright directly (builds the app before runn
 
 ## DSL Documentation
 
-The Flux DSL is documented in `docs/DSL-spec.md` — this is the single source of truth for language design. `docs/DSL-truthtables.md` and `docs/DSL-grammar.ebnf` flesh out the spec into concrete implementation references. Always consult these documents when working on the parser, evaluator, or anything DSL-related. Do not infer DSL behaviour from the codebase; if there is a conflict, the spec rules (ask user if in doubt).
+The Flux DSL is documented in `docs/DSL-spec.md` — this is the single source of truth for language design. `docs/DSL-truthtables.md` fleshes out the spec into a concrete implementation reference. Always consult these documents when working on the parser, evaluator, or anything DSL-related. Do not infer DSL behaviour from the codebase; if there is a conflict, the spec rules (ask user if in doubt).
 
 **Keeping the documents in sync:** any change to the spec that affects observable behaviour must be reflected in the corresponding truth table section, and vice versa. The two files must never contradict each other.
 

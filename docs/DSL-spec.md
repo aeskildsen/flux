@@ -23,6 +23,10 @@ Generators are objects that yield a stream of values for use in synth instantiat
 
 Unlike SuperCollider patterns/streams, all generators yield indefinitely. They are never exhausted — it's the caller's responsibility to stop polling when a phrase needs to end.
 
+`[]` is the only non-scalar generator. All other generator forms — numeric literals, `rand`, `gau`, `step`, `mul`, `lin`, `geo`, etc. — are **scalar**: they yield a single value per poll and make no claim about time. `[]` does both: it yields values _and_ assigns each a temporal position within the cycle. This is why nesting `[]` inside `[]` subdivides time (the inner list fills its parent slot with multiple timed events) rather than violating the generator contract — the inner list's temporal extent is simply scaled to fit the outer slot.
+
+This scalar/non-scalar distinction is load-bearing elsewhere in the spec: the right-hand side of transposition and the `'stut` count argument both require a scalar generator and reject `[...]` outright.
+
 ### Whitespace rules
 
 > _See truth tables [12 (Whitespace)](DSL-truthtables.md#12-whitespace-truth-table)._
