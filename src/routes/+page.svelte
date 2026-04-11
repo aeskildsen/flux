@@ -81,17 +81,6 @@
 				appendLog('Some synths could not be loaded — see browser console for details', 'error');
 			}
 
-			// Load the CDN synthdef used for playback
-			try {
-				await sc.loadSynthDef('sonic-pi-prophet');
-			} catch (e) {
-				console.error('[handleBoot] sonic-pi-prophet load failed:', e);
-				appendLog(
-					'CDN synth "sonic-pi-prophet" failed to load — default synth unavailable. Check network.',
-					'error'
-				);
-			}
-
 			// Instantiate master bus FX in chain order on the master group.
 			// ReplaceOut reads from + replaces the output bus, so order matters.
 			// We read FxPanel's persisted state from localStorage to restore param values.
@@ -282,7 +271,7 @@
 				const { ev: rawEv, gateDurationSeconds } = event;
 				// rest/fx are filtered to skip:true in gen.ts — rawEv is always a BaseEvent here
 				const ev = rawEv as Extract<typeof rawEv, { synthdef?: unknown; offsetMs?: unknown }>;
-				const synthdef = ev.synthdef ?? 'sonic-pi-prophet';
+				const synthdef = ev.synthdef ?? 'fm';
 				const adjustedTime = ntpTime + (ev.offsetMs ?? 0) / 1000;
 
 				if (ev.contentType === 'mono') {
