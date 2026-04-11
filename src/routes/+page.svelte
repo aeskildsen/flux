@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { asset } from '$app/paths';
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
@@ -73,7 +74,7 @@
 			try {
 				await Promise.all(
 					Object.keys(data.synthdefs).map((name) =>
-						sc!.loadSynthDef(`/compiled_synthdefs/${name}.scsyndef`)
+						sc!.loadSynthDef(asset(`/compiled_synthdefs/${name}.scsyndef`))
 					)
 				);
 			} catch (e) {

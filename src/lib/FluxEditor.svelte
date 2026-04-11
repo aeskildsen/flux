@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { asset } from '$app/paths';
 	import type * as Monaco from 'monaco-editor';
 	import { registerFluxLanguage, chooseCommentAction } from '$lib/monaco-adapter.js';
 
@@ -25,13 +26,13 @@
 			self.MonacoEnvironment = {
 				getWorkerUrl(_moduleId: string, label: string) {
 					if (label === 'css' || label === 'scss' || label === 'less')
-						return '/monacoeditorwork/css.worker.bundle.js';
+						return asset('/monacoeditorwork/css.worker.bundle.js');
 					if (label === 'html' || label === 'handlebars' || label === 'razor')
-						return '/monacoeditorwork/html.worker.bundle.js';
-					if (label === 'json') return '/monacoeditorwork/json.worker.bundle.js';
+						return asset('/monacoeditorwork/html.worker.bundle.js');
+					if (label === 'json') return asset('/monacoeditorwork/json.worker.bundle.js');
 					if (label === 'typescript' || label === 'javascript')
-						return '/monacoeditorwork/ts.worker.bundle.js';
-					return '/monacoeditorwork/editor.worker.bundle.js';
+						return asset('/monacoeditorwork/ts.worker.bundle.js');
+					return asset('/monacoeditorwork/editor.worker.bundle.js');
 				}
 			};
 

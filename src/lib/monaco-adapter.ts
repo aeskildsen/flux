@@ -57,7 +57,7 @@ function resolveColorAlpha(cssVarName: string, alpha: number): string {
 export function createFluxTheme(monaco: typeof Monaco): void {
 	monaco.editor.defineTheme('flux-dark', {
 		base: 'vs-dark',
-		inherit: false,
+		inherit: true,
 		rules: [
 			{ token: 'keyword', foreground: resolveColor('--syntax-keyword-structural') },
 			{ token: 'keyword.operator', foreground: resolveColor('--syntax-generator') },
