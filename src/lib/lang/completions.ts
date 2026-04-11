@@ -137,15 +137,9 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 	{
 		label: 'pick',
 		insertText: 'pick',
-		detail: "'pick — random element each time",
-		documentation: 'Like Prand.',
-		kind: 'keyword'
-	},
-	{
-		label: 'wran',
-		insertText: 'wran',
-		detail: "'wran — weighted random selection",
-		documentation: 'Use ?weight on elements to assign relative weights.',
+		detail: "'pick — random element each time (optionally weighted)",
+		documentation:
+			'Uniform random by default. Use `?n` on elements to assign non-negative weights; unweighted elements default to 1. Like Prand / Pwrand.',
 		kind: 'keyword'
 	},
 	{

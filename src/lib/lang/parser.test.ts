@@ -384,7 +384,7 @@ describe("modifierSuffix — timing: 'lock and 'eager", () => {
 	});
 });
 
-describe("modifierSuffix — sequence traversal: 'shuf, 'pick, 'wran", () => {
+describe("modifierSuffix — sequence traversal: 'shuf, 'pick", () => {
 	it("parses 'shuf on a list", () => {
 		expect(parse("note lead [0 1 2 3]'shuf").parseErrors).toHaveLength(0);
 	});
@@ -393,12 +393,28 @@ describe("modifierSuffix — sequence traversal: 'shuf, 'pick, 'wran", () => {
 		expect(parse("note lead [0 1 2 3]'pick").parseErrors).toHaveLength(0);
 	});
 
-	it("parses 'wran on a list with weights", () => {
-		expect(parse("note lead [0?2 1?1 2?3]'wran").parseErrors).toHaveLength(0);
+	it("parses 'pick on a list with weights", () => {
+		expect(parse("note lead [0?2 1?1 2?3]'pick").parseErrors).toHaveLength(0);
 	});
 
-	it("parses 'wran on a list without explicit weights", () => {
-		expect(parse("note lead [0 1 2]'wran").parseErrors).toHaveLength(0);
+	it("parses 'pick on a list with a mix of weighted and unweighted elements", () => {
+		expect(parse("note lead [0 1?2 2]'pick").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'pick with a float weight", () => {
+		expect(parse("note lead [0?0.5 1?1]'pick").parseErrors).toHaveLength(0);
+	});
+
+	it('parses ?0 (zero-weight element)', () => {
+		expect(parse("note lead [0?0 1?1]'pick").parseErrors).toHaveLength(0);
+	});
+
+	it('rejects negative weights: ?-1', () => {
+		expect(parse("note lead [0?-1 1?1]'pick").parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('rejects generator-expression weights: ?(1rand3)', () => {
+		expect(parse("note lead [0?(1rand3) 1?1]'pick").parseErrors.length).toBeGreaterThan(0);
 	});
 });
 

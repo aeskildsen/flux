@@ -46,8 +46,7 @@
  * - 'stut(n): repeat each event n times; total events = N×k, each slot = 1/(N×k)
  * - 'maybe(p): pass each event with probability p; empty array is ok
  * - 'shuf: shuffle elements once per cycle, then traverse in order
- * - 'pick: pick a random element each slot
- * - 'wran: weighted random selection (uses ? weight syntax per element)
+ * - 'pick: random element each slot (with optional ? weights for weighted selection)
  * - 'legato(n): gate-close time = n × slot
  * - 'offset(ms): shift all event times by ms
  * - 'mono (via `mono` content type keyword): single synth node; events carry mono:true
@@ -497,7 +496,7 @@ type CompiledScalar = {
 	runner: RunnerState;
 	/** Accidental semitone offset (0 = none). Applied before scale lookup. */
 	accidentalOffset: number;
-	/** Per-element weight for 'wran (default: 1). */
+	/** Per-element weight for 'pick (default: 1). */
 	weight: RunnerState;
 	/**
 	 * Absolute beat offset from cycle start, set by the `@` timing syntax.
@@ -510,14 +509,14 @@ type CompiledSubsequence = {
 	kind: 'sequence';
 	elements: CompiledElement[];
 	traversal: TraversalMode;
-	/** Per-element weight for parent 'wran selection (default: 1). */
+	/** Per-element weight for parent 'pick selection (default: 1). */
 	weight: RunnerState;
 };
 
 /** A silent slot — occupies time but spawns no synth. */
 type CompiledRest = {
 	kind: 'rest';
-	/** Per-element weight for parent 'wran selection (default: 1). */
+	/** Per-element weight for parent 'pick selection (default: 1). */
 	weight: RunnerState;
 };
 
@@ -525,7 +524,7 @@ type CompiledRest = {
 type CompiledSymbol = {
 	kind: 'symbol';
 	name: string; // buffer name without leading \
-	/** Per-element weight for parent 'wran selection (default: 1). */
+	/** Per-element weight for parent 'pick selection (default: 1). */
 	weight: RunnerState;
 	beatOverride?: number;
 };
@@ -605,7 +604,9 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		let subTraversal: TraversalMode = 'seq';
 		if (hasModifier(subListMods, 'shuf')) subTraversal = 'shuf';
 		else if (hasModifier(subListMods, 'pick')) subTraversal = 'pick';
-		else if (hasModifier(subListMods, 'wran')) subTraversal = 'wran';
+		if (subTraversal !== 'pick' && listHasExplicitWeights(seqGen)) {
+			console.warn("[flux] `?` weight ignored: weights are only meaningful on lists with 'pick");
+		}
 		const subElemNodes = (seqGen.children.sequenceElement as CstNode[]) ?? [];
 		const subElements: CompiledElement[] = [];
 		for (const se of subElemNodes) {
@@ -629,27 +630,36 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 	const poll = numGenToPollFn(numGen);
 	if (!poll) return null;
 
-	// Weight from ?expr syntax
-	let weight = makeRunner(() => 1, { kind: 'lock' });
-	const questionToks = (elem.children.Question as IToken[]) ?? [];
-	if (questionToks.length > 0) {
-		// Weight is either a numericLiteral child or a generatorExpr child (in parens)
-		const weightLit = ((elem.children.numericLiteral as CstNode[]) ?? [])[0];
-		const weightGenExpr = ((elem.children.generatorExpr as CstNode[]) ?? [])[1]; // second generatorExpr
-		if (weightLit) {
-			const w = litToNumber(weightLit) ?? 1;
-			weight = makeRunner(() => w, { kind: 'lock' });
-		} else if (weightGenExpr) {
-			const wAtomic = ((weightGenExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
-			const wNumGen = wAtomic ? ((wAtomic.children.numericGenerator as CstNode[]) ?? [])[0] : null;
-			const wPoll = wNumGen ? numGenToPollFn(wNumGen) : null;
-			const wMods = (weightGenExpr.children.modifierSuffix as CstNode[]) ?? [];
-			const wMode = extractEagerMode(wMods) ?? { kind: 'lock' };
-			if (wPoll) weight = makeRunner(wPoll, wMode);
-		}
-	}
+	// Weight from `?n` suffix. `n` must be a non-negative numeric literal,
+	// enforced by the parser's `weightLiteral` rule (no Minus, no generator).
+	const weight = weightFromElem(elem);
 
 	return { kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
+}
+
+/**
+ * Extract the `?n` weight from a sequenceElement CST node. Defaults to 1 when
+ * no `?` is present. `n` is guaranteed to be a non-negative numeric literal
+ * (the parser's `weightLiteral` rule rejects negatives and generator forms).
+ */
+function weightFromElem(elem: CstNode): RunnerState {
+	const questionToks = (elem.children.Question as IToken[]) ?? [];
+	if (questionToks.length === 0) return makeRunner(() => 1, { kind: 'lock' });
+	const wLit = ((elem.children.weightLiteral as CstNode[]) ?? [])[0];
+	if (!wLit) return makeRunner(() => 1, { kind: 'lock' });
+	const intTok = ((wLit.children.Integer as IToken[]) ?? [])[0];
+	const floatTok = ((wLit.children.Float as IToken[]) ?? [])[0];
+	const value = intTok ? parseInt(intTok.image, 10) : floatTok ? parseFloat(floatTok.image) : 1;
+	return makeRunner(() => value, { kind: 'lock' });
+}
+
+/** True if any sequenceElement in this list carries a `?` weight suffix. */
+function listHasExplicitWeights(seqNode: CstNode): boolean {
+	const elems = (seqNode.children.sequenceElement as CstNode[]) ?? [];
+	for (const el of elems) {
+		if (((el.children.Question as IToken[]) ?? []).length > 0) return true;
+	}
+	return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1036,7 +1046,7 @@ function compileTransposition(patternNode: CstNode): CompiledTransposition {
 // ---------------------------------------------------------------------------
 
 /** List-level traversal modifier. */
-type TraversalMode = 'seq' | 'shuf' | 'pick' | 'wran';
+type TraversalMode = 'seq' | 'shuf' | 'pick';
 
 type ContentType = 'note' | 'mono' | 'sample' | 'slice' | 'cloud';
 
@@ -1127,7 +1137,12 @@ function compilePattern(
 	let traversal: TraversalMode = 'seq';
 	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
 	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
-	else if (hasModifier(listMods, 'wran')) traversal = 'wran';
+
+	// Warn when `?` weights are present on a list without 'pick — the weight
+	// is meaningless there and silently ignored. Matches spec truth table 4.
+	if (traversal !== 'pick' && seqNode && listHasExplicitWeights(seqNode)) {
+		console.warn("[flux] `?` weight ignored: weights are only meaningful on lists with 'pick");
+	}
 
 	const compiled: CompiledElement[] = [];
 
@@ -1402,6 +1417,12 @@ function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number
 // Evaluate a compiled loop/line for one cycle
 // ---------------------------------------------------------------------------
 
+/** A slot filled with a rest, returned by 'pick when all weights are zero. */
+const ZERO_WEIGHT_REST: CompiledElement = {
+	kind: 'rest',
+	weight: makeRunner(() => 1, { kind: 'lock' })
+};
+
 /** Apply traversal strategy to an element array, returning the ordered sequence. */
 function orderedSubElements(
 	elements: CompiledElement[],
@@ -1409,19 +1430,13 @@ function orderedSubElements(
 	cycle: number
 ): CompiledElement[] {
 	if (traversal === 'pick') {
-		return elements.map(() => elements[Math.floor(Math.random() * elements.length)]);
-	} else if (traversal === 'shuf') {
-		const arr = [...elements];
-		for (let i = arr.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[arr[i], arr[j]] = [arr[j], arr[i]];
-		}
-		return arr;
-	} else if (traversal === 'wran') {
+		// Unified weighted selection: unweighted elements default to weight 1,
+		// so a plain [a b c]'pick behaves exactly like uniform random. When all
+		// weights are zero the slot is silent (rest event).
+		const weights = elements.map((el) => sampleRunner(el.weight, cycle));
+		const total = weights.reduce((a, b) => a + b, 0);
+		if (total <= 0) return elements.map(() => ZERO_WEIGHT_REST);
 		return elements.map(() => {
-			const weights = elements.map((el) => Math.max(0, sampleRunner(el.weight, cycle)));
-			const total = weights.reduce((a, b) => a + b, 0);
-			if (total === 0) return elements[0];
 			let r = Math.random() * total;
 			for (let i = 0; i < elements.length; i++) {
 				r -= weights[i];
@@ -1429,6 +1444,13 @@ function orderedSubElements(
 			}
 			return elements[elements.length - 1];
 		});
+	} else if (traversal === 'shuf') {
+		const arr = [...elements];
+		for (let i = arr.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[arr[i], arr[j]] = [arr[j], arr[i]];
+		}
+		return arr;
 	}
 	return elements; // 'seq
 }

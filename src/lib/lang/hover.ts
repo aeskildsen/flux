@@ -211,7 +211,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'',
 		'Attaches a modifier to the immediately preceding token.',
 		'',
-		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `wran`'
+		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`'
 	].join('\n'),
 
 	At: [
@@ -297,10 +297,10 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'Yields elements in order, cycling back to the start indefinitely.',
 		'',
 		'```flux',
-		'[1 2 3]         // 1, 2, 3, 1, 2, 3, ...',
-		"[1 2 3]'shuf    // shuffle then traverse",
-		"[1 2 3]'pick    // random element each time",
-		"[1?3 2?1]'wran  // weighted random",
+		'[1 2 3]           // 1, 2, 3, 1, 2, 3, ...',
+		"[1 2 3]'shuf      // shuffle then traverse",
+		"[1 2 3]'pick      // uniform random element each time",
+		"[1 2?2 3]'pick    // weighted random (probs 0.25/0.5/0.25)",
 		'```'
 	].join('\n'),
 
@@ -424,21 +424,12 @@ const MODIFIER_DOCS: Record<string, string> = {
 	pick: [
 		"**`'pick`** — pick a random element each time.",
 		'',
-		'Picks uniformly at random on every poll. Equivalent to Prand.',
+		'Uniform random by default. Optional per-element `?n` weights make selection proportional; unweighted elements default to weight 1. `?0` means the element is never picked. Equivalent to Prand / Pwrand.',
 		'',
 		'```flux',
-		"[1 2 3 4]'pick",
-		'```'
-	].join('\n'),
-
-	wran: [
-		"**`'wran`** — weighted random selection.",
-		'',
-		'Use `?weight` on elements to assign relative weights. Default weight = 1.',
-		'',
-		'```flux',
-		"[1?3 2?1]'wran  // 1 appears 3× as often as 2",
-		"[x?0 y?1]'wran  // zero weight removes entry",
+		"[1 2 3 4]'pick        // uniform",
+		"[1 2?2 3]'pick        // probs 0.25 / 0.5 / 0.25",
+		"[1?0.5 2?1 3?2]'pick  // probs 0.14 / 0.29 / 0.57",
 		'```'
 	].join('\n'),
 
