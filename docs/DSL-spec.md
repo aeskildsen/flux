@@ -646,6 +646,27 @@ Modifiers attach to the **immediately preceding token**, not to the whole expres
 
 Modifiers are generally written **after** the list they modify. Evaluation order is left-to-right.
 
+**Valid attachment points.** A modifier (`'name`) or a `"param` must attach directly to a **generator expression**. The valid targets are:
+
+| Target                        | Example                    | Notes                                                                               |
+| ----------------------------- | -------------------------- | ----------------------------------------------------------------------------------- |
+| List generator                | `[0 2 4]'stut(2)`          | Attaches to the whole list.                                                         |
+| Scalar generator              | `0rand7'lock`              | Attaches to a single stochastic or literal generator.                               |
+| Parenthesised expression      | `(0rand4)'lock`            | The group is treated as one generator token.                                        |
+| Whole content-type expression | `note [0 2 4]'legato(0.8)` | Attaches to the content-type expression as a whole — see below.                     |
+| Another modifier (chaining)   | `[0 2 4]'stut(2)'lock`     | Chained modifiers return `this`, so the next modifier attaches to the previous one. |
+
+Placement **after a non-generator token is a syntax error**. In particular, a modifier or `"param` cannot attach to a bare content-type keyword, decorator, operator, or separator:
+
+| Code                 | Failure                                                                 |
+| -------------------- | ----------------------------------------------------------------------- |
+| `note'legato(0.8)`   | Syntax error — `note` alone is a content-type keyword, not a generator. |
+| `note"amp(0.5)`      | Syntax error — `"param` requires a preceding generator expression.      |
+| `'stut(2)`           | Syntax error — no preceding token to attach to (see truth table 1).     |
+| `note [0] +'stut(2)` | Syntax error — the transposition operator is not a generator.           |
+
+To apply a modifier to the whole content-type expression (including a transposition operand), use a **modifier continuation line** — see below.
+
 > **Implementation note:** No whitespace is permitted between `'` and the modifier name (`[0]'lock`, not `[0]' lock`). The current JS parser has a known deviation — it accepts a space because the lexer tokenises `'` and the identifier separately and Chevrotain ignores inter-token whitespace. Enforcing this would require a compound lexer token or a contextual lexer mode. Until fixed, the parser should emit a parse error for `[0]' lock` rather than silently accepting it. See truth table 12.
 
 ### `'lock` and `'eager(n)`
@@ -678,7 +699,7 @@ note lead [0rand7'lock 4rand6]       // first element locked, second draws every
 
 ### Modifier continuation lines
 
-Because modifiers attach to the immediately preceding token, modifiers intended to apply to a whole content type expression (including its transposition operand) are written on an indented continuation line:
+Because modifiers attach to the immediately preceding token, a modifier written directly after a transposition operand would attach only to that operand — not to the whole content-type expression. To attach a modifier to a whole content-type expression (including its transposition operand), write it on an indented continuation line:
 
 ```flux
 note lead [0 2 4] + 0rand3
@@ -686,7 +707,9 @@ note lead [0 2 4] + 0rand3
   'legato(0.8)
 ```
 
-The parser distinguishes modifier continuations from decorator block bodies by the leading `'` character on the indented line.
+Each continuation line begins with `'` and attaches to the content-type expression as a whole, in the order written. This is the only way to reach the whole-content-type-expression attachment point described in the table above. The parser distinguishes modifier continuations from decorator block bodies by the leading `'` character on the indented line.
+
+Continuation lines are currently modifier-only; `"param` does not have a continuation form and must be written inline after a generator expression.
 
 ### `"param` — direct SynthDef argument access
 

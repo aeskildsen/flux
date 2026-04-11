@@ -17,22 +17,25 @@ These tables are **directly usable** for TDD and for Claude Code.
 
 # 1. **Modifier Attachment Truth Table**
 
-A modifier always attaches to the _immediately preceding syntactic token_, even across lines if the continuation-line rule applies.
+A modifier always attaches to the _immediately preceding syntactic token_, which must be a **generator expression** — a list, a scalar generator, a parenthesised expression, a whole content-type expression (via a continuation line), or a previous modifier (chaining). Attaching to any other token is a syntax error.
 
-| Code Snippet                    | Interpretation                                   | Evaluation                                   | Result                                 |
-| ------------------------------- | ------------------------------------------------ | -------------------------------------------- | -------------------------------------- |
-| `[1 2]'shuf`                    | Modifier attaches to list.                       | List token is atomic.                        | Entire list shuffle behavior.          |
-| `0rand4'lock`                   | Modifier attaches to generator.                  | Apply `'lock` to generator.                  | Fixed random value.                    |
-| `(0rand4)'lock`                 | Modifier attaches to parenthesized expression.   | Group first, then modify.                    | Parent grouping respected.             |
-| `note [0] + 2rand4` ↵ `  'lock` | Continuation-line modifier attaches to _2rand4_. | Continuation rule sees `'` at INDENT.        | **Only** RHS scalar frozen.            |
-| `[0rand4'lock 1]`               | `'lock` applies only to first element.           | Element-level modifier overrides outer ones. | First element frozen; second is eager. |
+| Code Snippet                    | Interpretation                                                        | Evaluation                                   | Result                                                      |
+| ------------------------------- | --------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------- |
+| `[1 2]'shuf`                    | Modifier attaches to list generator.                                  | List token is atomic.                        | Entire list shuffle behavior.                               |
+| `0rand4'lock`                   | Modifier attaches to scalar generator.                                | Apply `'lock` to generator.                  | Fixed random value.                                         |
+| `(0rand4)'lock`                 | Modifier attaches to parenthesized expression.                        | Group first, then modify.                    | Parent grouping respected.                                  |
+| `[0 2 4]'stut(2)'lock`          | Chained modifiers: `'lock` attaches to `'stut`.                       | Each modifier returns `this`.                | Frozen stutter count.                                       |
+| `note [0] + 2rand4` ↵ `  'lock` | Continuation-line modifier attaches to whole content-type expression. | Continuation rule sees `'` at INDENT.        | Modifier applies to the content-type expression as a whole. |
+| `[0rand4'lock 1]`               | `'lock` applies only to first element.                                | Element-level modifier overrides outer ones. | First element frozen; second is eager.                      |
 
 **Error cases**
 
-| Code             | Failure Type | Why                                                                              |
-| ---------------- | ------------ | -------------------------------------------------------------------------------- |
-| `'stut` alone    | Parse error  | Modifier has no preceding token to attach to.                                    |
-| `note` ↵ `'stut` | Parse error  | Continuation line requires a generator on the previous line, not a bare keyword. |
+| Code                 | Failure Type | Why                                                                              |
+| -------------------- | ------------ | -------------------------------------------------------------------------------- |
+| `'stut` alone        | Parse error  | Modifier has no preceding token to attach to.                                    |
+| `note'legato(0.8)`   | Parse error  | Attaches to a bare content-type keyword, which is not a generator expression.    |
+| `note [0] +'stut(2)` | Parse error  | Attaches to an operator, which is not a generator expression.                    |
+| `note` ↵ `'stut`     | Parse error  | Continuation line requires a generator on the previous line, not a bare keyword. |
 
 ---
 
