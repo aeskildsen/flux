@@ -73,25 +73,27 @@ How stutter counts are sampled. Applies to all content types.
 
 ---
 
-# 4. **Weighted Random `'wran` Truth Table**
+# 4. **Weighted Random `'pick` Truth Table**
 
-How weights are interpreted.
+How `?` weights on a `'pick` list are interpreted.
 
-| Code                  | Interpretation        | Evaluation                 | Result                           |
-| --------------------- | --------------------- | -------------------------- | -------------------------------- |
-| `[1 2 3]'wran`        | All weights = 1.      | Normalize equal weights.   | Uniform random.                  |
-| `[1?3 2?1]'wran`      | Explicit weights.     | Weighted selection.        | 1 appears 3× as often as 2.      |
-| `[x?0 y?1]'wran`      | Zero weight.          | Remove entry entirely.     | y only.                          |
-| `[a?(1rand3)'lock b]` | Dynamic weight for a. | Lock weight at first eval. | Weight fixed for entire session. |
+| Code               | Interpretation                      | Evaluation                                    | Result                          |
+| ------------------ | ----------------------------------- | --------------------------------------------- | ------------------------------- |
+| `[1 2 3]'pick`     | No weights.                         | All weights default to 1; uniform random.     | Uniform random.                 |
+| `[1 2?2 3]'pick`   | Mixed explicit and default weights. | Weights 1/2/1 → probs 0.25/0.5/0.25.          | 2 appears half the time.        |
+| `[1?3 2?1]'pick`   | Explicit weights.                   | Weighted selection.                           | 1 appears 3× as often as 2.     |
+| `[x?0 y?1]'pick`   | Zero weight.                        | x is never picked.                            | y only.                         |
+| `[x?0 y?0]'pick`   | All weights zero.                   | No element can be selected; emit rest.        | Silent slot (rest event).       |
+| `[[1 2?3]'pick 5]` | `?` on inner `'pick` list.          | Inner list picks 2 with weight 3, else 1.     | Valid per-level check.          |
+| `[[1 2?3] 5]'pick` | `?` on inner list without `'pick`.  | Inner `?3` ignored with warning; outer picks. | Warning logged; weight ignored. |
 
 **Error cases**
 
-| Code                              | Failure Type   | Why                                                                   |
-| --------------------------------- | -------------- | --------------------------------------------------------------------- |
-| `[a?invalid]`                     | Parse error    | Weight must be a numeric literal or generator, not a bare identifier. |
-| `[a?-1]`                          | Semantic error | Negative weight is not meaningful.                                    |
-| `[x?0 y?0]'wran`                  | Semantic error | All weights zero; no element can be selected.                         |
-| `[1 2]'pick` with `?` on elements | Semantic error | `?` weight syntax is only valid with `'wran`.                         |
+| Code                | Failure Type | Why                                                                       |
+| ------------------- | ------------ | ------------------------------------------------------------------------- |
+| `[a?invalid]`       | Parse error  | Weight must be a non-negative numeric literal.                            |
+| `[a?-1]'pick`       | Parse error  | Negative weights are not meaningful.                                      |
+| `[a?(1rand3)]'pick` | Parse error  | Generator expressions are not valid as weights; weight must be a literal. |
 
 ---
 

@@ -596,23 +596,24 @@ class FluxParser extends CstParser {
 		]);
 		this.OPTION(() => {
 			this.CONSUME(Question);
-			this.OR2([
-				{ ALT: () => this.SUBRULE(this.numericLiteral) },
-				{
-					ALT: () => {
-						this.CONSUME(LParen);
-						// Use SUBRULE2 to distinguish this from the generatorExpr above
-						this.SUBRULE2(this.generatorExpr);
-						this.CONSUME(RParen);
-					}
-				}
-			]);
+			this.SUBRULE(this.weightLiteral);
 		});
 		// `!n` inline repetition: 1!4 expands to four copies of element 1 in the list
 		this.OPTION2(() => {
 			this.CONSUME(Bang);
 			this.CONSUME(Integer);
 		});
+	});
+
+	/**
+	 * Weight literal for `?n` suffixes in `'pick` lists.
+	 *
+	 * Only non-negative numeric literals are valid weights — no leading `-`,
+	 * no parenthesised generator expressions. `?0` is allowed (the element
+	 * has zero probability and is never picked).
+	 */
+	weightLiteral = this.RULE('weightLiteral', () => {
+		this.OR([{ ALT: () => this.CONSUME(Float) }, { ALT: () => this.CONSUME(Integer) }]);
 	});
 
 	/** Returns true if LA(1) is Integer and LA(2) is Sharp or Flat. */
