@@ -292,6 +292,44 @@ describe('createGen() — fx/rest events are skipped', () => {
 		const yielded = take(gen, 5);
 		expect(realEvents(yielded)).toHaveLength(0);
 	});
+
+	it('sample events yield skip:false', () => {
+		const ev: ScheduledEvent = {
+			contentType: 'sample',
+			bufferName: 'kick',
+			beatOffset: 0,
+			duration: 0.25,
+			loopId: 'drums'
+		};
+		const inst = fakeInst([ev], { doneOnCycle: 1 });
+		const gen = createGen(makeDeps(inst));
+		expect(realEvents(take(gen, 5))).toHaveLength(1);
+	});
+
+	it('slice events yield skip:false', () => {
+		const ev: ScheduledEvent = {
+			contentType: 'slice',
+			sliceIndex: 0,
+			beatOffset: 0,
+			duration: 0.25,
+			loopId: 'drums'
+		};
+		const inst = fakeInst([ev], { doneOnCycle: 1 });
+		const gen = createGen(makeDeps(inst));
+		expect(realEvents(take(gen, 5))).toHaveLength(1);
+	});
+
+	it('cloud events yield skip:false', () => {
+		const ev: ScheduledEvent = {
+			contentType: 'cloud',
+			beatOffset: 0,
+			duration: 1,
+			loopId: 'atmos'
+		};
+		const inst = fakeInst([ev], { doneOnCycle: 1 });
+		const gen = createGen(makeDeps(inst));
+		expect(realEvents(take(gen, 5))).toHaveLength(1);
+	});
 });
 
 // ---------------------------------------------------------------------------

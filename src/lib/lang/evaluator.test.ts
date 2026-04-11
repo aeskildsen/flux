@@ -2272,9 +2272,34 @@ describe('sample content type', () => {
 		expect(evs[1].beatOffset).toBeCloseTo(0.5);
 	});
 
-	it('@buf on sample is a semantic error', () => {
-		const inst = createInstance('@buf(\\x) sample drums [\\kick]');
-		expect(inst.ok).toBe(false);
+	it('@buf on sample is a semantic error — returns ok:false with @buf in message', () => {
+		const result = createInstance('@buf(\\x) sample drums [\\kick]');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error).toMatch(/@buf/);
+	});
+
+	it('@buf on sample alongside a valid pattern — whole instance is rejected', () => {
+		const result = createInstance('@buf(\\x) sample drums [\\kick]\nnote good [0 2 4]');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error).toMatch(/@buf/);
+	});
+
+	it('@buf on note is a semantic error', () => {
+		const result = createInstance('@buf(\\x) note lead [0 2]');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error).toMatch(/@buf/);
+	});
+
+	it('@buf on mono is a semantic error', () => {
+		const result = createInstance('@buf(\\x) mono bass [0 2]');
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error).toMatch(/@buf/);
+	});
+
+	it('sample(\\mySampler) sets synthdef on all events', () => {
+		const evs = eval0('sample(\\mySampler) drums [\\kick \\hat]') as SampleEvent[];
+		expect(evs[0].synthdef).toBe('mySampler');
+		expect(evs[1].synthdef).toBe('mySampler');
 	});
 });
 
@@ -2314,6 +2339,34 @@ describe('slice content type', () => {
 			expect(e.loopId).toBe('drums');
 		}
 	});
+
+	it('slice(\\myPlayer) sets synthdef on all events', () => {
+		const evs = eval0('slice(\\myPlayer) drums [0 2 4]') as SliceEvent[];
+		expect(evs[0].synthdef).toBe('myPlayer');
+		expect(evs[1].synthdef).toBe('myPlayer');
+		expect(evs[2].synthdef).toBe('myPlayer');
+	});
+
+	it('slice drums [0 _ 4] — middle event is contentType:rest', () => {
+		const evs = eval0('slice drums [0 _ 4]');
+		expect(evs).toHaveLength(3);
+		expect(evs[0].contentType).toBe('slice');
+		expect(evs[1].contentType).toBe('rest');
+		expect(evs[2].contentType).toBe('slice');
+	});
+
+	it("sample drums [\\kick \\hat \\snare]'pick — emits 3 events all contentType:sample", () => {
+		// 'pick picks a random element each slot — 3 slots, 3 events (like Prand)
+		const evs = eval0("sample drums [\\kick \\hat \\snare]'pick");
+		expect(evs).toHaveLength(3);
+		for (const e of evs) expect(e.contentType).toBe('sample');
+	});
+
+	it("sample drums [\\kick \\hat]'shuf — emits 2 events with contentType:sample", () => {
+		const evs = eval0("sample drums [\\kick \\hat]'shuf");
+		expect(evs).toHaveLength(2);
+		for (const e of evs) expect(e.contentType).toBe('sample');
+	});
 });
 
 describe('cloud content type', () => {
@@ -2352,5 +2405,36 @@ describe('cloud content type', () => {
 			expect(r.events).toHaveLength(1);
 			expect(r.events[0].contentType).toBe('cloud');
 		}
+	});
+
+	it('cloud(\\myGrain) sets synthdef on cloud event', () => {
+		const ev = eval0('cloud(\\myGrain) atmos []')[0] as CloudEvent;
+		expect(ev.synthdef).toBe('myGrain');
+	});
+
+	it("cloud atmos []'n(3) emits 3 CloudEvents with cycleOffset 0,1,2", () => {
+		const evs = eval0("cloud atmos []'n(3)") as CloudEvent[];
+		expect(evs).toHaveLength(3);
+		expect(evs[0].cycleOffset ?? 0).toBeCloseTo(0);
+		expect(evs[1].cycleOffset).toBeCloseTo(1);
+		expect(evs[2].cycleOffset).toBeCloseTo(2);
+	});
+});
+
+describe('mono — legato and stut', () => {
+	it("mono 'legato(2.0) still uses full slot — legato is ignored for any value", () => {
+		const ds = eval0("mono x [0 2 4]'legato(2.0)").map((e) => e.duration);
+		for (const d of ds) expect(d).toBeCloseTo(1 / 3);
+	});
+
+	it("mono 'legato(0.1) still uses full slot — legato is ignored for any value", () => {
+		const ds = eval0("mono x [0 2 4]'legato(0.1)").map((e) => e.duration);
+		for (const d of ds) expect(d).toBeCloseTo(1 / 3);
+	});
+
+	it("mono x [0 2]'stut — emits 4 events, all contentType:'mono'", () => {
+		const evs = eval0("mono x [0 2]'stut");
+		expect(evs).toHaveLength(4);
+		for (const e of evs) expect(e.contentType).toBe('mono');
 	});
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
-	import { createInstance } from '$lib/lang/evaluator';
+	import { createInstance, type RestEvent, type FxEvent } from '$lib/lang/evaluator';
 	import { buildOscParams } from '$lib/dispatch';
 	import { createGen } from '$lib/gen';
 	import FluxEditor from '$lib/FluxEditor.svelte';
@@ -263,11 +263,11 @@
 			outgoingHandle = handle;
 		}
 
-		// Per-loop mono node ID map: loopId → active SC node ID.
+		// Persistent-node ID map for mono and cloud patterns: loopId → active SC node ID.
 		// Scoped to a single run() invocation — a fresh map is created each time the
 		// user triggers playback. Stale entries (from stopped patterns) are cleared
 		// when the pattern stops producing events; full lifecycle cleanup deferred to #19.
-		const monoNodes = new Map<string, number>();
+		const persistentNodes = new Map<string, number>();
 
 		handle = run(
 			createGen({
@@ -279,9 +279,9 @@
 			}),
 			(event, ntpTime) => {
 				if (event.skip) return;
+				// rest/fx are filtered to skip:true in gen.ts and never reach here
 				const { ev: rawEv, gateDurationSeconds } = event;
-				// rest/fx are filtered to skip:true in gen.ts — rawEv is always a BaseEvent here
-				const ev = rawEv as Extract<typeof rawEv, { synthdef?: unknown; offsetMs?: unknown }>;
+				const ev = rawEv as Exclude<typeof rawEv, RestEvent | FxEvent>;
 				const synthdef = ev.synthdef ?? 'sonic-pi-prophet';
 				const adjustedTime = ntpTime + (ev.offsetMs ?? 0) / 1000;
 
@@ -289,12 +289,12 @@
 					// Monophonic: single persistent node per loopId, updated via .set
 					const oscParams = buildOscParams(ev, data.synthdefs[synthdef]);
 					if (ev.loopId) {
-						const existing = monoNodes.get(ev.loopId);
+						const existing = persistentNodes.get(ev.loopId);
 						if (existing !== undefined) {
 							scProxy.setAt(adjustedTime, existing, oscParams);
 						} else {
 							const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
-							monoNodes.set(ev.loopId, nodeId);
+							persistentNodes.set(ev.loopId, nodeId);
 						}
 					} else {
 						console.warn('[flux] mono event has no loopId — falling back to polyphonic', ev);
@@ -302,13 +302,15 @@
 						scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
 					}
 				} else if (ev.contentType === 'sample') {
-					// Buffer playback: trigger samplePlayer (or custom synthdef) with buffer params
-					// Channel-count SynthDef variant resolution happens here when buffer registry is wired.
-					// For now, use the synthdef name as-is and pass bufferName as a param.
-					const oscParams: Record<string, number> = { ...(ev.params ?? {}) };
-					console.info('[flux] sample event — bufferName:', ev.bufferName, 'synthdef:', synthdef);
-					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
-					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
+					// Buffer playback: trigger samplePlayer (or custom synthdef).
+					// Buffer registry lookup (bufferName → numeric buf ID) is pending implementation.
+					// Until wired, log a warning and skip dispatch to avoid silent wrong-buffer audio.
+					console.warn(
+						'[flux] sample dispatch pending buffer registry — bufferName:',
+						ev.bufferName,
+						'synthdef:',
+						synthdef
+					);
 				} else if (ev.contentType === 'slice') {
 					// Beat-sliced buffer playback
 					const oscParams: Record<string, number> = {
@@ -330,13 +332,15 @@
 					// Granular synthesis: persistent node per loopId, updated via .set
 					const oscParams: Record<string, number> = { ...(ev.params ?? {}) };
 					if (ev.loopId) {
-						const existing = monoNodes.get(ev.loopId);
+						const existing = persistentNodes.get(ev.loopId);
 						if (existing !== undefined) {
 							scProxy.setAt(adjustedTime, existing, oscParams);
 						} else {
 							const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
-							monoNodes.set(ev.loopId, nodeId);
+							persistentNodes.set(ev.loopId, nodeId);
 						}
+					} else {
+						console.warn('[flux] cloud event has no loopId — skipping dispatch', ev);
 					}
 				} else if (ev.contentType === 'note') {
 					// note (default): polyphonic — spawn a new node and schedule a gate close

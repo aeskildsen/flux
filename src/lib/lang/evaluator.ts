@@ -1205,10 +1205,13 @@ function compilePattern(
 					? 'cloud'
 					: 'note';
 
-	// @buf decorator: valid on slice and cloud; semantic error on sample
+	// @buf decorator: valid on slice and cloud only; semantic error on note, mono, sample
 	const bufName = decoratorLayers ? extractBufName(decoratorLayers) : null;
-	if (bufName !== null && contentType === 'sample') {
-		return '@buf is not valid on sample — buffer selection in sample is per-event inside the list';
+	if (
+		bufName !== null &&
+		(contentType === 'sample' || contentType === 'note' || contentType === 'mono')
+	) {
+		return `@buf is not valid on ${contentType} — @buf is only valid on slice and cloud`;
 	}
 
 	// 'numSlices modifier (slice only)
@@ -1721,7 +1724,7 @@ type CompiledDecoratedPattern = {
 function compileDecoratorBlock(
 	blockNode: CstNode,
 	outerLayers: CstNode[][]
-): CompiledDecoratedPattern[] {
+): CompiledDecoratedPattern[] | string {
 	const decorators = (blockNode.children.decorator as CstNode[]) ?? [];
 	const layers = [...outerLayers, decorators];
 	const results: CompiledDecoratedPattern[] = [];
@@ -1729,14 +1732,15 @@ function compileDecoratorBlock(
 	const patternNodes = (blockNode.children.patternStatement as CstNode[]) ?? [];
 	for (const pn of patternNodes) {
 		const compiled = compilePattern(pn, undefined, layers);
-		if (typeof compiled !== 'string') {
-			results.push({ compiled, decoratorLayers: layers });
-		}
+		if (typeof compiled === 'string') return compiled; // propagate semantic error
+		results.push({ compiled, decoratorLayers: layers });
 	}
 
 	const nestedBlocks = (blockNode.children.decoratorBlock as CstNode[]) ?? [];
 	for (const nb of nestedBlocks) {
-		results.push(...compileDecoratorBlock(nb, layers));
+		const nested = compileDecoratorBlock(nb, layers);
+		if (typeof nested === 'string') return nested; // propagate semantic error
+		results.push(...nested);
 	}
 
 	return results;
@@ -1809,6 +1813,7 @@ function compileSource(source: string): CompileResult {
 		const decBlockNodes = stmt.children.decoratorBlock as CstNode[] | undefined;
 		if (decBlockNodes?.length) {
 			const innerCompiled = compileDecoratorBlock(decBlockNodes[0], []);
+			if (typeof innerCompiled === 'string') return { ok: false, error: innerCompiled };
 			for (const { compiled: cl, decoratorLayers } of innerCompiled) {
 				if (cl.name) compiledByName.set(cl.name, cl);
 				patternEntries.push({ kind: 'decorated', compiled: cl, decoratorLayers });
