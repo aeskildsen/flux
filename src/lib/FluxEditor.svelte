@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { asset } from '$app/paths';
 	import type * as Monaco from 'monaco-editor';
+	import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 	import { registerFluxLanguage, chooseCommentAction } from '$lib/monaco-adapter.js';
 
 	interface Props {
@@ -21,18 +21,11 @@
 			if (!mounted) return;
 			registerFluxLanguage(monaco);
 
-			// Point Monaco at the pre-bundled worker files emitted by vite-plugin-monaco-editor.
-			// Without this, Monaco falls back to running workers on the main thread.
+			// Flux only registers a custom language, so Monaco never asks for
+			// json/ts/css/html workers — the core editor worker is all we need.
 			self.MonacoEnvironment = {
-				getWorkerUrl(_moduleId: string, label: string) {
-					if (label === 'css' || label === 'scss' || label === 'less')
-						return asset('/monacoeditorwork/css.worker.bundle.js');
-					if (label === 'html' || label === 'handlebars' || label === 'razor')
-						return asset('/monacoeditorwork/html.worker.bundle.js');
-					if (label === 'json') return asset('/monacoeditorwork/json.worker.bundle.js');
-					if (label === 'typescript' || label === 'javascript')
-						return asset('/monacoeditorwork/ts.worker.bundle.js');
-					return asset('/monacoeditorwork/editor.worker.bundle.js');
+				getWorker() {
+					return new EditorWorker();
 				}
 			};
 
