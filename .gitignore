@@ -1,4 +1,5 @@
 node_modules
+.pnpm-store
 
 # Output
 .output
@@ -26,5 +27,4 @@ test-results
 coverage/
 
 dev-references
-scripts/sync.sh
 static/compiled_synthdefs
