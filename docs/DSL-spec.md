@@ -27,6 +27,8 @@ Unlike SuperCollider patterns/streams, all generators yield indefinitely. They a
 
 This scalar/non-scalar distinction is load-bearing elsewhere in the spec: the right-hand side of transposition and the `'stut` count argument both require a scalar generator and reject `[...]` outright.
 
+`{}` curly brackets are not assigned to any syntax form and are reserved for future use. Any input containing `{` or `}` is a lex error.
+
 ### Whitespace rules
 
 > _See truth tables [12 (Whitespace)](DSL-truthtables.md#12-whitespace-truth-table)._

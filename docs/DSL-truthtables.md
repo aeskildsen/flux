@@ -419,21 +419,24 @@ Direct SynthDef argument access. Valid wherever modifiers are valid.
 
 # 17. **Error Condition Summary**
 
-| Code                  | Failure Type   | Why                                                 |
-| --------------------- | -------------- | --------------------------------------------------- |
-| `[0 1 2`              | Parse error    | Missing `]`.                                        |
-| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as operand.                 |
-| `0rand4rand7`         | Semantic error | Ambiguous construction; parentheses required.       |
-| `note [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.                    |
-| `'stut` alone         | Parse error    | No preceding target.                                |
-| `note` ↵ `  'stut`    | Parse error    | No generator on previous line.                      |
-| `[a?invalid]`         | Parse error    | Weight must be literal or generator.                |
-| `note [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.           |
-| `note[0]`             | Parse error    | Missing space between content type keyword and `[`. |
-| `0 rand 4`            | Parse error    | Whitespace inside generator expression.             |
-| `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.             |
-| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.        |
-| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.            |
-| `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.     |
-| `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.        |
-| `note [0]'n(1.5)`     | Semantic error | Repetition count must be a positive integer.        |
+| Code                  | Failure Type   | Why                                                               |
+| --------------------- | -------------- | ----------------------------------------------------------------- |
+| `[0 1 2`              | Parse error    | Missing `]`.                                                      |
+| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as operand.                               |
+| `0rand4rand7`         | Semantic error | Ambiguous construction; parentheses required.                     |
+| `note [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.                                  |
+| `'stut` alone         | Parse error    | No preceding target.                                              |
+| `note` ↵ `  'stut`    | Parse error    | No generator on previous line.                                    |
+| `[a?invalid]`         | Parse error    | Weight must be literal or generator.                              |
+| `note [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.                         |
+| `note[0]`             | Parse error    | Missing space between content type keyword and `[`.               |
+| `0 rand 4`            | Parse error    | Whitespace inside generator expression.                           |
+| `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.                           |
+| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.                      |
+| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.                          |
+| `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.                   |
+| `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.                      |
+| `{4:1/2 7:3/2}`       | Lex error      | `{}` curly brackets are reserved; no token exists for `{` or `}`. |
+| `{`                   | Lex error      | Lone `{` is unrecognised by the lexer.                            |
+| `}`                   | Lex error      | Lone `}` is unrecognised by the lexer.                            |
+| `note [0]'n(1.5)`     | Semantic error | Repetition count must be a positive integer.                      |
