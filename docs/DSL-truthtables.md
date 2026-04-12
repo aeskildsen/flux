@@ -458,9 +458,9 @@ Converts a bare identifier to its UTF-8 byte sequence and yields the bytes cycli
 
 **Error cases**
 
-| Code               | Failure Type | Why                                                                 |
-| ------------------ | ------------ | ------------------------------------------------------------------- |
-| `utf8 {coffee}`    | Parse error  | Whitespace between `utf8` and `{` is not permitted.                 |
-| `utf8{}`           | Parse error  | Empty braces — identifier is required inside `{}`.                  |
-| `utf8{1coffee}`    | Parse error  | Content must be a valid identifier (cannot start with a digit).     |
-| `utf8{coffee bar}` | Parse error  | Only a single bare identifier is allowed; spaces are not permitted. |
+| Code               | Failure Type | Why                                                                                                            |
+| ------------------ | ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `utf8 {coffee}`    | Lex error    | Whitespace between `utf8` and `{` is not permitted; `utf8` becomes an Identifier and bare `{` is unrecognised. |
+| `utf8{}`           | Parse error  | Empty braces — identifier is required inside `{}`.                                                             |
+| `utf8{1coffee}`    | Parse error  | Content must be a valid identifier (cannot start with a digit).                                                |
+| `utf8{coffee bar}` | Parse error  | Only a single bare identifier is allowed; spaces are not permitted.                                            |

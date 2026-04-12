@@ -128,8 +128,7 @@ note lead [utf8{hello} % 7 0 2]'shuf
 utf8Generator   = "utf8" "{" identifier "}" ;
 
 (* utf8Generator is a new alternative in atomicGenerator *)
-atomicGenerator = parenGenerator
-                | sequenceGenerator
+atomicGenerator = sequenceGenerator
                 | utf8Generator
                 | numericGenerator ;
 ```
@@ -141,7 +140,7 @@ atomicGenerator = parenGenerator
 - `utf8{word}` is a **scalar generator** — it yields a single integer per poll. It is valid wherever a scalar generator is valid: directly as the sole generator in a pattern, or nested inside `[...]`.
 - Combined with `%` (modulo), it maps byte values into a useful scale-degree range, e.g. `utf8{coffee} % 14`.
 
-**Whitespace rule:** `utf8` must be written adjacent to `{` — `utf8 {coffee}` is a parse error, consistent with the no-whitespace-inside-generator-expressions rule.
+**Whitespace rule:** `utf8` must be written adjacent to `{` — `utf8 {coffee}` is a lex error: with the space, `utf8` tokenises as a plain identifier and the bare `{` is unrecognised by the lexer.
 
 ### Generator nesting
 

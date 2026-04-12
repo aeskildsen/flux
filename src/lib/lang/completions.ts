@@ -456,6 +456,9 @@ export function getCompletions(
 	if (prevType === 'ParamSigil') return getParamCompletions(synthdefMetadata, activeSynthDef);
 	if (prevType === 'Pipe') return PIPE_COMPLETIONS;
 	if (prevType === 'LBracket') return SEQUENCE_BODY_COMPLETIONS;
+	// After a generator name (Identifier token) — offer top-level body generators
+	// e.g. "note lead |cursor|" → suggest utf8{word} and other body forms
+	if (prevType === 'Identifier') return GENERATOR_BODY_COMPLETIONS;
 
 	return [];
 }

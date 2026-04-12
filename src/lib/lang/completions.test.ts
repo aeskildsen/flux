@@ -184,6 +184,20 @@ describe('getCompletions — trigger: [', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. Top-level generator body completions (after generator name)
+// ---------------------------------------------------------------------------
+
+describe('getCompletions — top-level body (after generator name)', () => {
+	it('offers utf8{word} snippet after generator name (explicit invocation)', () => {
+		// Simulates: "note lead " with cursor at end — prev token is Identifier "lead"
+		const src = 'note lead ';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, endCursor(src));
+		expect(items.some((i: CompletionItem) => i.label.includes('utf8'))).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // 4. Trigger character: ( — context-sensitive
 // ---------------------------------------------------------------------------
 
