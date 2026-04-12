@@ -687,6 +687,37 @@ describe('"param — direct SynthDef argument access', () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// absTimedList — retired syntax: {} brackets must NOT parse
+//
+// The {time:degree} absolute-timed list syntax was never implemented and has
+// been officially retired (issue #36). {} brackets are free for future use.
+// Verify that any input containing '{' produces lex errors — the lexer has
+// no token for curly braces, so they are always illegal.
+// ---------------------------------------------------------------------------
+
+describe('absTimedList — retired {} syntax is rejected', () => {
+	it('rejects bare curly-brace timed list: {4:1/2 7:3/2}', () => {
+		const { lexErrors } = parse('{4:1/2 7:3/2}');
+		expect(lexErrors.length).toBeGreaterThan(0);
+	});
+
+	it('rejects curly-brace timed list as pattern body: note lead {4:1/2 7:3/2}', () => {
+		const { lexErrors } = parse('note lead {4:1/2 7:3/2}');
+		expect(lexErrors.length).toBeGreaterThan(0);
+	});
+
+	it('rejects a lone opening curly brace', () => {
+		const { lexErrors } = parse('{');
+		expect(lexErrors.length).toBeGreaterThan(0);
+	});
+
+	it('rejects a lone closing curly brace', () => {
+		const { lexErrors } = parse('}');
+		expect(lexErrors.length).toBeGreaterThan(0);
+	});
+});
+
 describe('derived generators — child:parent syntax', () => {
 	it("parses derived generator: sample perc:drums 'at(1/8)", () => {
 		expect(parse("sample perc:drums 'at(1/8)").parseErrors).toHaveLength(0);
