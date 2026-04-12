@@ -387,6 +387,121 @@ function utf8GenToPollFn(utf8Node: CstNode): PollFn | null {
 }
 
 // ---------------------------------------------------------------------------
+// rangeExpr — eager expansion helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Read the numeric value from a rangeBound or intBound CST node.
+ * Returns the number (signed if Minus is present), or null on error.
+ */
+function rangeBoundToNumber(bound: CstNode): number | null {
+	const negative = ((bound.children.Minus as IToken[]) ?? []).length > 0;
+	const intTok = ((bound.children.Integer as IToken[]) ?? [])[0];
+	const floatTok = ((bound.children.Float as IToken[]) ?? [])[0];
+	let value: number | null = null;
+	if (intTok) value = parseInt(intTok.image, 10);
+	else if (floatTok) value = parseFloat(floatTok.image);
+	if (value === null) return null;
+	return negative ? -value : value;
+}
+
+/**
+ * Expand a rangeExpr CST node to a flat array of numeric values.
+ *
+ * Returns an error string if the range is semantically invalid:
+ *   - Zero step → error
+ *   - Step going wrong direction (no elements would be produced) → error
+ *
+ * Both inclusive bounds.
+ */
+function expandRangeExpr(rangeNode: CstNode): number[] | string {
+	const bounds = (rangeNode.children.rangeBound as CstNode[]) ?? [];
+	const intBounds = (rangeNode.children.intBound as CstNode[]) ?? [];
+	const hasComma = ((rangeNode.children.Comma as IToken[]) ?? []).length > 0;
+
+	let start: number;
+	let stepOrSecond: number | null = null;
+	let end: number;
+
+	if (hasComma) {
+		// Stepped form: rangeBound[0]=start, rangeBound[1]=step, rangeBound[2]=end
+		if (bounds.length < 3) return 'range: malformed stepped range (need start, step, end)';
+		const s = rangeBoundToNumber(bounds[0]);
+		const t = rangeBoundToNumber(bounds[1]);
+		const e = rangeBoundToNumber(bounds[2]);
+		if (s === null || t === null || e === null) return 'range: could not parse bounds';
+		start = s;
+		stepOrSecond = t;
+		end = e;
+	} else {
+		// No-step form: intBound[0]=start, rangeBound[0]=end (integer only)
+		if (intBounds.length < 1 || bounds.length < 1)
+			return 'range: malformed no-step range (need start, end)';
+		const s = rangeBoundToNumber(intBounds[0]);
+		const e = rangeBoundToNumber(bounds[0]);
+		if (s === null || e === null) return 'range: could not parse bounds';
+		start = s;
+		end = e;
+	}
+
+	// Compute step
+	let step: number;
+	if (hasComma && stepOrSecond !== null) {
+		// Explicit step: step = second_value - start
+		step = stepOrSecond - start;
+	} else {
+		// Default step: 1 if ascending, -1 if descending
+		step = end >= start ? 1 : -1;
+	}
+
+	// Validate step
+	if (step === 0) {
+		return `range: step of zero would produce an infinite sequence — use a non-zero step`;
+	}
+
+	// Validate direction: step must point from start toward end.
+	// For the stepped form [start, second..end], 'second' is the first step value.
+	// If second already overshoots end (e.g. [0, 2..1] → second=2 > end=1 with step>0),
+	// the range is semantically invalid.
+	if (step > 0) {
+		if (start > end) {
+			return `range: positive step (${step}) cannot reach end (${end}) from start (${start})`;
+		}
+		if (hasComma && stepOrSecond !== null && stepOrSecond > end + Number.EPSILON) {
+			return `range: step value (${stepOrSecond}) overshoots end (${end}) from start (${start})`;
+		}
+	}
+	if (step < 0) {
+		if (start < end) {
+			return `range: negative step (${step}) cannot reach end (${end}) from start (${start})`;
+		}
+		if (hasComma && stepOrSecond !== null && stepOrSecond < end - Number.EPSILON) {
+			return `range: step value (${stepOrSecond}) overshoots end (${end}) from start (${start})`;
+		}
+	}
+
+	// Expand: include both bounds
+	const values: number[] = [];
+	const isFloat = !Number.isInteger(start) || !Number.isInteger(step) || !Number.isInteger(end);
+
+	if (step > 0) {
+		for (let v = start; v <= end + Number.EPSILON; v += step) {
+			values.push(isFloat ? v : Math.round(v));
+		}
+	} else {
+		for (let v = start; v >= end - Number.EPSILON; v += step) {
+			values.push(isFloat ? v : Math.round(v));
+		}
+	}
+
+	if (values.length === 0) {
+		return `range: produces zero elements (start=${start}, step=${step}, end=${end})`;
+	}
+
+	return values;
+}
+
+// ---------------------------------------------------------------------------
 // CST compilation: numericGenerator → PollFn
 // ---------------------------------------------------------------------------
 
@@ -1232,6 +1347,7 @@ type CompiledPattern = {
  * Parser structure: modifiers written after [...] are consumed by sequenceExpr's
  * MANY2, not by patternStatement's MANY. So we must look in sequenceExpr or
  * relTimedList as well as on the pattern node itself.
+ * For range expressions, the modifiers live on the rangeExpr child node.
  * Continuation modifiers are found as continuationModifier children on the pattern node.
  */
 function collectPatternModifiers(patternNode: CstNode): CstNode[] {
@@ -1239,7 +1355,17 @@ function collectPatternModifiers(patternNode: CstNode): CstNode[] {
 	const seqNode =
 		((patternNode.children.sequenceExpr as CstNode[]) ?? [])[0] ??
 		((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
-	const seqMods = seqNode ? ((seqNode.children.modifierSuffix as CstNode[]) ?? []) : [];
+
+	let seqMods: CstNode[] = [];
+	if (seqNode) {
+		// For range expressions, modifiers are on the rangeExpr child
+		const rangeNode = ((seqNode.children.rangeExpr as CstNode[]) ?? [])[0];
+		if (rangeNode) {
+			seqMods = (rangeNode.children.modifierSuffix as CstNode[]) ?? [];
+		} else {
+			seqMods = (seqNode.children.modifierSuffix as CstNode[]) ?? [];
+		}
+	}
 
 	// Any modifier suffixes directly on the pattern statement (rare — after transposition etc.)
 	const directMods = (patternNode.children.modifierSuffix as CstNode[]) ?? [];
@@ -1283,11 +1409,20 @@ function compilePattern(
 	const relNode = ((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
 	const utf8Node = ((patternNode.children.utf8Generator as CstNode[]) ?? [])[0];
 
+	// Check if seqNode contains a rangeExpr child — if so, use range path
+	const rangeNode = seqNode ? (((seqNode.children.rangeExpr as CstNode[]) ?? [])[0] ?? null) : null;
+
 	const bodyNode = seqNode ?? relNode ?? utf8Node ?? null;
 	if (!bodyNode && !parentPattern) return 'pattern has no sequence body';
 
-	// List-level modifiers (on the [...] itself)
-	const listMods = bodyNode ? ((bodyNode.children.modifierSuffix as CstNode[]) ?? []) : [];
+	// List-level modifiers:
+	// - For range expressions: modifiers live on the rangeExpr node
+	// - For regular sequences: modifiers live on the sequenceExpr node directly
+	const listMods = rangeNode
+		? ((rangeNode.children.modifierSuffix as CstNode[]) ?? [])
+		: bodyNode
+			? ((bodyNode.children.modifierSuffix as CstNode[]) ?? [])
+			: [];
 	const listMode = extractEagerMode(listMods) ?? DEFAULT_MODE;
 
 	// Traversal mode
@@ -1297,13 +1432,26 @@ function compilePattern(
 
 	// Warn when `?` weights are present on a list without 'pick — the weight
 	// is meaningless there and silently ignored. Matches spec truth table 4.
-	if (traversal !== 'pick' && seqNode && listHasExplicitWeights(seqNode)) {
+	if (traversal !== 'pick' && seqNode && !rangeNode && listHasExplicitWeights(seqNode)) {
 		console.warn("[flux] `?` weight ignored: weights are only meaningful on lists with 'pick");
 	}
 
 	const compiled: CompiledElement[] = [];
 
-	if (seqNode) {
+	if (rangeNode) {
+		// Range expression: eagerly expand to a flat value array
+		const values = expandRangeExpr(rangeNode);
+		if (typeof values === 'string') return `Semantic error: ${values}`;
+		for (const v of values) {
+			const val = v;
+			compiled.push({
+				kind: 'scalar',
+				runner: makeRunner(() => val, listMode),
+				accidentalOffset: 0,
+				weight: makeRunner(() => 1, { kind: 'lock' })
+			});
+		}
+	} else if (seqNode) {
 		const elements = (seqNode.children.sequenceElement as CstNode[]) ?? [];
 		for (const elem of elements) {
 			const ce = compileElement(elem, listMode);

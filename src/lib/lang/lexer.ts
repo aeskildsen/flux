@@ -582,6 +582,30 @@ export const Percent = createToken({
 });
 
 /**
+ * `..` — range separator in sequence generators: `[0..7]`, `[0, 2..10]`.
+ * Must appear BEFORE Float in allTokens so that `0..7` does not lex as
+ * Float(`0.`) + something. The pattern `/\.\./` is two literal dots —
+ * unambiguous since `.` alone never appears as a token.
+ */
+export const DotDot = createToken({
+	name: 'DotDot',
+	pattern: /\.\./
+	// Monaco scope: 'operator'
+});
+
+/**
+ * `,` — range-step separator: `[0, 2..10]`.
+ * Only meaningful inside a range expression; the parser treats a bare `,`
+ * outside of a range as a parse error (commas are not general element
+ * separators).
+ */
+export const Comma = createToken({
+	name: 'Comma',
+	pattern: /,/
+	// Monaco scope: 'delimiter'
+});
+
+/**
  * `_` — rest: a silent slot in a sequence. No synth is spawned; the slot occupies time.
  * Uses a custom pattern that matches a standalone `_` — not followed by alphanumeric or
  * additional underscore characters — so that identifiers like `_foo` or `__bar` still
@@ -609,16 +633,22 @@ export const Rest = createToken({
 // ---------------------------------------------------------------------------
 
 /**
- * Float literal, e.g. `0.5`, `1.2`.
+ * Float literal, e.g. `0.5`, `1.2`, `0.` (used in `0.rand4`).
  * Must appear BEFORE Integer in allTokens — `0.5` would otherwise lex as
  * Integer(`0`) then an error on `.5`.
  *
- * The pattern requires digits on both sides of the dot.
+ * The pattern requires at least one digit before the dot, then an optional
+ * sequence of digits after it. The negative lookahead `(?!\.)` prevents
+ * consuming the first dot of a `..` range separator — e.g. in `0..7` the
+ * Float pattern does NOT match `0.` because the dot is immediately followed
+ * by another dot; Integer(`0`) + DotDot(`..`) + Integer(`7`) is produced
+ * instead.
+ *
  * `0.rand4` (float-rand form) is handled by Float + Rand + Integer.
  */
 export const Float = createToken({
 	name: 'Float',
-	pattern: /\d+\.\d*/
+	pattern: /\d+\.(?!\.)\d*/
 	// Monaco scope: 'number'
 });
 
@@ -749,6 +779,9 @@ export const allTokens = [
 	Colon,
 	Bang,
 	Percent,
+	// Range operators — DotDot before Float so '..' is not eaten by the Float pattern
+	DotDot, // '..' — range separator
+	Comma, // ',' — range step separator
 	// Literals — Float before Integer
 	Float,
 	Integer,

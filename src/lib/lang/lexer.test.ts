@@ -39,7 +39,9 @@ import {
 	ParamSigil,
 	Utf8Kw,
 	LCurly,
-	RCurly
+	RCurly,
+	DotDot,
+	Comma
 } from './lexer.js';
 
 describe('FluxLexer', () => {
@@ -722,5 +724,64 @@ describe('utf8 generator tokens', () => {
 	it('bare "}" without utf8 context is a lex error', () => {
 		const { errors } = FluxLexer.tokenize('}');
 		expect(errors.length).toBeGreaterThan(0);
+	});
+});
+
+describe('DotDot — range separator token', () => {
+	it('tokenizes ".." as a single DotDot token', () => {
+		const { tokens, errors } = FluxLexer.tokenize('..');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(DotDot);
+		expect(tokens[0].image).toBe('..');
+	});
+
+	it('tokenizes "[0..7]" correctly as LBracket Integer DotDot Integer RBracket', () => {
+		const { tokens, errors } = FluxLexer.tokenize('[0..7]');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(LBracket);
+		expect(tokens[1].tokenType).toBe(Integer);
+		expect(tokens[1].image).toBe('0');
+		expect(tokens[2].tokenType).toBe(DotDot);
+		expect(tokens[3].tokenType).toBe(Integer);
+		expect(tokens[3].image).toBe('7');
+		expect(tokens[4].tokenType).toBe(RBracket);
+	});
+
+	it('tokenizes "[0.0, 0.25..1.0]" — Float Comma Float DotDot Float', () => {
+		const { tokens, errors } = FluxLexer.tokenize('[0.0, 0.25..1.0]');
+		expect(errors).toHaveLength(0);
+		// LBracket Float Comma Float DotDot Float RBracket
+		expect(tokens[1].tokenType).toBe(Float);
+		expect(tokens[2].tokenType).toBe(Comma);
+		expect(tokens[3].tokenType).toBe(Float);
+		expect(tokens[4].tokenType).toBe(DotDot);
+		expect(tokens[5].tokenType).toBe(Float);
+	});
+
+	it('".." does not match inside a regular Float like "0.5"', () => {
+		// 0.5 should lex as Float, not Integer + DotDot + something
+		const { tokens, errors } = FluxLexer.tokenize('0.5');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(Float);
+	});
+});
+
+describe('Comma — range-specific separator token', () => {
+	it('tokenizes "," as a single Comma token', () => {
+		const { tokens, errors } = FluxLexer.tokenize(',');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(Comma);
+	});
+
+	it('tokenizes "[0, 2..10]" with Comma between start and step', () => {
+		const { tokens, errors } = FluxLexer.tokenize('[0, 2..10]');
+		expect(errors).toHaveLength(0);
+		const commaIdx = tokens.findIndex((t) => t.tokenType === Comma);
+		expect(commaIdx).toBeGreaterThan(0);
+		expect(tokens[commaIdx - 1].tokenType).toBe(Integer);
+		expect(tokens[commaIdx + 1].tokenType).toBe(Integer);
 	});
 });

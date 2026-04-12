@@ -834,3 +834,74 @@ describe('utf8Generator — parser', () => {
 		expect(lexErrors.length + parseErrors.length).toBeGreaterThan(0);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Range notation — [start..end] and [start, step..end]
+// ---------------------------------------------------------------------------
+
+describe('range notation — parser', () => {
+	it('parses [0..7] — integer range with default step', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0..7]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses [0, 2..10] — integer range with explicit step', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0, 2..10]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses [0.0, 0.25..1.0] — float range with explicit step', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0.0, 0.25..1.0]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses [10, 8..0] — descending range with explicit step', () => {
+		const { parseErrors, lexErrors } = parse('note lead [10, 8..0]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses [5..0] — descending range with default step', () => {
+		const { parseErrors, lexErrors } = parse('note lead [5..0]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses [0..3]'shuf — range with modifier", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..3]'shuf");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses [0..3]'pick — range with pick", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..3]'pick");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses slice drums [0..15] — range as slice pool', () => {
+		const { parseErrors, lexErrors } = parse('slice drums [0..15]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses [0..0] — single-element range', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0..0]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses negative start: [-3..3]', () => {
+		const { parseErrors, lexErrors } = parse('note lead [-3..3]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('rejects float before ".." with no comma — [0.0..1.0] is a parse error', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0.0..1.0]');
+		expect(parseErrors.length + lexErrors.length).toBeGreaterThan(0);
+	});
+});

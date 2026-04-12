@@ -35,7 +35,7 @@ This scalar/non-scalar distinction is load-bearing elsewhere in the spec: the ri
 
 Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `note` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gau`, `exp`, `bro`, `step`, `mul`, `lin`, `geo`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
 
-Inside `[...]` sequence generators, elements are separated by spaces. Commas are not valid separators.
+Inside `[...]` sequence generators, elements are separated by spaces. Commas are not valid separators — except inside a range expression (see below).
 
 ### Sequence generators
 
@@ -57,6 +57,34 @@ Inside `[...]` sequence generators, elements are separated by spaces. Commas are
 - Negative weights (e.g. `?-1`) are a parse error.
 - Generator expressions are not valid as weights — `?` must be followed by a numeric literal.
 - The `?` weight syntax is only meaningful on a list whose own modifiers include `'pick`. Using `?` on a list without `'pick` is not an error, but the weight is ignored and a warning is logged. This rule applies per list level: `[[1 2?3]'pick 5]` is fine, but `[[1 2?3] 5]'pick` ignores the inner `?3` because the inner list has no `'pick`.
+
+### Range notation
+
+> _See truth table [22 (Range notation)](DSL-truthtables.md#22-range-notation-truth-table)._
+
+A compact SC-inspired syntax for generating integer or float sequences inside `[...]`. All bounds are inclusive.
+
+```flux
+[0..7]            // [0 1 2 3 4 5 6 7]
+[0, 2..10]        // [0 2 4 6 8 10]
+[0.0, 0.25..1.0]  // [0.0 0.25 0.5 0.75 1.0]
+[10, 8..0]        // [10 8 6 4 2 0]  (descending)
+```
+
+**Forms:**
+
+- `[start..end]` — integer range; step defaults to `1` if `end >= start`, `-1` if `end < start`.
+- `[start, step..end]` — explicit step; the step value equals `second − first`.
+
+**Rules:**
+
+- Both bounds are inclusive.
+- Float ranges require an explicit step — `[0.0..1.0]` is a parse error (the parser rejects a float before `..` with no preceding comma).
+- Descending ranges are valid when `end < start` (default step `-1`) or when the explicit step would count down toward `end`.
+- A range that produces zero elements is a semantic error (e.g. `[0, 0..5]` — step of 0; or `[5..0]` with positive step 1 would produce 0 elements if start > end but is handled by auto-negating the step).
+- Ranges are eagerly expanded to a flat value array at parse/compile time — they behave identically to an explicit list `[v1 v2 ... vN]`.
+- A range list may carry the usual list modifiers (`'shuf`, `'pick`, `'lock`, etc.) after the `]`.
+- Slice selection: `[0..15]` is the natural way to express a pool of 16 slices (e.g. `slice drums [0..15]'pick`).
 
 ### Rests
 
