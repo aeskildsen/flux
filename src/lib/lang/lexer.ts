@@ -544,6 +544,23 @@ export const Slash = createToken({
 	// Monaco scope: 'operator'
 });
 
+/**
+ * `**` — exponentiation operator. Must appear BEFORE Star in allTokens so that
+ * `**` is matched as a single token rather than two `*` tokens.
+ */
+export const Doublestar = createToken({
+	name: 'Doublestar',
+	pattern: /\*\*/
+	// Monaco scope: 'operator'
+});
+
+/** `*` — multiplication operator. Must appear AFTER Doublestar in allTokens. */
+export const Star = createToken({
+	name: 'Star',
+	pattern: /\*/
+	// Monaco scope: 'operator'
+});
+
 export const Colon = createToken({
 	name: 'Colon',
 	pattern: /:/
@@ -726,6 +743,8 @@ export const allTokens = [
 	Equals,
 	Plus,
 	Minus,
+	Doublestar, // '**' — must come BEFORE Star so '**' is not split into two '*'
+	Star, // '*'
 	Slash,
 	Colon,
 	Bang,

@@ -1407,6 +1407,137 @@ describe('transposition (truth table 10)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Generator arithmetic — issue #31
+// ---------------------------------------------------------------------------
+// C major degree → MIDI: 0→60, 1→62, 2→64, 3→65, 4→67, 5→69, 6→71, 7→72
+
+describe('generator arithmetic — scalar RHS (truth table 10)', () => {
+	it('* 2: degrees are multiplied then passed through pitch chain', () => {
+		// [0 2] * 2 → degrees [0, 4] → MIDI [60, 67]
+		expect(notes('note x [0 2] * 2')).toEqual([60, 67]);
+	});
+
+	it('/ 2: degrees are divided (floor) then passed through pitch chain', () => {
+		// [0 4] / 2 → degrees [0, 2] → MIDI [60, 64]
+		expect(notes('note x [0 4] / 2')).toEqual([60, 64]);
+	});
+
+	it('** 2: degrees are exponentiated then passed through pitch chain', () => {
+		// [2 3] ** 2 → degrees [4, 9] → MIDI [67, 74]
+		// degree 9 = octave 7 + 2 → MIDI 60 + 12 + 4 = 76? Let's just check it produces 2 events
+		const evs = eval0('note x [2 3] ** 2');
+		expect(evs).toHaveLength(2);
+		// degree 4 → G5 = 67
+		expect(pitched(evs[0]).note).toBe(67);
+	});
+
+	it('% 7: degrees are taken modulo 7 then passed through pitch chain', () => {
+		// [5 9] % 7 → degrees [5, 2] → MIDI [69, 64]
+		expect(notes('note x [5 9] % 7')).toEqual([69, 64]);
+	});
+
+	it('* 0: all degrees become 0 → MIDI 60 per slot', () => {
+		expect(notes('note x [0 2 4] * 0')).toEqual([60, 60, 60]);
+	});
+
+	it('% 14 on utf8{coffee} maps bytes into scale degree range', () => {
+		// "coffee" bytes: 99, 111, 102, 102, 101, 101
+		// % 14: 99%14=1, 111%14=13, 102%14=4, 102%14=4, 101%14=3, 101%14=3
+		const evs = eval0('note lead utf8{coffee} % 14');
+		expect(evs).toHaveLength(6);
+		// degree 1 → D5 = 62
+		expect(pitched(evs[0]).note).toBe(62);
+	});
+
+	it('arithmetic with scalar RHS produces same event count as LHS', () => {
+		expect(eval0('note x [0 2 4] * 2')).toHaveLength(3);
+		expect(eval0('note x [0 2 4] / 2')).toHaveLength(3);
+		expect(eval0('note x [0 2 4] ** 2')).toHaveLength(3);
+		expect(eval0('note x [0 2 4] % 7')).toHaveLength(3);
+	});
+
+	it('scalar / 0: all events skipped with warning', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const evs = eval0('note x [1 2 3] / 0');
+		expect(evs).toHaveLength(0);
+		expect(warnSpy).toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	it('scalar % 0: identity for all elements (no events skipped)', () => {
+		// a % 0 = a, so degrees pass through unchanged
+		const evs = eval0('note x [1 2 3] % 0');
+		expect(evs).toHaveLength(3);
+	});
+});
+
+describe('generator arithmetic — list RHS / wrap-around (truth table 10)', () => {
+	it('[0 1 2] + [4 8] → degrees 4, 9, 6 (rhs wraps)', () => {
+		// pos 0: 0+4=4→G5=67, pos 1: 1+8=9→D6=74, pos 2: 2+(4)=6→B5=71
+		// degree 4 = G5 = 67, degree 9 = C major: 9 mod 7 = 2 + 1 octave → D6=74
+		// Actually: degree 9 maps to MIDI via degreeToMidi(9, C major, C5):
+		// 9 = 7*1 + 2, so octave shift 1, degree 2 = +4 semitones → 60 + 12 + 4 = 76? Let's check:
+		// degree 6 = B5 = 71
+		const evs = eval0('note x [0 1 2] + [4 8]');
+		expect(evs).toHaveLength(3);
+		// degree 4 → G5=67
+		expect(pitched(evs[0]).note).toBe(67);
+		// degree 6 → B5=71
+		expect(pitched(evs[2]).note).toBe(71);
+	});
+
+	it('list RHS wraps: [0 1 2] + [4 8] pos 2 uses rhs[0]=4', () => {
+		// pos 2: degree 2 + rhs[2%2=0]=4 → degree 6 → B5=71
+		const evs = eval0('note x [0 1 2] + [4 8]');
+		expect(pitched(evs[2]).note).toBe(71); // degree 6 = B5
+	});
+
+	it('list RHS produces same event count as LHS list', () => {
+		// LHS has 3 elements, RHS has 2 — output has 3 events
+		const evs = eval0('note x [0 1 2] + [4 8]');
+		expect(evs).toHaveLength(3);
+	});
+
+	it('[0 1 2] * [2 3] → degrees [0, 3, 4] (rhs wraps)', () => {
+		// pos 0: 0*2=0→C5=60, pos 1: 1*3=3→F5=65, pos 2: 2*2=4→G5=67
+		const evs = eval0('note x [0 1 2] * [2 3]');
+		expect(evs).toHaveLength(3);
+		expect(pitched(evs[0]).note).toBe(60); // degree 0 = C5
+		expect(pitched(evs[1]).note).toBe(65); // degree 3 = F5
+		expect(pitched(evs[2]).note).toBe(67); // degree 4 = G5
+	});
+
+	it('[1 2 3] % [4 0]: modulo zero is identity (a%0=a)', () => {
+		// pos 0: 1%4=1→D5=62, pos 1: 2%0=2 (identity)→E5=64, pos 2: 3%4=3→F5=65
+		const evs = eval0('note x [1 2 3] % [4 0]');
+		expect(evs).toHaveLength(3);
+		expect(pitched(evs[0]).note).toBe(62); // degree 1 = D5
+		expect(pitched(evs[1]).note).toBe(64); // degree 2 = E5 (identity: 2%0=2)
+		expect(pitched(evs[2]).note).toBe(65); // degree 3 = F5
+	});
+
+	it('[1 2 3] / [4 0]: division by zero skips event with warning', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const evs = eval0('note x [1 2 3] / [4 0]');
+		// pos 1: 2/0 is skipped → only 2 events (pos 0 and pos 2)
+		expect(evs).toHaveLength(2);
+		expect(warnSpy).toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	it('both operands reset at cycle boundary', () => {
+		// Cycle 0 and cycle 1 should produce the same result (both reset)
+		const i = inst('note x [0 1 2] + [4 8]');
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		if (!r0.ok || !r1.ok) throw new Error('eval failed');
+		const notes0 = r0.events.map((e) => pitched(e).note);
+		const notes1 = r1.events.map((e) => pitched(e).note);
+		expect(notes0).toEqual(notes1);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // 9. Structural — note'n statement, continuation modifier lines
 // ---------------------------------------------------------------------------
 

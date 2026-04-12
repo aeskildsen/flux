@@ -408,19 +408,60 @@ set key(g# lydian)
 
 The `@cent` decorator remains available for fine-tuning but is not part of the common vocabulary.
 
-### Modal transposition via `+` and `-`
+### Generator arithmetic operators
 
-> _See truth table [10 (Arithmetic transposition)](DSL-truthtables.md#10-arithmetic-transposition-truth-table)._
+> _See truth table [10 (Generator arithmetic)](DSL-truthtables.md#10-generator-arithmetic-truth-table)._
 
-Modal transposition uses infix `+` and `-` operators on a content type expression:
+Arithmetic operators apply element-wise to the degree values produced by the left-hand generator. The left-hand side is always the pattern's generator expression; the right-hand side is a scalar generator or a list generator.
+
+Supported operators:
+
+| Operator | Meaning        | Example                       |
+| -------- | -------------- | ----------------------------- |
+| `+`      | Addition       | `note lead [0 2 4] + 2`       |
+| `-`      | Subtraction    | `note lead [0 2 4] - 1`       |
+| `*`      | Multiplication | `note lead [0 2 4] * 2`       |
+| `/`      | Division       | `note lead [0 2 4] / 2`       |
+| `**`     | Exponentiation | `note lead [0 2 4] ** 2`      |
+| `%`      | Modulo         | `note lead utf8{coffee} % 14` |
 
 ```flux
 note lead [0 2 4] + 2        // shift all degrees up 2 scale steps
 note lead [0 2 4] - 1        // shift down 1 scale step
 note lead [0 2 4] + 0rand3   // stochastic transposition, eager(1) by default
+note lead [0 1 2] * 2        // double each degree: 0, 2, 4
+note lead utf8{coffee} % 14  // map byte values into scale-degree range
 ```
 
-The right-hand side must be a non-negative scalar value or scalar generator. List generators (`[...]`) are not permitted as operands — two list generators combined arithmetically creates unresolvable stream-combination ambiguity. A double-negative such as `note [0] - -4` is a syntax error; use `note [0] + 4` instead.
+**Scalar right-hand side** — the value is applied uniformly to every element each cycle (existing `+`/`-` behaviour is preserved):
+
+```flux
+note lead [0 2 4] + 3        // every element gets +3 scale steps
+```
+
+**Generator right-hand side** — a list generator (`[...]`) or scalar generator may appear on the right. When a list generator is used, its values wrap around for position i: `rhs_value = rhs[i % rhs_length]`. Both operands reset their state at cycle boundaries.
+
+```flux
+// [0 1 2] + [4 8] → pos 0: 0+4=4, pos 1: 1+8=9, pos 2: 2+4=6
+note lead [0 1 2] + [4 8]    // → 4, 9, 6, 4, 9, 6 per cycle
+
+// scalar RHS — existing behaviour, applied uniformly
+note lead [0 1 2] + 3        // → 3, 4, 5
+```
+
+**Division by zero** — when the right-hand side evaluates to zero for a given element slot, a warning is emitted and the event for that slot is skipped (best-effort for live coding):
+
+```flux
+[1 2 3] / [4 0]   // 1/4 fires; 2/0 is skipped with a warning; 3/4 fires (pos 2 wraps to rhs[0]=4)
+```
+
+**Modulo zero** — `a % 0` is defined as the identity `a` (not an error or skip):
+
+```flux
+[1 2 3] % [4 0]   // 1%4=1, 2%0=2, 3%4=3
+```
+
+**Double-negative** — `note [0] - -4` is a parse error; use `note [0] + 4` instead. This restriction applies only to `+` and `-` because the leading `-` on the RHS is syntactically ambiguous with a negative number literal; for `*`, `/`, `**`, and `%` the RHS must always be a positive scalar or a list generator.
 
 ### Accidentals
 
