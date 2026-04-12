@@ -79,6 +79,8 @@ import {
 	Rest,
 	Colon,
 	Percent,
+	Star,
+	Doublestar,
 	ParamSigil,
 	INDENT,
 	DEDENT,
@@ -469,15 +471,49 @@ class FluxParser extends CstParser {
 	});
 
 	// -------------------------------------------------------------------------
-	// Transposition
+	// Arithmetic operator (generalised from transposition)
 	// -------------------------------------------------------------------------
+	//
+	// Supports: + - * / ** %
+	// RHS: a scalar generator (positiveScalar) or a list generator ([...]).
+	// Double-negative (- -4) is a parse error because positiveScalar does NOT
+	// accept a leading Minus.
+	//
+	// The rule is still named "transposition" in the CST for backward
+	// compatibility with the evaluator; the evaluator reads the operator token
+	// to determine which operation to apply.
 
 	transposition = this.RULE('transposition', () => {
-		// (+ | -) positiveScalar
-		// Double-negative (- -4) is a parse error because positiveScalar
-		// does NOT accept a leading Minus.
-		this.OR([{ ALT: () => this.CONSUME(Plus) }, { ALT: () => this.CONSUME(Minus) }]);
-		this.SUBRULE(this.positiveScalar);
+		this.OR([
+			{ ALT: () => this.CONSUME(Plus) },
+			{ ALT: () => this.CONSUME(Minus) },
+			{ ALT: () => this.CONSUME(Doublestar) }, // '**' before '*'
+			{ ALT: () => this.CONSUME(Star) },
+			{ ALT: () => this.CONSUME(Slash) },
+			{ ALT: () => this.CONSUME(Percent) }
+		]);
+		// RHS: list generator ([...]) or scalar generator.
+		this.OR2([
+			{ ALT: () => this.SUBRULE(this.arithmeticListRhs) },
+			{ ALT: () => this.SUBRULE(this.positiveScalar) }
+		]);
+	});
+
+	/**
+	 * List generator on the right-hand side of an arithmetic operator.
+	 * Parses `[elem ...]` with optional modifiers.
+	 * This is the same body as sequenceGenerator/sequenceExpr but named
+	 * distinctly so the evaluator can identify the list-RHS case.
+	 */
+	arithmeticListRhs = this.RULE('arithmeticListRhs', () => {
+		this.CONSUME(LBracket);
+		this.MANY(() => {
+			this.SUBRULE(this.sequenceElement);
+		});
+		this.CONSUME(RBracket);
+		this.MANY2(() => {
+			this.SUBRULE(this.modifierSuffix);
+		});
 	});
 
 	positiveScalar = this.RULE('positiveScalar', () => {
