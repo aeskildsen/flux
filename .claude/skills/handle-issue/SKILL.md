@@ -85,11 +85,7 @@ Stage all modified tracked files (be specific — don't `git add .` blindly):
 git diff --name-only
 ```
 
-Commit message format follows conventional commits: `feat(scope): description (#N)` (or `fix` instead of feat if issue is a bug report). Derive `scope` from the primary files changed (e.g. `parser`, `evaluator`, `lang`, `ui`). Keep the subject line under 72 characters. Add the co-author trailer:
-
-```
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-```
+Commit message format follows conventional commits: `feat(scope): description (#N)` (or `fix` instead of feat if issue is a bug report). Derive `scope` from the primary files changed (e.g. `parser`, `evaluator`, `lang`, `ui`). Keep the subject line under 72 characters. Do not add any `Co-Authored-By` trailer.
 
 ### Push
 
