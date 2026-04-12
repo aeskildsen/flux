@@ -55,7 +55,7 @@ If no issue is eligible (all remaining issues are blocked), stop and tell the us
 Before spawning work, check the issue's current state:
 
 ```bash
-gh issue view <N> --json state,stateReason
+gh issue view <N> --json state
 ```
 
 If the issue is already closed, mark it as done and move to the next one.
@@ -81,7 +81,7 @@ Implement the issue end-to-end — read it, plan, implement with TDD, and open a
 ```
 
 **Important considerations:**
-- The issue-handler works on an isolated worktree so it doesn't interfere with main.
+- The issue-handler checks out a normal local branch — no worktree isolation needed.
 - Wait for the agent to complete before proceeding. It will return the PR number in its output.
 - If the agent fails or reports an error, log it and ask the user whether to retry or skip.
 
@@ -111,16 +111,10 @@ Wait for the reviewer to complete. It will classify the outcome as PASSED, PASSE
 After the review passes, merge the PR so that subsequent issues build on top of the completed work:
 
 ```bash
-gh pr merge <PR> --squash --delete-branch
+gh pr merge <PR> --squash
 ```
 
-Verify the merge succeeded and that main is up to date:
-
-```bash
-git switch main && git pull
-```
-
-If the merge fails (e.g. merge conflicts, branch protection rules), ask the user for help — do not force-merge. Mark the issue as done only after a successful merge.
+This merges remotely, switches to main, and pulls — all in one step. If it fails (e.g. merge conflicts, branch protection rules), ask the user for help — do not force-merge. Mark the issue as done only after a successful merge.
 
 ## Step 6: Record progress and continue
 
