@@ -104,6 +104,10 @@ echo "Host network detected as: $HOST_NETWORK"
 iptables -A INPUT -s "$HOST_NETWORK" -j ACCEPT
 iptables -A OUTPUT -d "$HOST_NETWORK" -j ACCEPT
 
+# Allow LAN access for notifications
+iptables -A OUTPUT -d 192.168.1.3 -j ACCEPT
+iptables -A INPUT -s 192.168.1.3 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
 # Set default policies to DROP first
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
