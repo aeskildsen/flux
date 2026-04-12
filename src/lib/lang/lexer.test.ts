@@ -34,7 +34,10 @@ import {
 	Flat,
 	Bang,
 	Percent,
-	ParamSigil
+	ParamSigil,
+	Utf8Kw,
+	LCurly,
+	RCurly
 } from './lexer.js';
 
 describe('FluxLexer', () => {
@@ -618,5 +621,60 @@ describe('BlockComment — multi-line comment (SKIPPED)', () => {
 		const { tokens, errors } = FluxLexer.tokenize('/* ignored */ note [0]');
 		expect(errors).toHaveLength(0);
 		expect(tokens[0].tokenType).toBe(Note);
+	});
+});
+
+describe('utf8 generator tokens', () => {
+	it('tokenizes "utf8" as Utf8Kw when immediately followed by "{"', () => {
+		const { tokens, errors } = FluxLexer.tokenize('utf8{coffee}');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(Utf8Kw);
+		expect(tokens[0].image).toBe('utf8');
+	});
+
+	it('tokenizes "utf8{coffee}" as Utf8Kw + LCurly + Identifier + RCurly', () => {
+		const { tokens, errors } = FluxLexer.tokenize('utf8{coffee}');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(4);
+		expect(tokens[0].tokenType).toBe(Utf8Kw);
+		expect(tokens[1].tokenType).toBe(LCurly);
+		expect(tokens[2].tokenType).toBe(Identifier);
+		expect(tokens[2].image).toBe('coffee');
+		expect(tokens[3].tokenType).toBe(RCurly);
+	});
+
+	it('tokenizes "utf8{a}" (single char) correctly', () => {
+		const { tokens, errors } = FluxLexer.tokenize('utf8{a}');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(Utf8Kw);
+		expect(tokens[2].image).toBe('a');
+	});
+
+	it('"utf8foo" tokenizes as Identifier (not Utf8Kw + Identifier)', () => {
+		// When followed by a letter instead of {, it must be an Identifier
+		const { tokens, errors } = FluxLexer.tokenize('utf8foo');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(Identifier);
+		expect(tokens[0].image).toBe('utf8foo');
+	});
+
+	it('"utf8 {coffee}" (space before brace) — utf8 becomes Identifier, { is a lex error', () => {
+		// Space means utf8 is an ordinary identifier; { is unrecognised
+		const { tokens, errors } = FluxLexer.tokenize('utf8 {coffee}');
+		// utf8 tokenizes as Identifier (not followed by {)
+		expect(tokens[0].tokenType).toBe(Identifier);
+		// { is not a valid token without utf8 context — lex error
+		expect(errors.length).toBeGreaterThan(0);
+	});
+
+	it('bare "{" without utf8 context is a lex error', () => {
+		const { errors } = FluxLexer.tokenize('{');
+		expect(errors.length).toBeGreaterThan(0);
+	});
+
+	it('bare "}" without utf8 context is a lex error', () => {
+		const { errors } = FluxLexer.tokenize('}');
+		expect(errors.length).toBeGreaterThan(0);
 	});
 });

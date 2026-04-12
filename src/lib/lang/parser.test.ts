@@ -735,3 +735,46 @@ describe('derived generators — child:parent syntax', () => {
 		expect(parse('note harm:lead [0 4 7] | fx(\\lpf)').parseErrors).toHaveLength(0);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// utf8{word} generator — UTF-8 byte sequence generator
+// ---------------------------------------------------------------------------
+
+describe('utf8Generator — parser', () => {
+	it('parses "note lead utf8{coffee}" without errors', () => {
+		const { parseErrors, lexErrors } = parse('note lead utf8{coffee}');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses "note lead utf8{coffee}" with modifiers without errors', () => {
+		// Note: % modulo operator (issue #31) is not yet implemented; test basic form only.
+		const { parseErrors, lexErrors } = parse("note lead utf8{coffee}'lock");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses utf8{word} nested inside a sequence list', () => {
+		const { parseErrors, lexErrors } = parse('note lead [utf8{hello} 0 2]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses utf8{word} with shuf modifier on enclosing list', () => {
+		const { parseErrors, lexErrors } = parse("note lead [utf8{hello} 0 2]'shuf");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses utf8{a} (single char)', () => {
+		const { parseErrors, lexErrors } = parse('note lead utf8{a}');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('rejects utf8{} with empty braces (parse error)', () => {
+		const { parseErrors, lexErrors } = parse('note lead utf8{}');
+		// Either a lex or parse error must be present
+		expect(lexErrors.length + parseErrors.length).toBeGreaterThan(0);
+	});
+});

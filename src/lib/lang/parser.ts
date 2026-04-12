@@ -81,7 +81,10 @@ import {
 	Percent,
 	ParamSigil,
 	INDENT,
-	DEDENT
+	DEDENT,
+	Utf8Kw,
+	LCurly,
+	RCurly
 } from './lexer.js';
 
 // ---------------------------------------------------------------------------
@@ -281,11 +284,16 @@ class FluxParser extends CstParser {
 				ALT: () => this.SUBRULE(this.relTimedList)
 			},
 			{ ALT: () => this.SUBRULE(this.sequenceExpr) },
+			// utf8{word} as a top-level pattern body (scalar generator form).
+			{
+				GATE: () => this.LA(1).tokenType === Utf8Kw,
+				ALT: () => this.SUBRULE(this.utf8Generator)
+			},
 			// Derived generator with no body — body is optional for child:parent form.
-			// Detected by the absence of '[' as the next token.
+			// Detected by the absence of '[' or 'utf8' as the next token.
 			// The evaluator enforces that only derived (child:parent) names may omit the body.
 			{
-				GATE: () => this.LA(1).tokenType !== LBracket,
+				GATE: () => this.LA(1).tokenType !== LBracket && this.LA(1).tokenType !== Utf8Kw,
 				ALT: () => {
 					/* no body — inherited from parent */
 				}
@@ -694,8 +702,27 @@ class FluxParser extends CstParser {
 	atomicGenerator = this.RULE('atomicGenerator', () => {
 		this.OR([
 			{ ALT: () => this.SUBRULE(this.sequenceGenerator) },
+			{ ALT: () => this.SUBRULE(this.utf8Generator) },
 			{ ALT: () => this.SUBRULE(this.numericGenerator) }
 		]);
+	});
+
+	/**
+	 * `utf8{word}` — UTF-8 byte sequence generator.
+	 * Converts the characters of a bare identifier to their UTF-8 byte values
+	 * and yields them cyclically.
+	 *
+	 * CST children:
+	 *   - Utf8Kw[0]   — the `utf8` keyword token
+	 *   - LCurly[0]   — `{`
+	 *   - Identifier[0] — the bare word whose bytes are yielded
+	 *   - RCurly[0]   — `}`
+	 */
+	utf8Generator = this.RULE('utf8Generator', () => {
+		this.CONSUME(Utf8Kw);
+		this.CONSUME(LCurly);
+		this.CONSUME(Identifier);
+		this.CONSUME(RCurly);
 	});
 
 	parenGenerator = this.RULE('parenGenerator', () => {

@@ -138,6 +138,76 @@ export const Fx = createToken({
 	// Monaco scope: 'keyword'
 });
 
+/**
+ * `utf8` — byte-sequence generator keyword.
+ * Only matches when immediately followed by `{` (no whitespace).
+ * This prevents `utf8foo` from tokenising as Utf8Kw + Identifier.
+ * Uses a custom pattern so the lexer can enforce the no-space rule.
+ */
+export const Utf8Kw = createToken({
+	name: 'Utf8Kw',
+	pattern: {
+		exec: (text: string, offset: number) => {
+			if (text.slice(offset, offset + 4) !== 'utf8') return null;
+			if (text[offset + 4] !== '{') return null;
+			const match = ['utf8'] as unknown as RegExpExecArray;
+			match.index = offset;
+			match.input = text;
+			return match;
+		}
+	},
+	longer_alt: Identifier,
+	line_breaks: false
+	// Monaco scope: 'keyword'
+});
+
+/**
+ * `{` — opens a utf8 generator body.
+ * Only matches when immediately preceded by `utf8` (i.e., the 4 characters
+ * before the current offset are `utf8`). This keeps `{` a lex error in all
+ * other contexts, preserving backwards-compatibility.
+ */
+export const LCurly = createToken({
+	name: 'LCurly',
+	pattern: {
+		exec: (text: string, offset: number) => {
+			if (text[offset] !== '{') return null;
+			if (text.slice(offset - 4, offset) !== 'utf8') return null;
+			const match = ['{'] as unknown as RegExpExecArray;
+			match.index = offset;
+			match.input = text;
+			return match;
+		}
+	},
+	line_breaks: false
+	// Monaco scope: 'delimiter'
+});
+
+/**
+ * `}` — closes a utf8 generator body.
+ * Only matches when the preceding character is an identifier character
+ * (letter, digit, or underscore) — i.e., when we are at the end of an
+ * identifier inside `utf8{word}`. A lone `}` (preceded by nothing or
+ * by non-identifier characters) remains a lex error.
+ */
+export const RCurly = createToken({
+	name: 'RCurly',
+	pattern: {
+		exec: (text: string, offset: number) => {
+			if (text[offset] !== '}') return null;
+			if (offset === 0) return null;
+			const prev = text[offset - 1];
+			if (!/[a-zA-Z0-9_]/.test(prev)) return null;
+			const match = ['}'] as unknown as RegExpExecArray;
+			match.index = offset;
+			match.input = text;
+			return match;
+		}
+	},
+	line_breaks: false
+	// Monaco scope: 'delimiter'
+});
+
 // send_fx and master_fx are removed — send FX are not supported.
 // master bus FX are UI-configured and have no DSL syntax.
 // Keeping stub exports for any remaining references (will be cleaned up in parser/evaluator).
@@ -618,6 +688,7 @@ export const allTokens = [
 	Note,
 	Mono,
 	Fx,
+	Utf8Kw, // 'utf8' keyword — must appear before Identifier; longer_alt: Identifier
 	Set,
 	// Generator keywords (longer ones first where prefixes overlap)
 	Step, // 'step' before 'set' — no overlap, but keep deterministic order
@@ -646,6 +717,8 @@ export const allTokens = [
 	RBracket,
 	LParen,
 	RParen,
+	LCurly, // '{' — only valid immediately after 'utf8'
+	RCurly, // '}' — only valid to close a utf8{...} body
 	Pipe,
 	At,
 	Tilde,

@@ -18,6 +18,21 @@ export interface HoverResult {
 // ---------------------------------------------------------------------------
 
 const TOKEN_TYPE_DOCS: Record<string, string> = {
+	Utf8Kw: [
+		'**`utf8{word}`** — UTF-8 byte sequence generator.',
+		'',
+		'Converts the characters of a bare identifier to their UTF-8 byte values and yields them',
+		'cyclically. Inspired by `"coffee".ascii` in SuperCollider.',
+		'',
+		'```flux',
+		'note lead utf8{coffee}          // bytes: 99 111 102 102 101 101',
+		'note lead [utf8{hello} 0 2]     // utf8 as a cycling scalar element in a list',
+		'```',
+		'',
+		'The identifier inside `{}` is treated as a literal string — it is not looked up as a',
+		'variable. `utf8` must be written adjacent to `{` with no space.'
+	].join('\n'),
+
 	Note: [
 		'**`note [...]`** — polyphonic pitched events.',
 		'',

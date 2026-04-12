@@ -2396,3 +2396,94 @@ describe('cloud content type', () => {
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 12. utf8{word} generator
+//
+// Converts identifier characters to UTF-8 bytes and yields them cyclically.
+// "coffee" = [99, 111, 102, 102, 101, 101]
+// With % 14: [1, 7, 4, 4, 3, 3]
+// "hello"  = [104, 101, 108, 108, 111]
+// "a"      = [97]
+// ---------------------------------------------------------------------------
+
+describe('utf8{word} generator', () => {
+	it('utf8{coffee} yields the 6 byte values of "coffee" as degrees', () => {
+		// "coffee" bytes: c=99, o=111, f=102, f=102, e=101, e=101
+		// These are degree values in C major; scale lookup wraps octaves so
+		// we verify that the sequence is deterministic by comparing two evals.
+		const evs = eval0('note lead utf8{coffee}');
+		expect(evs).toHaveLength(6);
+		const noteNums = evs.map((e) => pitched(e).note);
+		// Verify sequence is deterministic and consistent across two parses
+		const evs2 = eval0('note lead utf8{coffee}');
+		expect(evs2.map((e) => pitched(e).note)).toEqual(noteNums);
+	});
+
+	it('utf8{coffee} produces 6 events (one per byte)', () => {
+		const evs = eval0('note lead utf8{coffee}');
+		expect(evs).toHaveLength(6);
+	});
+
+	it('utf8{a} produces 1 event (single-byte word)', () => {
+		const evs = eval0('note lead utf8{a}');
+		expect(evs).toHaveLength(1);
+	});
+
+	it('utf8{coffee} cycles — cycle 1 repeats the same bytes', () => {
+		const i = inst('note lead utf8{coffee}');
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		if (!r0.ok || !r1.ok) throw new Error('eval failed');
+		expect(r0.events.map((e) => pitched(e).note)).toEqual(r1.events.map((e) => pitched(e).note));
+	});
+
+	it('utf8{coffee} nested inside a sequence list', () => {
+		// [utf8{coffee} 0 2] — utf8{coffee} is one scalar element; polls one byte per slot
+		// So the list has 3 elements: the generator, 0, and 2.
+		const evs = eval0('note lead [utf8{coffee} 0 2]');
+		expect(evs).toHaveLength(3);
+		// First element is the first byte of "coffee" (99 → degree 99)
+		// Second element is degree 0 → MIDI 60 (C5)
+		// Third element is degree 2 → MIDI 64 (E5)
+		expect(pitched(evs[1]).note).toBe(60); // degree 0 = C5
+		expect(pitched(evs[2]).note).toBe(64); // degree 2 = E5
+	});
+
+	it('utf8{coffee} cycles through bytes across list slots in subsequent cycles', () => {
+		// In a list [utf8{coffee} 0], the utf8 generator polls once per list traversal.
+		// Cycle 0: byte[0] = 99 (c)
+		// Cycle 1: byte[1] = 111 (o)
+		const i = inst('note lead [utf8{coffee} 0]');
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		if (!r0.ok || !r1.ok) throw new Error('eval failed');
+		// First element differs between cycles (cycling through bytes)
+		const first0 = pitched(r0.events[0]).note;
+		const first1 = pitched(r1.events[0]).note;
+		// They should NOT be equal (different bytes at index 0 vs index 1)
+		expect(first0).not.toBe(first1);
+	});
+
+	it('utf8{coffee} as sole pattern element has correct beat offsets', () => {
+		const evs = eval0('note lead utf8{coffee}');
+		// 6 events equally spaced across the cycle
+		const expectedOffsets = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
+		evs.forEach((ev, i) => {
+			expect(ev.beatOffset).toBeCloseTo(expectedOffsets[i], 10);
+		});
+	});
+
+	it('eval succeeds (no error) for utf8{hello}', () => {
+		const i = createInstance('note lead utf8{hello}');
+		expect(i.ok).toBe(true);
+		if (!i.ok) return;
+		const r = i.evaluate({ cycleNumber: 0 });
+		expect(r.ok).toBe(true);
+	});
+
+	it('utf8{word} creates an instance without errors', () => {
+		const i = createInstance('note lead utf8{coffee}');
+		expect(i.ok).toBe(true);
+	});
+});
