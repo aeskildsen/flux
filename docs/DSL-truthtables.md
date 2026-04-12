@@ -235,12 +235,12 @@ Element-wise arithmetic applied to degree values. Operators: `+`, `-`, `*`, `/`,
 
 **Generator right-hand side (wrap-around)**
 
-| Code                   | Interpretation                       | Evaluation                                                    | Result                   |
-| ---------------------- | ------------------------------------ | ------------------------------------------------------------- | ------------------------ |
-| `note [0 1 2] + [4 8]` | Add list RHS, wrap-around.           | pos i uses rhs[i % rhs_length]; both reset at cycle boundary. | [4, 9, 6].               |
-| `note [0 1 2] * [2 3]` | Multiply list RHS, wrap-around.      | pos i uses rhs[i % rhs_length].                               | [0, 3, 4].               |
-| `note [0 1 2] % [4 0]` | Modulo list RHS; zero is identity.   | 0%4=0, 1%0=1 (identity), 2%4=2.                               | [0, 1, 2].               |
-| `note [1 2 3] / [4 0]` | Division list RHS; zero skips event. | 1/4 fires; 2/0 is skipped with a warning.                     | [0.25]; event 2 skipped. |
+| Code                   | Interpretation                       | Evaluation                                                    | Result                       |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------- | ---------------------------- |
+| `note [0 1 2] + [4 8]` | Add list RHS, wrap-around.           | pos i uses rhs[i % rhs_length]; both reset at cycle boundary. | [4, 9, 6].                   |
+| `note [0 1 2] * [2 3]` | Multiply list RHS, wrap-around.      | pos i uses rhs[i % rhs_length].                               | [0, 3, 4].                   |
+| `note [0 1 2] % [4 0]` | Modulo list RHS; zero is identity.   | 0%4=0, 1%0=1 (identity), 2%4=2.                               | [0, 1, 2].                   |
+| `note [1 2 3] / [4 0]` | Division list RHS; zero skips event. | 1/4 fires; 2/0 skipped; 3/4 fires (pos 2 wraps to rhs[0]=4).  | [0.25, 0.75]; pos 1 skipped. |
 
 **Error and edge cases**
 

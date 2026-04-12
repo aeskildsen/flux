@@ -1455,6 +1455,20 @@ describe('generator arithmetic — scalar RHS (truth table 10)', () => {
 		expect(eval0('note x [0 2 4] ** 2')).toHaveLength(3);
 		expect(eval0('note x [0 2 4] % 7')).toHaveLength(3);
 	});
+
+	it('scalar / 0: all events skipped with warning', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const evs = eval0('note x [1 2 3] / 0');
+		expect(evs).toHaveLength(0);
+		expect(warnSpy).toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	it('scalar % 0: identity for all elements (no events skipped)', () => {
+		// a % 0 = a, so degrees pass through unchanged
+		const evs = eval0('note x [1 2 3] % 0');
+		expect(evs).toHaveLength(3);
+	});
 });
 
 describe('generator arithmetic — list RHS / wrap-around (truth table 10)', () => {

@@ -452,7 +452,7 @@ note lead [0 1 2] + 3        // → 3, 4, 5
 **Division by zero** — when the right-hand side evaluates to zero for a given element slot, a warning is emitted and the event for that slot is skipped (best-effort for live coding):
 
 ```flux
-[1 2 3] / [4 0]   // 1/4 fires; 2/0 is skipped with a warning
+[1 2 3] / [4 0]   // 1/4 fires; 2/0 is skipped with a warning; 3/4 fires (pos 2 wraps to rhs[0]=4)
 ```
 
 **Modulo zero** — `a % 0` is defined as the identity `a` (not an error or skip):
