@@ -2773,3 +2773,14 @@ describe('range notation — error cases', () => {
 		expect(i.ok).toBe(false);
 	});
 });
+
+describe('range notation — nested inside outer list', () => {
+	it('[[0..3] 4] — nested range subdivides parent slot', () => {
+		// The spec says ranges behave identically to explicit lists.
+		// [[0..3] 4] should behave like [[0 1 2 3] 4]: 2 top-level slots,
+		// first slot subdivided into 4 sub-events.
+		const evs = eval0('note x [[0..3] 4]');
+		// 2 top-level slots → 1 with 4 sub-events + 1 scalar = 5 total events
+		expect(evs).toHaveLength(5);
+	});
+});

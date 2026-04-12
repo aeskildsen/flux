@@ -764,8 +764,35 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 
 	// Handle nested sequence generator: [1 2] inside [0 4 [1 2]]
 	// The sub-list subdivides the parent slot — each sub-element gets slot/n time.
+	// Also handles nested range expressions: [[0..3] 4] behaves like [[0 1 2 3] 4].
 	const seqGen = ((atomic.children.sequenceGenerator as CstNode[]) ?? [])[0];
 	if (seqGen) {
+		// Check if this is a range expression inside the sequence generator
+		const subRangeNode = ((seqGen.children.rangeExpr as CstNode[]) ?? [])[0];
+		if (subRangeNode) {
+			// Nested range: expand to flat values and build a sub-sequence.
+			// Modifiers live on the rangeExpr node, not directly on seqGen.
+			const subListMods = (subRangeNode.children.modifierSuffix as CstNode[]) ?? [];
+			const subListMode = extractEagerMode(subListMods) ?? inherited;
+			let subTraversal: TraversalMode = 'seq';
+			if (hasModifier(subListMods, 'shuf')) subTraversal = 'shuf';
+			else if (hasModifier(subListMods, 'pick')) subTraversal = 'pick';
+			const expandedValues = expandRangeExpr(subRangeNode);
+			if (typeof expandedValues === 'string') return null; // semantic error in nested range
+			const subElements: CompiledElement[] = expandedValues.map((v) => ({
+				kind: 'scalar' as const,
+				runner: makeRunner(() => v, subListMode),
+				accidentalOffset: 0,
+				weight: makeRunner(() => 1, { kind: 'lock' })
+			}));
+			return {
+				kind: 'sequence',
+				elements: subElements,
+				traversal: subTraversal,
+				weight: makeRunner(() => 1, { kind: 'lock' })
+			};
+		}
+
 		const subListMods = (seqGen.children.modifierSuffix as CstNode[]) ?? [];
 		const subListMode = extractEagerMode(subListMods) ?? inherited;
 		let subTraversal: TraversalMode = 'seq';
