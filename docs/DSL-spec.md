@@ -27,7 +27,7 @@ Unlike SuperCollider patterns/streams, all generators yield indefinitely. They a
 
 This scalar/non-scalar distinction is load-bearing elsewhere in the spec: the right-hand side of transposition and the `'stut` count argument both require a scalar generator and reject `[...]` outright.
 
-`{}` curly brackets are not assigned to any syntax form and are reserved for future use. Any input containing `{` or `}` is a lex error.
+`{}` curly brackets are used exclusively by the `utf8{}` generator (see below). Outside of that context, a bare `{` or `}` is a lex error.
 
 ### Whitespace rules
 
@@ -107,6 +107,41 @@ note lead [_ 2 4]      // rest on the 1st slot
 // Geometric/exponential interpolation (no counterpart in SC)
 2geo7x8
 ```
+
+### UTF-8 byte generator
+
+> _See truth table [21 (utf8 generator)](DSL-truthtables.md#21-utf8-generator-truth-table)._
+
+`utf8{word}` converts the characters of a bare identifier to their UTF-8 byte values and yields them in sequence, cycling indefinitely.
+
+```flux
+// "coffee" → [99 111 102 102 101 101] → % 14 → [1 7 4 4 3 3]
+note lead utf8{coffee} % 14
+
+// nested inside a sequence list
+note lead [utf8{hello} % 7 0 2]'shuf
+```
+
+**Syntax:**
+
+```ebnf
+utf8Generator   = "utf8" "{" identifier "}" ;
+
+(* utf8Generator is a new alternative in atomicGenerator *)
+atomicGenerator = parenGenerator
+                | sequenceGenerator
+                | utf8Generator
+                | numericGenerator ;
+```
+
+- `utf8` must be immediately followed by `{` with no whitespace.
+- The content inside `{}` is a single bare identifier (letters, digits, underscores — same as any Flux identifier).
+- The identifier is treated as a **literal string** — its characters are encoded as UTF-8 bytes. It is not looked up as a variable name or generator alias.
+- The generator cycles: after the last byte, it restarts from the first.
+- `utf8{word}` is a **scalar generator** — it yields a single integer per poll. It is valid wherever a scalar generator is valid: directly as the sole generator in a pattern, or nested inside `[...]`.
+- Combined with `%` (modulo), it maps byte values into a useful scale-degree range, e.g. `utf8{coffee} % 14`.
+
+**Whitespace rule:** `utf8` must be written adjacent to `{` — `utf8 {coffee}` is a parse error, consistent with the no-whitespace-inside-generator-expressions rule.
 
 ### Generator nesting
 

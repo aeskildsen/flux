@@ -176,6 +176,11 @@ describe('getCompletions — trigger: [', () => {
 		const items = getCompletions([], 0, '[');
 		expect(items.some((i: CompletionItem) => i.insertText.includes('rand'))).toBe(true);
 	});
+
+	it('sequence body completions include utf8{word} snippet', () => {
+		const items = getCompletions([], 0, '[');
+		expect(items.some((i: CompletionItem) => i.label.includes('utf8'))).toBe(true);
+	});
 });
 
 // ---------------------------------------------------------------------------

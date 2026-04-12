@@ -419,24 +419,48 @@ Direct SynthDef argument access. Valid wherever modifiers are valid.
 
 # 17. **Error Condition Summary**
 
-| Code                  | Failure Type   | Why                                                               |
-| --------------------- | -------------- | ----------------------------------------------------------------- |
-| `[0 1 2`              | Parse error    | Missing `]`.                                                      |
-| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as operand.                               |
-| `0rand4rand7`         | Semantic error | Ambiguous construction; parentheses required.                     |
-| `note [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.                                  |
-| `'stut` alone         | Parse error    | No preceding target.                                              |
-| `note` ↵ `  'stut`    | Parse error    | No generator on previous line.                                    |
-| `[a?invalid]`         | Parse error    | Weight must be literal or generator.                              |
-| `note [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.                         |
-| `note[0]`             | Parse error    | Missing space between content type keyword and `[`.               |
-| `0 rand 4`            | Parse error    | Whitespace inside generator expression.                           |
-| `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.                           |
-| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.                      |
-| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.                          |
-| `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.                   |
-| `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.                      |
-| `{4:1/2 7:3/2}`       | Lex error      | `{}` curly brackets are reserved; no token exists for `{` or `}`. |
-| `{`                   | Lex error      | Lone `{` is unrecognised by the lexer.                            |
-| `}`                   | Lex error      | Lone `}` is unrecognised by the lexer.                            |
-| `note [0]'n(1.5)`     | Semantic error | Repetition count must be a positive integer.                      |
+| Code                  | Failure Type   | Why                                                                              |
+| --------------------- | -------------- | -------------------------------------------------------------------------------- |
+| `[0 1 2`              | Parse error    | Missing `]`.                                                                     |
+| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as operand.                                              |
+| `0rand4rand7`         | Semantic error | Ambiguous construction; parentheses required.                                    |
+| `note [@root(5) 0]`   | Parse error    | Decorators invalid inside lists.                                                 |
+| `'stut` alone         | Parse error    | No preceding target.                                                             |
+| `note` ↵ `  'stut`    | Parse error    | No generator on previous line.                                                   |
+| `[a?invalid]`         | Parse error    | Weight must be literal or generator.                                             |
+| `note [0 2] - -4`     | Parse error    | Double-negative transposition; use `+ 4`.                                        |
+| `note[0]`             | Parse error    | Missing space between content type keyword and `[`.                              |
+| `0 rand 4`            | Parse error    | Whitespace inside generator expression.                                          |
+| `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.                                          |
+| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.                                     |
+| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.                                         |
+| `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.                                  |
+| `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.                                     |
+| `{4:1/2 7:3/2}`       | Lex error      | `{}` outside of `utf8{...}` context is invalid; bare `{` or `}` is unrecognised. |
+| `{`                   | Lex error      | Lone `{` outside `utf8{...}` is unrecognised by the lexer.                       |
+| `}`                   | Lex error      | Lone `}` outside `utf8{...}` is unrecognised by the lexer.                       |
+| `note [0]'n(1.5)`     | Semantic error | Repetition count must be a positive integer.                                     |
+
+---
+
+# 21. **`utf8{}` Generator Truth Table**
+
+Converts a bare identifier to its UTF-8 byte sequence and yields the bytes cyclically.
+
+| Code Snippet                           | Interpretation                                                   | Evaluation                                                                                 | Result                                        |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `note lead utf8{coffee}`               | Generator yields bytes of "coffee": 99 111 102 102 101 101.      | Each poll returns the next byte in the sequence, cycling.                                  | Six events at degrees 99 111 102 102 101 101. |
+| `note lead utf8{coffee} % 14`          | Byte values modulo 14.                                           | After each poll, `%` wraps value into [0, 13].                                             | Degrees: 1 7 4 4 3 3.                         |
+| `note lead [utf8{hello} % 7 0 2]`      | `utf8{hello}` nested as a scalar element inside a sequence list. | Each cycle polls the next byte from "hello" (bytes: 104 101 108 108 111), then wraps by 7. | Cycling scalar inside the list.               |
+| `note lead utf8{a}`                    | Single-character word — one byte.                                | Generator yields 97 (ASCII 'a') repeatedly (cycle of length 1).                            | All events at degree 97.                      |
+| `note lead utf8{coffee} % 14 'shuf`    | `'shuf` modifier attached to the utf8 generator expression.      | Modifier applies to the scalar generator result (no-op on scalar; effectively ignored).    | Same as `% 14` without `'shuf`.               |
+| `note lead [utf8{hello} % 7 0 2]'shuf` | `'shuf` on containing list.                                      | Whole list shuffled each cycle; utf8 element polls one byte per slot.                      | Shuffled list containing cycling utf8 byte.   |
+
+**Error cases**
+
+| Code               | Failure Type | Why                                                                 |
+| ------------------ | ------------ | ------------------------------------------------------------------- |
+| `utf8 {coffee}`    | Parse error  | Whitespace between `utf8` and `{` is not permitted.                 |
+| `utf8{}`           | Parse error  | Empty braces — identifier is required inside `{}`.                  |
+| `utf8{1coffee}`    | Parse error  | Content must be a valid identifier (cannot start with a digit).     |
+| `utf8{coffee bar}` | Parse error  | Only a single bare identifier is allowed; spaces are not permitted. |
