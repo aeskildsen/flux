@@ -23,6 +23,7 @@ const TOKEN_CLASS: Record<string, string> = {
 	Slice: 'tok-keyword',
 	Cloud: 'tok-keyword',
 	Fx: 'tok-keyword',
+	Utf8Kw: 'tok-keyword',
 	SendFx: 'tok-keyword',
 	MasterFx: 'tok-keyword',
 	Set: 'tok-keyword',
@@ -66,7 +67,9 @@ const TOKEN_CLASS: Record<string, string> = {
 	LBracket: 'tok-delimiter',
 	RBracket: 'tok-delimiter',
 	LParen: 'tok-delimiter',
-	RParen: 'tok-delimiter'
+	RParen: 'tok-delimiter',
+	LCurly: 'tok-delimiter',
+	RCurly: 'tok-delimiter'
 };
 
 // ---------------------------------------------------------------------------

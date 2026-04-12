@@ -59,6 +59,14 @@ describe('getHover — keyword tokens', () => {
 		expect(result!.contents).toContain('note');
 	});
 
+	it('returns documentation for "utf8" keyword in utf8{coffee}', () => {
+		// First token of 'utf8{coffee}' is Utf8Kw
+		const result = getHover(firstToken('utf8{coffee}'));
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('utf8');
+		expect(result!.contents).toContain('UTF-8');
+	});
+
 	it('returns documentation for "mono"', () => {
 		const result = getHover(firstToken('mono'));
 		expect(result).not.toBeNull();

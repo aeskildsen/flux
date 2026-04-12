@@ -348,6 +348,38 @@ function expSample(lo: number, hi: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// utf8Generator — compile to a cycling poll function
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the byte sequence from a utf8Generator CST node.
+ * Returns the UTF-8 bytes of the identifier string, or null if the node
+ * structure is unexpected.
+ */
+function utf8Bytes(utf8Node: CstNode): number[] | null {
+	const idTok = ((utf8Node.children.Identifier as IToken[]) ?? [])[0];
+	if (!idTok) return null;
+	// Encode identifier as UTF-8 bytes via TextEncoder (standard Web API)
+	const encoded = new TextEncoder().encode(idTok.image);
+	return Array.from(encoded);
+}
+
+/**
+ * Compile a utf8Generator CST node to a cycling PollFn.
+ * Each call returns the next byte in the sequence, wrapping back to 0 at the end.
+ */
+function utf8GenToPollFn(utf8Node: CstNode): PollFn | null {
+	const bytes = utf8Bytes(utf8Node);
+	if (!bytes || bytes.length === 0) return null;
+	let index = 0;
+	return () => {
+		const value = bytes[index % bytes.length];
+		index++;
+		return value;
+	};
+}
+
+// ---------------------------------------------------------------------------
 // CST compilation: numericGenerator → PollFn
 // ---------------------------------------------------------------------------
 
@@ -594,6 +626,16 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 
 	const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
 	if (!atomic) return null;
+
+	// Handle utf8Generator inside a sequence: utf8{word} as a scalar element.
+	// Each poll returns the next byte in the sequence, cycling.
+	const utf8Gen = ((atomic.children.utf8Generator as CstNode[]) ?? [])[0];
+	if (utf8Gen) {
+		const poll = utf8GenToPollFn(utf8Gen);
+		if (!poll) return null;
+		const weight = weightFromElem(elem);
+		return { kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
+	}
 
 	// Handle nested sequence generator: [1 2] inside [0 4 [1 2]]
 	// The sub-list subdivides the parent slot — each sub-element gets slot/n time.
@@ -1125,8 +1167,9 @@ function compilePattern(
 			| undefined
 	)?.[0];
 	const relNode = ((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
+	const utf8Node = ((patternNode.children.utf8Generator as CstNode[]) ?? [])[0];
 
-	const bodyNode = seqNode ?? relNode;
+	const bodyNode = seqNode ?? relNode ?? utf8Node ?? null;
 	if (!bodyNode && !parentPattern) return 'pattern has no sequence body';
 
 	// List-level modifiers (on the [...] itself)
@@ -1159,6 +1202,21 @@ function compilePattern(
 		for (const elem of elems) {
 			const ce = compileTimedElement(elem, listMode);
 			if (ce) compiled.push(ce);
+		}
+	} else if (utf8Node) {
+		// utf8{word} as a top-level pattern body: each byte becomes one event.
+		// Each byte gets its own scalar runner (a constant poll function) so that
+		// the sequence has a fixed, deterministic length per cycle.
+		const bytes = utf8Bytes(utf8Node);
+		if (!bytes || bytes.length === 0) return 'utf8 generator has no bytes';
+		for (const byte of bytes) {
+			const b = byte;
+			compiled.push({
+				kind: 'scalar',
+				runner: makeRunner(() => b, listMode),
+				accidentalOffset: 0,
+				weight: makeRunner(() => 1, { kind: 'lock' })
+			});
 		}
 	} else if (parentPattern) {
 		// Derived generator with no body — inherit parent's elements (deep-copy runners)

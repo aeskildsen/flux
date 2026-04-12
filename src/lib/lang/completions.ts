@@ -152,12 +152,38 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 	}
 ];
 
+/**
+ * Completions offered after a content type keyword (note/mono/sample/slice/cloud)
+ * when the user hasn't opened a `[` yet. Covers generator forms that can appear
+ * directly as the pattern body.
+ */
+const GENERATOR_BODY_COMPLETIONS: CompletionItem[] = [
+	{
+		label: 'utf8{word}',
+		insertText: 'utf8{${1:coffee}}',
+		isSnippet: true,
+		detail: 'utf8{word} — UTF-8 bytes of a word as a melodic sequence',
+		documentation:
+			'Converts a bare identifier to its UTF-8 byte values and yields them cyclically. Each character becomes one event. Inspired by "coffee".ascii in SuperCollider.',
+		kind: 'snippet'
+	}
+];
+
 const SEQUENCE_BODY_COMPLETIONS: CompletionItem[] = [
 	{
 		label: '0 2 4 7',
 		insertText: '0 2 4 7]',
 		detail: 'Major chord degrees',
 		kind: 'value'
+	},
+	{
+		label: 'utf8{word}',
+		insertText: 'utf8{${1:coffee}}',
+		isSnippet: true,
+		detail: 'utf8{word} — UTF-8 bytes of a word as a cycling scalar',
+		documentation:
+			'Cycles through the UTF-8 byte values of the identifier, one byte per list slot per cycle.',
+		kind: 'snippet'
 	},
 	{
 		label: '0 2 4',
@@ -430,6 +456,9 @@ export function getCompletions(
 	if (prevType === 'ParamSigil') return getParamCompletions(synthdefMetadata, activeSynthDef);
 	if (prevType === 'Pipe') return PIPE_COMPLETIONS;
 	if (prevType === 'LBracket') return SEQUENCE_BODY_COMPLETIONS;
+	// After a generator name (Identifier token) — offer top-level body generators
+	// e.g. "note lead |cursor|" → suggest utf8{word} and other body forms
+	if (prevType === 'Identifier') return GENERATOR_BODY_COMPLETIONS;
 
 	return [];
 }
