@@ -67,6 +67,13 @@ import { SCALES, DEFAULT_SCALE, degreeToMidi } from '../scales.js';
 import type { Scale } from '../scales.js';
 
 // ---------------------------------------------------------------------------
+// Arithmetic operator types (issue #31)
+// ---------------------------------------------------------------------------
+
+/** All supported arithmetic operators for generator arithmetic. */
+type ArithmeticOp = '+' | '-' | '*' | '/' | '**' | '%';
+
+// ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
@@ -393,6 +400,9 @@ function genExprToPollFn(genExpr: CstNode): PollFn | null {
 	if (!atomic) return null;
 	const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
 	if (numGen) return numGenToPollFn(numGen);
+	// utf8Generator is also a scalar generator
+	const utf8Gen = ((atomic.children.utf8Generator as CstNode[]) ?? [])[0];
+	if (utf8Gen) return utf8GenToPollFn(utf8Gen);
 	return null; // sequenceGenerators cannot serve as scalar generator bases
 }
 
@@ -1016,42 +1026,81 @@ function extractRepeat(mods: CstNode[]): number | null {
 }
 
 // ---------------------------------------------------------------------------
-// Transposition extraction
+// Arithmetic extraction (generalised from transposition — issue #31)
 // ---------------------------------------------------------------------------
 
-type CompiledTransposition = {
-	sign: 1 | -1;
-	runner: RunnerState;
-} | null;
+/**
+ * Compiled arithmetic operator applied to the LHS generator.
+ *
+ * - `op`: the operator (+, -, *, /, **, %)
+ * - `scalarRunner`: present when RHS is a scalar generator; yields one value per cycle
+ * - `listPolls`: present when RHS is a list generator; yields one poll fn per list slot;
+ *   caller wraps around with `listPolls[i % listPolls.length]`
+ */
+type CompiledTransposition =
+	| {
+			op: ArithmeticOp;
+			scalarRunner: RunnerState;
+			listPolls?: undefined;
+	  }
+	| {
+			op: ArithmeticOp;
+			scalarRunner?: undefined;
+			listPolls: PollFn[];
+	  }
+	| null;
 
-function compileTransposition(patternNode: CstNode): CompiledTransposition {
-	const transpNode = ((patternNode.children.transposition as CstNode[]) ?? [])[0];
-	if (!transpNode) return null;
+/**
+ * Apply an arithmetic operator to a raw degree and RHS value.
+ * Returns the new degree, or `null` if the event should be skipped (division by zero).
+ */
+function applyArithmeticOp(op: ArithmeticOp, degree: number, rhs: number): number | null {
+	switch (op) {
+		case '+':
+			return degree + rhs;
+		case '-':
+			return degree - rhs;
+		case '*':
+			return degree * rhs;
+		case '/':
+			if (rhs === 0) return null; // skip with warning
+			return degree / rhs;
+		case '**':
+			return Math.pow(degree, rhs);
+		case '%':
+			if (rhs === 0) return degree; // identity: a % 0 = a
+			return degree % rhs;
+	}
+}
 
-	const plusToks = (transpNode.children.Plus as IToken[]) ?? [];
-	const sign: 1 | -1 = plusToks.length > 0 ? 1 : -1;
+/** Extract the operator token string from the transposition CST node. */
+function extractArithmeticOp(transpNode: CstNode): ArithmeticOp | null {
+	if (((transpNode.children.Plus as IToken[]) ?? []).length > 0) return '+';
+	if (((transpNode.children.Minus as IToken[]) ?? []).length > 0) return '-';
+	if (((transpNode.children.Star as IToken[]) ?? []).length > 0) return '*';
+	if (((transpNode.children.Slash as IToken[]) ?? []).length > 0) return '/';
+	if (((transpNode.children.Doublestar as IToken[]) ?? []).length > 0) return '**';
+	if (((transpNode.children.Percent as IToken[]) ?? []).length > 0) return '%';
+	return null;
+}
 
-	const posScalar = ((transpNode.children.positiveScalar as CstNode[]) ?? [])[0];
-	if (!posScalar) return null;
-
-	// posScalar = (parenGenerator | positiveNumericGenerator) + modifierSuffix*
+/**
+ * Compile a positiveScalar CST node to a RunnerState.
+ * Returns null if the node is missing or malformed.
+ */
+function compilePositiveScalarRunner(posScalar: CstNode): RunnerState | null {
 	const scalarMods = (posScalar.children.modifierSuffix as CstNode[]) ?? [];
 	const mode = extractEagerMode(scalarMods) ?? DEFAULT_MODE;
 
-	// Try positiveNumericGenerator
 	const posNumGen = ((posScalar.children.positiveNumericGenerator as CstNode[]) ?? [])[0];
 	if (posNumGen) {
-		// positiveNumericGenerator has Float | Integer at top level (no Minus)
 		const intTok = ((posNumGen.children.Integer as IToken[]) ?? [])[0];
 		const floatTok = ((posNumGen.children.Float as IToken[]) ?? [])[0];
 		let baseVal: number | null = null;
 		if (intTok) baseVal = parseInt(intTok.image, 10);
 		else if (floatTok) baseVal = parseFloat(floatTok.image);
-
 		if (baseVal === null) return null;
 
-		// Check for generator suffix (rand, gau, etc.) — reuse numericGenerator compilation
-		// by constructing a synthetic numericGenerator-like node from the positiveNumericGenerator
 		const syntheticNumGen: CstNode = {
 			name: 'numericGenerator',
 			children: {
@@ -1077,10 +1126,75 @@ function compileTransposition(patternNode: CstNode): CompiledTransposition {
 			}
 		};
 		const poll = numGenToPollFn(syntheticNumGen) ?? (() => baseVal!);
-		return { sign, runner: makeRunner(poll, mode) };
+		return makeRunner(poll, mode);
+	}
+
+	// parenGenerator — compile via generatorExpr
+	const parenGen = ((posScalar.children.parenGenerator as CstNode[]) ?? [])[0];
+	if (parenGen) {
+		const innerGenExpr = ((parenGen.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (innerGenExpr) {
+			const poll = genExprToPollFn(innerGenExpr);
+			if (poll) return makeRunner(poll, mode);
+		}
 	}
 
 	return null;
+}
+
+/**
+ * Compile the arithmetic/transposition node from a pattern statement.
+ * Handles all 6 operators (+, -, *, /, **, %) and both scalar and list RHS.
+ */
+function compileTransposition(patternNode: CstNode): CompiledTransposition {
+	const transpNode = ((patternNode.children.transposition as CstNode[]) ?? [])[0];
+	if (!transpNode) return null;
+
+	const op = extractArithmeticOp(transpNode);
+	if (!op) return null;
+
+	// Check for list RHS (arithmeticListRhs)
+	const listRhsNode = ((transpNode.children.arithmeticListRhs as CstNode[]) ?? [])[0];
+	if (listRhsNode) {
+		// Compile each element of the list to a PollFn
+		const elements = (listRhsNode.children.sequenceElement as CstNode[]) ?? [];
+		const listPolls: PollFn[] = [];
+		for (const elem of elements) {
+			const poll = compileSequenceElementToPollFn(elem);
+			if (poll !== null) listPolls.push(poll);
+		}
+		if (listPolls.length === 0) return null;
+		return { op, listPolls };
+	}
+
+	// Scalar RHS
+	const posScalar = ((transpNode.children.positiveScalar as CstNode[]) ?? [])[0];
+	if (!posScalar) return null;
+
+	const scalarRunner = compilePositiveScalarRunner(posScalar);
+	if (!scalarRunner) return null;
+	return { op, scalarRunner };
+}
+
+/**
+ * Compile a sequenceElement CST node to a single PollFn for use in list RHS.
+ * Handles integer literals (degree literals) and scalar generators.
+ * Returns null for unsupported elements (rests, symbols, sub-lists).
+ */
+function compileSequenceElementToPollFn(elem: CstNode): PollFn | null {
+	// Degree literal: integer (possibly with accidentals — accidentals are ignored in list RHS)
+	const degreeLitNode = ((elem.children.degreeLiteral as CstNode[]) ?? [])[0];
+	if (degreeLitNode) {
+		const intTok = ((degreeLitNode.children.Integer as IToken[]) ?? [])[0];
+		if (!intTok) return null;
+		const degree = parseInt(intTok.image, 10);
+		return () => degree;
+	}
+
+	// generatorExpr (numeric or utf8 generator)
+	const genExpr = ((elem.children.generatorExpr as CstNode[]) ?? [])[0];
+	if (!genExpr) return null;
+	return genExprToPollFn(genExpr);
 }
 
 // ---------------------------------------------------------------------------
@@ -1517,7 +1631,12 @@ type SlotParams = {
 	legato: number;
 	cycle: number;
 	scaleCtx: ScaleContext;
-	transposeDelta: number;
+	/**
+	 * Per-slot arithmetic function (issue #31): applies the arithmetic operator to
+	 * a raw degree and returns the modified degree, or null to skip the event.
+	 * null = no arithmetic (degree passes through unchanged).
+	 */
+	arithmeticFn: ((rawDegree: number) => number | null) | null;
 	contentType: ContentType;
 	loopId: string;
 	offsetMs: number | undefined;
@@ -1579,10 +1698,15 @@ function expandSlot(
 	const rawDegree = sampleRunner(el.runner, p.cycle);
 	const beatOffset = el.beatOverride !== undefined ? el.beatOverride : slotStart;
 
+	// Apply arithmetic operator if present (issue #31).
+	// For division by zero, arithmeticFn returns null — skip the event.
+	const effectiveDegree = p.arithmeticFn ? p.arithmeticFn(rawDegree) : rawDegree;
+	if (effectiveDegree === null) return []; // event skipped (e.g. division by zero)
+
 	if (p.contentType === 'slice') {
 		const ev: SliceEvent = {
 			contentType: 'slice',
-			sliceIndex: Math.round(rawDegree),
+			sliceIndex: Math.round(effectiveDegree),
 			beatOffset,
 			duration: slotDuration,
 			loopId: p.loopId
@@ -1597,7 +1721,7 @@ function expandSlot(
 	}
 
 	// note or mono — pitched events
-	const note = degreeToMidiCtx(rawDegree + p.transposeDelta, p.scaleCtx) + el.accidentalOffset;
+	const note = degreeToMidiCtx(effectiveDegree, p.scaleCtx) + el.accidentalOffset;
 	const duration = slotDuration * p.legato;
 
 	if (p.contentType === 'mono') {
@@ -1684,13 +1808,6 @@ function evaluateCompiledPattern(
 	// Sample maybe probability once per cycle
 	const maybeProb = maybeRunner ? sampleRunner(maybeRunner, cycle) : null;
 
-	// Sample transposition once per cycle
-	let transposeDelta = 0;
-	if (compiled.transposition) {
-		const { sign, runner } = compiled.transposition;
-		transposeDelta = sign * sampleRunner(runner, cycle);
-	}
-
 	// Determine the ordered sequence of elements (traversal strategy)
 	const orderedElements = orderedSubElements(elements, compiled.traversal, cycle);
 
@@ -1718,6 +1835,39 @@ function evaluateCompiledPattern(
 	// A finite pattern occupies cycles [atOffset, atOffset + repeatCount).
 	if (isFinite && cycle >= atOffset + repeatCount) {
 		return { events: [], done: true };
+	}
+
+	// Pre-compute per-slot arithmetic functions (issue #31).
+	// For scalar RHS, one value is sampled per cycle and applied uniformly.
+	// For list RHS, values are sampled per slot (with wrap-around).
+	// arithmetic.applyToSlot(rawDegree, slotIndex) → number | null (null = skip event).
+	let arithmeticApply: ((rawDegree: number, slotIndex: number) => number | null) | null = null;
+	if (compiled.transposition) {
+		const arith = compiled.transposition;
+		if (arith.listPolls) {
+			const listPolls = arith.listPolls;
+			const listLen = listPolls.length;
+			arithmeticApply = (rawDegree: number, slotIndex: number) => {
+				const rhsVal = listPolls[slotIndex % listLen]();
+				const result = applyArithmeticOp(arith.op, rawDegree, rhsVal);
+				if (result === null) {
+					console.warn(
+						`[flux] arithmetic: ${arith.op} by zero at slot ${slotIndex}; event skipped`
+					);
+				}
+				return result;
+			};
+		} else {
+			// Scalar RHS — sample once per cycle
+			const rhsVal = sampleRunner(arith.scalarRunner!, cycle);
+			arithmeticApply = (rawDegree: number) => {
+				const result = applyArithmeticOp(arith.op, rawDegree, rhsVal);
+				if (result === null) {
+					console.warn(`[flux] arithmetic: ${arith.op} by zero; event skipped`);
+				}
+				return result;
+			};
+		}
 	}
 
 	// Sample numSlices once per cycle (slice only)
@@ -1749,12 +1899,16 @@ function evaluateCompiledPattern(
 				if (maybeProb !== null && Math.random() >= maybeProb) continue;
 
 				const el = expandedElements[i];
+				// Build per-slot arithmetic function: closes over slot index i for list RHS wrap-around.
+				const slotArithFn = arithmeticApply
+					? (rawDegree: number) => arithmeticApply!(rawDegree, i)
+					: null;
 				events.push(
 					...expandSlot(el, i * slotDuration, slotDuration, {
 						legato,
 						cycle,
 						scaleCtx,
-						transposeDelta,
+						arithmeticFn: slotArithFn,
 						contentType,
 						loopId,
 						offsetMs,

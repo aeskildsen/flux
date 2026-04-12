@@ -217,23 +217,40 @@ Piped insert FX attaches to preceding pattern expression. Wet/dry level (integer
 
 ---
 
-# 10. **Arithmetic Transposition Truth Table**
+# 10. **Generator Arithmetic Truth Table**
 
-Rules for `+` / `-` on loops and lines.
+Element-wise arithmetic applied to degree values. Operators: `+`, `-`, `*`, `/`, `**`, `%`.
 
-| Code                | Interpretation        | Evaluation                                    | Result                        |
-| ------------------- | --------------------- | --------------------------------------------- | ----------------------------- |
-| `note [0 2] + 3`    | Add scalar transpose. | Apply after generator sampling.               | [3, 5].                       |
-| `note [0] + 0rand3` | Random transpose.     | Transpose sampled at correct eager/lock rate. | Per-cycle or per-event shift. |
+**Scalar right-hand side**
 
-**Error cases**
+| Code                | Interpretation                     | Evaluation                                                         | Result                        |
+| ------------------- | ---------------------------------- | ------------------------------------------------------------------ | ----------------------------- |
+| `note [0 2] + 3`    | Add scalar to every degree.        | Apply after generator sampling.                                    | [3, 5].                       |
+| `note [0 2] - 1`    | Subtract scalar from every degree. | Apply after generator sampling.                                    | [-1, 1].                      |
+| `note [0 2] * 2`    | Multiply every degree by scalar.   | Apply after generator sampling.                                    | [0, 4].                       |
+| `note [0 4] / 2`    | Divide every degree by scalar.     | Apply after generator sampling; result is float, rounded for MIDI. | [0, 2].                       |
+| `note [2 3] ** 2`   | Exponentiate every degree.         | Apply after generator sampling.                                    | [4, 9].                       |
+| `note [5 9] % 7`    | Modulo every degree.               | Apply after generator sampling.                                    | [5, 2].                       |
+| `note [0] + 0rand3` | Random scalar transpose.           | Transpose sampled at correct eager/lock rate.                      | Per-cycle or per-event shift. |
 
-| Code                  | Failure Type   | Why                                                                |
-| --------------------- | -------------- | ------------------------------------------------------------------ |
-| `[0 1] + [2 3]`       | Semantic error | Both operands are list generators; no valid stream combination.    |
-| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as arithmetic operand.                     |
-| `3 + note [0]`        | Semantic error | Transposition operator requires a content type keyword on the LHS. |
-| `note [0 2] - -4`     | Parse error    | Double-negative in transposition; use `+ 4` instead.               |
+**Generator right-hand side (wrap-around)**
+
+| Code                   | Interpretation                       | Evaluation                                                    | Result                       |
+| ---------------------- | ------------------------------------ | ------------------------------------------------------------- | ---------------------------- |
+| `note [0 1 2] + [4 8]` | Add list RHS, wrap-around.           | pos i uses rhs[i % rhs_length]; both reset at cycle boundary. | [4, 9, 6].                   |
+| `note [0 1 2] * [2 3]` | Multiply list RHS, wrap-around.      | pos i uses rhs[i % rhs_length].                               | [0, 3, 4].                   |
+| `note [0 1 2] % [4 0]` | Modulo list RHS; zero is identity.   | 0%4=0, 1%0=1 (identity), 2%4=2.                               | [0, 1, 2].                   |
+| `note [1 2 3] / [4 0]` | Division list RHS; zero skips event. | 1/4 fires; 2/0 skipped; 3/4 fires (pos 2 wraps to rhs[0]=4).  | [0.25, 0.75]; pos 1 skipped. |
+
+**Error and edge cases**
+
+| Code                  | Failure Type   | Why                                                             |
+| --------------------- | -------------- | --------------------------------------------------------------- |
+| `note [0] + @root(5)` | Semantic error | Decorator cannot appear as arithmetic operand.                  |
+| `3 + note [0]`        | Semantic error | Arithmetic operator requires a content type keyword on the LHS. |
+| `note [0 2] - -4`     | Parse error    | Double-negative with `-`; use `+ 4` instead.                    |
+| `note [1 2] / [4 0]`  | Warning + skip | Division by zero: warning emitted, that event slot is skipped.  |
+| `note [1 2] % [4 0]`  | Identity       | Modulo zero: `a % 0 = a` (no error, no skip).                   |
 
 ---
 

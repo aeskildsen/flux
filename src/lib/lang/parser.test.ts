@@ -227,7 +227,7 @@ describe('accidentals', () => {
 	});
 });
 
-describe('transposition', () => {
+describe('transposition / arithmetic operators', () => {
 	it('parses note with + transposition: note lead [0 2] + 3', () => {
 		const { parseErrors } = parse('note lead [0 2] + 3');
 		expect(parseErrors).toHaveLength(0);
@@ -246,6 +246,62 @@ describe('transposition', () => {
 	it('errors on double-negative transposition: note lead [0] - -4', () => {
 		const { parseErrors } = parse('note lead [0] - -4');
 		expect(parseErrors.length).toBeGreaterThan(0);
+	});
+
+	// Arithmetic operators — issue #31
+	it('parses * operator: note lead [0 2] * 2', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0 2] * 2');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses / operator: note lead [0 4] / 2', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0 4] / 2');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses ** operator: note lead [2 3] ** 2', () => {
+		const { parseErrors, lexErrors } = parse('note lead [2 3] ** 2');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses % operator: note lead [5 9] % 7', () => {
+		const { parseErrors, lexErrors } = parse('note lead [5 9] % 7');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses % operator with utf8 generator: note lead utf8{coffee} % 14', () => {
+		const { parseErrors, lexErrors } = parse('note lead utf8{coffee} % 14');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	// Generator RHS (list on right-hand side)
+	it('parses + with list RHS: note lead [0 1 2] + [4 8]', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0 1 2] + [4 8]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses * with list RHS: note lead [0 1 2] * [2 3]', () => {
+		const { parseErrors, lexErrors } = parse('note lead [0 1 2] * [2 3]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses % with list RHS: note lead [1 2 3] % [4 0]', () => {
+		const { parseErrors, lexErrors } = parse('note lead [1 2 3] % [4 0]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses / with list RHS: note lead [1 2 3] / [4 0]', () => {
+		const { parseErrors, lexErrors } = parse('note lead [1 2 3] / [4 0]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
 	});
 });
 

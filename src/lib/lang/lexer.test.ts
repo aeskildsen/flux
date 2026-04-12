@@ -34,6 +34,8 @@ import {
 	Flat,
 	Bang,
 	Percent,
+	Star,
+	Doublestar,
 	ParamSigil,
 	Utf8Kw,
 	LCurly,
@@ -546,6 +548,50 @@ describe('Percent — wet/dry operator', () => {
 		expect(pctIdx).toBeGreaterThan(0);
 		expect(tokens[pctIdx - 1].tokenType).toBe(Integer);
 		expect(tokens[pctIdx - 1].image).toBe('70');
+	});
+});
+
+describe('Star — multiplication operator', () => {
+	it('tokenizes * as a single Star token', () => {
+		const { tokens, errors } = FluxLexer.tokenize('*');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(Star);
+		expect(tokens[0].image).toBe('*');
+	});
+
+	it('tokenizes note lead [0] * 2 correctly', () => {
+		const { tokens, errors } = FluxLexer.tokenize('note lead [0] * 2');
+		expect(errors).toHaveLength(0);
+		const starIdx = tokens.findIndex((t) => t.tokenType === Star);
+		expect(starIdx).toBeGreaterThan(0);
+	});
+});
+
+describe('Doublestar — exponentiation operator', () => {
+	it('tokenizes ** as a single Doublestar token (not two Stars)', () => {
+		const { tokens, errors } = FluxLexer.tokenize('**');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(Doublestar);
+		expect(tokens[0].image).toBe('**');
+	});
+
+	it('tokenizes note lead [0] ** 2 correctly', () => {
+		const { tokens, errors } = FluxLexer.tokenize('note lead [0] ** 2');
+		expect(errors).toHaveLength(0);
+		const dsIdx = tokens.findIndex((t) => t.tokenType === Doublestar);
+		expect(dsIdx).toBeGreaterThan(0);
+	});
+
+	it('** is a single token even adjacent to other tokens', () => {
+		const { tokens, errors } = FluxLexer.tokenize('[0]**2');
+		expect(errors).toHaveLength(0);
+		const dsIdx = tokens.findIndex((t) => t.tokenType === Doublestar);
+		expect(dsIdx).toBeGreaterThan(0);
+		// Ensure it is ONE token, not two Star tokens
+		const starCount = tokens.filter((t) => t.tokenType === Star).length;
+		expect(starCount).toBe(0);
 	});
 });
 
