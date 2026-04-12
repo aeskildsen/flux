@@ -28,3 +28,4 @@ coverage/
 
 dev-references
 static/compiled_synthdefs
+.claude/settings.local.json
