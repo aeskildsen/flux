@@ -6,7 +6,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Agent, AskUserQuestion, Todo
 
 # run-roadmap
 
-Orchestrates the Flux v0.1.0 roadmap end-to-end. Reads the roadmap, resolves the dependency graph, and processes each issue in order by delegating to two specialized agents: `issue-handler` (implements and opens a PR) and `pr-reviewer` (reviews the PR and fixes critical issues). The user only gets asked questions when an agent hits genuine ambiguity — otherwise everything runs hands-off.
+Orchestrates the Flux roadmap end-to-end. Reads the roadmap, resolves the dependency graph, and processes each issue in order by delegating to two specialized agents: `issue-handler` (implements and opens a PR) and `pr-reviewer` (reviews the PR and fixes critical issues). The user only gets asked questions when an agent hits genuine ambiguity — otherwise everything runs hands-off.
 
 ## Arguments
 
@@ -14,7 +14,7 @@ The user may specify a limit on how many issues to process in this run, e.g. "ru
 
 ## Step 1: Parse the roadmap and build the dependency graph
 
-Read `dev-notes/roadmap-v0.1.0.md`. Extract every issue number and its dependencies. The roadmap encodes dependencies two ways:
+Read `docs/roadmap.md`. Extract every issue number and its dependencies. The roadmap encodes dependencies two ways:
 
 - **Explicit**: "(depends on #28)" in the issue description
 - **Implicit by ordering**: Within a section, earlier issues are foundational for later ones — but only within the same section. Issues across sections (DSL, UI, Stability, Docs) are independent unless explicitly linked.
