@@ -481,3 +481,29 @@ Converts a bare identifier to its UTF-8 byte sequence and yields the bytes cycli
 | `utf8{}`           | Parse error  | Empty braces — identifier is required inside `{}`.                                                             |
 | `utf8{1coffee}`    | Parse error  | Content must be a valid identifier (cannot start with a digit).                                                |
 | `utf8{coffee bar}` | Parse error  | Only a single bare identifier is allowed; spaces are not permitted.                                            |
+
+---
+
+# 22. **Range Notation Truth Table**
+
+Compact `[start..end]` / `[start, step..end]` syntax. All bounds inclusive. Eagerly expanded to a flat value array at compile time.
+
+| Code Snippet          | Interpretation                                 | Evaluation                                      | Result                   |
+| --------------------- | ---------------------------------------------- | ----------------------------------------------- | ------------------------ |
+| `[0..7]`              | Integer range, default step 1.                 | Expand to `[0 1 2 3 4 5 6 7]`.                  | 8 elements: 0–7.         |
+| `[0, 2..10]`          | Integer range, explicit step 2 (second−first). | Expand to `[0 2 4 6 8 10]`.                     | 6 elements.              |
+| `[0.0, 0.25..1.0]`    | Float range, explicit step 0.25.               | Expand to `[0.0 0.25 0.5 0.75 1.0]`.            | 5 float elements.        |
+| `[10, 8..0]`          | Descending, explicit step −2.                  | Expand to `[10 8 6 4 2 0]`.                     | 6 elements, descending.  |
+| `[5..0]`              | Descending, default step −1.                   | Expand to `[5 4 3 2 1 0]`.                      | 6 elements.              |
+| `[0..0]`              | Single-element range.                          | Expand to `[0]`.                                | 1 element.               |
+| `[0..3]'shuf`         | Range with modifier.                           | Expand then apply `'shuf`.                      | `[0 1 2 3]` shuffled.    |
+| `[0..3]'pick`         | Range with `'pick`.                            | Expand then pick randomly each slot.            | Uniform random from 0–3. |
+| `slice drums [0..15]` | Range as slice pool.                           | Expand to 16 elements; slice index cycles 0→15. | All 16 slices in order.  |
+
+**Error cases**
+
+| Code         | Failure Type   | Why                                                                                                 |
+| ------------ | -------------- | --------------------------------------------------------------------------------------------------- |
+| `[0.0..1.0]` | Parse error    | Float before `..` with no preceding comma (no explicit step); step would be fractional and unknown. |
+| `[0, 0..5]`  | Semantic error | Step of zero produces an infinite loop; rejected at compile time.                                   |
+| `[0, 2..1]`  | Semantic error | Step (2) goes the wrong direction relative to end (1), so no elements would be produced.            |

@@ -86,7 +86,9 @@ import {
 	DEDENT,
 	Utf8Kw,
 	LCurly,
-	RCurly
+	RCurly,
+	DotDot,
+	Comma
 } from './lexer.js';
 
 // ---------------------------------------------------------------------------
@@ -597,28 +599,174 @@ class FluxParser extends CstParser {
 	// sequenceGenerator — same body, but used inside a generatorExpr (nested)
 	// They are separate rules so the CST clearly labels which context a list
 	// appeared in.
+	//
+	// Both now support range notation as a first alternative, detected by
+	// scanning ahead for a DotDot token inside the brackets.
 	// -------------------------------------------------------------------------
 
+	/**
+	 * Lookahead predicate: returns true if the upcoming tokens look like a
+	 * range expression `[start..end]` or `[start, step..end]`.
+	 *
+	 * Scans forward from LA(1) (which must be `[`) for a `DotDot` token before
+	 * hitting `]` or end-of-input.
+	 */
+	private isRangeExpr(): boolean {
+		if (this.LA(1).tokenType !== LBracket) return false;
+		let i = 2;
+		// Scan up to 20 tokens ahead to find DotDot before ]
+		while (i <= 20) {
+			const tok = this.LA(i).tokenType;
+			if (tok === DotDot) return true;
+			if (tok === RBracket) return false;
+			// End-of-input sentinel has tokenTypeIdx === 0
+			if (this.LA(i).tokenTypeIdx === 0) return false;
+			i++;
+		}
+		return false;
+	}
+
 	sequenceExpr = this.RULE('sequenceExpr', () => {
+		this.OR([
+			{
+				GATE: () => this.isRangeExpr(),
+				ALT: () => this.SUBRULE(this.rangeExpr)
+			},
+			{
+				ALT: () => {
+					this.CONSUME(LBracket);
+					this.MANY(() => {
+						this.SUBRULE(this.sequenceElement);
+					});
+					this.CONSUME(RBracket);
+					this.MANY2(() => {
+						this.SUBRULE(this.modifierSuffix);
+					});
+				}
+			}
+		]);
+	});
+
+	sequenceGenerator = this.RULE('sequenceGenerator', () => {
+		this.OR([
+			{
+				GATE: () => this.isRangeExpr(),
+				ALT: () => this.SUBRULE(this.rangeExpr)
+			},
+			{
+				ALT: () => {
+					this.CONSUME(LBracket);
+					this.MANY(() => {
+						this.SUBRULE(this.sequenceElement);
+					});
+					this.CONSUME(RBracket);
+					this.MANY2(() => {
+						this.SUBRULE(this.modifierSuffix);
+					});
+				}
+			}
+		]);
+	});
+
+	/**
+	 * Range expression: `[start..end]` or `[start, step..end]`.
+	 *
+	 * Two syntactic forms:
+	 *
+	 *   rangeNoStep  = "[" intBound    ".." rangeBound "]" modifierSuffix*
+	 *   rangeWithStep = "[" rangeBound "," rangeBound ".." rangeBound "]" modifierSuffix*
+	 *
+	 * Float start WITHOUT an explicit step comma is a **parse error** — the grammar
+	 * only allows `rangeBound` (Float or Integer) as the start of the stepped form.
+	 * The no-step form uses `intBound` (Integer only, no Float).
+	 *
+	 * CST children (both forms share the same rangeExpr node):
+	 *   rangeBound[0]  — start bound
+	 *   Comma[0]       — present only in the stepped form
+	 *   rangeBound[1]  — second value (the explicit step value; actual step = second − start)
+	 *   DotDot[0]      — the ".." separator
+	 *   rangeBound[N]  — end bound (index 1 in no-step form, 2 in stepped form)
+	 *
+	 * The evaluator enforces:
+	 *   - Zero step is a semantic error.
+	 *   - Step going the wrong direction is a semantic error.
+	 */
+	rangeExpr = this.RULE('rangeExpr', () => {
 		this.CONSUME(LBracket);
-		this.MANY(() => {
-			this.SUBRULE(this.sequenceElement);
-		});
+		this.OR([
+			// Stepped form: start, step..end (allows Float or Integer for all bounds)
+			{
+				GATE: () => this.isSteppedRange(),
+				ALT: () => {
+					this.SUBRULE(this.rangeBound); // start (Float or Integer)
+					this.CONSUME(Comma);
+					this.SUBRULE2(this.rangeBound); // step (Float or Integer)
+					this.CONSUME(DotDot);
+					this.SUBRULE3(this.rangeBound); // end (Float or Integer)
+				}
+			},
+			// No-step form: intStart..end (Integer only for start — Float is rejected)
+			{
+				ALT: () => {
+					this.SUBRULE(this.intBound); // Integer-only start
+					this.CONSUME2(DotDot);
+					this.SUBRULE4(this.rangeBound); // end (Integer)
+				}
+			}
+		]);
 		this.CONSUME(RBracket);
-		this.MANY2(() => {
+		this.MANY(() => {
 			this.SUBRULE(this.modifierSuffix);
 		});
 	});
 
-	sequenceGenerator = this.RULE('sequenceGenerator', () => {
-		this.CONSUME(LBracket);
-		this.MANY(() => {
-			this.SUBRULE(this.sequenceElement);
+	/**
+	 * Lookahead: returns true if inside a range bracket we see start, comma before DotDot.
+	 * i.e. the token stream looks like: `bound , bound ..`
+	 * Called after `[` is consumed, so LA(1) is the first token inside the brackets.
+	 */
+	private isSteppedRange(): boolean {
+		// LA(1) is the first token after the consumed `[`.
+		// Scan forward until we find a Comma (stepped form) or DotDot/] (no-step form).
+		let i = 1;
+		while (i <= 15) {
+			const tok = this.LA(i).tokenType;
+			if (tok === Comma) return true;
+			if (tok === DotDot || tok === RBracket) return false;
+			if (this.LA(i).tokenTypeIdx === 0) return false;
+			i++;
+		}
+		return false;
+	}
+
+	/**
+	 * A numeric bound in a range expression: optional leading minus, then Float or Integer.
+	 *
+	 * CST children:
+	 *   Minus[0]   — present if negative
+	 *   Integer[0] — integer literal (if integer bound)
+	 *   Float[0]   — float literal (if float bound)
+	 */
+	rangeBound = this.RULE('rangeBound', () => {
+		this.OPTION(() => {
+			this.CONSUME(Minus);
 		});
-		this.CONSUME(RBracket);
-		this.MANY2(() => {
-			this.SUBRULE(this.modifierSuffix);
+		this.OR([{ ALT: () => this.CONSUME(Float) }, { ALT: () => this.CONSUME(Integer) }]);
+	});
+
+	/**
+	 * An integer-only bound for the no-step range form.
+	 * Float is not permitted here — use the stepped form `[f, step..end]` instead.
+	 *
+	 * CST children:
+	 *   Minus[0]   — present if negative
+	 *   Integer[0] — integer literal
+	 */
+	intBound = this.RULE('intBound', () => {
+		this.OPTION(() => {
+			this.CONSUME(Minus);
 		});
+		this.CONSUME(Integer);
 	});
 
 	sequenceElement = this.RULE('sequenceElement', () => {
