@@ -424,7 +424,7 @@ function expandRangeExpr(rangeNode: CstNode): number[] | string {
 	let end: number;
 
 	if (hasComma) {
-		// Stepped form: rangeBound[0]=start, rangeBound[1]=step, rangeBound[2]=end
+		// Stepped form: rangeBound[0]=start, rangeBound[1]=second (step = second−start), rangeBound[2]=end
 		if (bounds.length < 3) return 'range: malformed stepped range (need start, step, end)';
 		const s = rangeBoundToNumber(bounds[0]);
 		const t = rangeBoundToNumber(bounds[1]);

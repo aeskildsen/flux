@@ -683,7 +683,7 @@ class FluxParser extends CstParser {
 	 * CST children (both forms share the same rangeExpr node):
 	 *   rangeBound[0]  — start bound
 	 *   Comma[0]       — present only in the stepped form
-	 *   rangeBound[1]  — step value (only when Comma is present)
+	 *   rangeBound[1]  — second value (the explicit step value; actual step = second − start)
 	 *   DotDot[0]      — the ".." separator
 	 *   rangeBound[N]  — end bound (index 1 in no-step form, 2 in stepped form)
 	 *
@@ -722,12 +722,12 @@ class FluxParser extends CstParser {
 
 	/**
 	 * Lookahead: returns true if inside a range bracket we see start, comma before DotDot.
-	 * i.e. the token stream after `[` looks like: `bound , bound ..`
-	 * We are already past LA(1)=`[`, so scan from LA(2).
+	 * i.e. the token stream looks like: `bound , bound ..`
+	 * Called after `[` is consumed, so LA(1) is the first token inside the brackets.
 	 */
 	private isSteppedRange(): boolean {
-		// At this point LA(1) is already consumed (we are inside rangeExpr after LBracket)
-		// Check if there's a Comma before the DotDot
+		// LA(1) is the first token after the consumed `[`.
+		// Scan forward until we find a Comma (stepped form) or DotDot/] (no-step form).
 		let i = 1;
 		while (i <= 15) {
 			const tok = this.LA(i).tokenType;
