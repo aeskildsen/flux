@@ -2618,3 +2618,169 @@ describe('utf8{word} generator', () => {
 		expect(i.ok).toBe(true);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 22. Range notation — [start..end] and [start, step..end]
+// (truth table 22)
+// C major degree → MIDI: 0→60, 1→62, 2→64, 3→65, 4→67, 5→69, 6→71, 7→72
+// ---------------------------------------------------------------------------
+
+describe('range notation — [start..end]', () => {
+	it('[0..7] expands to 8 events, degrees 0–7', () => {
+		const ns = notes('note x [0..7]');
+		expect(ns).toHaveLength(8);
+		// degrees 0..7 in C major: C5=60, D5=62, E5=64, F5=65, G5=67, A5=69, B5=71, C6=72
+		expect(ns).toEqual([60, 62, 64, 65, 67, 69, 71, 72]);
+	});
+
+	it('[5..0] descending default step produces degrees 5,4,3,2,1,0', () => {
+		const ns = notes('note x [5..0]');
+		expect(ns).toHaveLength(6);
+		expect(ns).toEqual([69, 67, 65, 64, 62, 60]); // degrees 5,4,3,2,1,0
+	});
+
+	it('[0..0] single-element range produces 1 event', () => {
+		const ns = notes('note x [0..0]');
+		expect(ns).toHaveLength(1);
+		expect(ns[0]).toBe(60); // degree 0 = C5
+	});
+
+	it('[3..3] single-element range at degree 3', () => {
+		const ns = notes('note x [3..3]');
+		expect(ns).toHaveLength(1);
+		expect(ns[0]).toBe(65); // degree 3 = F5
+	});
+
+	it('[0..3] produces 4 events — degrees 0,1,2,3', () => {
+		const ns = notes('note x [0..3]');
+		expect(ns).toHaveLength(4);
+		expect(ns).toEqual([60, 62, 64, 65]);
+	});
+
+	it('range events have evenly-spaced beat offsets', () => {
+		const evs = eval0('note x [0..3]');
+		expect(evs).toHaveLength(4);
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.25);
+		expect(evs[2].beatOffset).toBeCloseTo(0.5);
+		expect(evs[3].beatOffset).toBeCloseTo(0.75);
+	});
+
+	it('[0..3] produces correct slot durations', () => {
+		const ds = durations('note x [0..3]');
+		// 4 events, slot = 1/4, default legato 0.8
+		for (const d of ds) expect(d).toBeCloseTo(0.25 * 0.8);
+	});
+
+	it('range is eagerly expanded — same result every cycle', () => {
+		const i = inst('note x [0..3]');
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		if (!r0.ok || !r1.ok) throw new Error('eval failed');
+		expect(r0.events.map((e) => pitched(e).note)).toEqual(r1.events.map((e) => pitched(e).note));
+	});
+
+	it('negative start: [-3..0] produces degrees -3,-2,-1,0', () => {
+		const ns = notes('note x [-3..0]');
+		expect(ns).toHaveLength(4);
+		// degree -3: below C5 by 3 diatonic steps in C major (going down)
+		// degree 0 = C5 = 60; verify count and last element
+		expect(ns[ns.length - 1]).toBe(60); // degree 0 = C5
+	});
+});
+
+describe('range notation — [start, step..end]', () => {
+	it('[0, 2..10] — every-other step, produces degrees 0,2,4,6,8,10', () => {
+		const ns = notes('note x [0, 2..10]');
+		expect(ns).toHaveLength(6);
+		// degrees 0,2,4,6,8,10 in C major
+		expect(ns[0]).toBe(60); // degree 0 = C5
+		expect(ns[1]).toBe(64); // degree 2 = E5
+		expect(ns[2]).toBe(67); // degree 4 = G5
+	});
+
+	it('[10, 8..0] — descending step -2, produces 10,8,6,4,2,0', () => {
+		// degrees 10,8,6,4,2,0 → last is degree 0 = C5 = 60
+		const ns = notes('note x [10, 8..0]');
+		expect(ns).toHaveLength(6);
+		expect(ns[ns.length - 1]).toBe(60); // degree 0 = C5
+	});
+
+	it('[0, 3..9] — step 3, produces degrees 0,3,6,9', () => {
+		const ns = notes('note x [0, 3..9]');
+		expect(ns).toHaveLength(4);
+		expect(ns[0]).toBe(60); // degree 0 = C5
+		expect(ns[1]).toBe(65); // degree 3 = F5
+	});
+
+	it('[0.0, 0.25..1.0] — float range with step 0.25 produces 5 events', () => {
+		// Float ranges go through the pitch chain (float degrees are rounded for MIDI)
+		// This tests that the evaluator produces 5 events: 0.0, 0.25, 0.5, 0.75, 1.0
+		const evs = eval0('note x [0.0, 0.25..1.0]');
+		expect(evs).toHaveLength(5);
+	});
+});
+
+describe('range notation — with modifiers', () => {
+	it("[0..3]'shuf — same 4 elements shuffled each cycle", () => {
+		const i = inst("note x [0..3]'shuf");
+		// Collect notes over several cycles — should always be exactly {60,62,64,65}
+		const allNotes: Set<number> = new Set();
+		for (let c = 0; c < 10; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			for (const e of r.events) allNotes.add(pitched(e).note);
+		}
+		expect(allNotes).toEqual(new Set([60, 62, 64, 65]));
+	});
+
+	it("[0..3]'pick — all notes in {60,62,64,65} across many cycles", () => {
+		const i = inst("note x [0..3]'pick");
+		const allNotes: Set<number> = new Set();
+		for (let c = 0; c < 50; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			for (const e of r.events) allNotes.add(pitched(e).note);
+		}
+		// All notes should be within the expanded range
+		for (const n of allNotes) {
+			expect([60, 62, 64, 65]).toContain(n);
+		}
+	});
+
+	it('slice drums [0..15] — range as slice pool produces 16 events', () => {
+		const evs = eval0('slice drums [0..15]');
+		expect(evs).toHaveLength(16);
+		const sliceEvs = evs as SliceEvent[];
+		expect(sliceEvs[0].sliceIndex).toBe(0);
+		expect(sliceEvs[15].sliceIndex).toBe(15);
+	});
+});
+
+describe('range notation — error cases', () => {
+	it('[0.0..1.0] without explicit step is a parse/lex error', () => {
+		const i = createInstance('note x [0.0..1.0]');
+		expect(i.ok).toBe(false);
+	});
+
+	it('[0, 0..5] — zero step is a semantic error', () => {
+		const i = createInstance('note x [0, 0..5]');
+		expect(i.ok).toBe(false);
+	});
+
+	it('[0, 2..1] — step goes wrong direction is a semantic error', () => {
+		const i = createInstance('note x [0, 2..1]');
+		expect(i.ok).toBe(false);
+	});
+});
+
+describe('range notation — nested inside outer list', () => {
+	it('[[0..3] 4] — nested range subdivides parent slot', () => {
+		// The spec says ranges behave identically to explicit lists.
+		// [[0..3] 4] should behave like [[0 1 2 3] 4]: 2 top-level slots,
+		// first slot subdivided into 4 sub-events.
+		const evs = eval0('note x [[0..3] 4]');
+		// 2 top-level slots → 1 with 4 sub-events + 1 scalar = 5 total events
+		expect(evs).toHaveLength(5);
+	});
+});
