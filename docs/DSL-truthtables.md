@@ -507,3 +507,26 @@ Compact `[start..end]` / `[start, step..end]` syntax. All bounds inclusive. Eage
 | `[0.0..1.0]` | Parse error    | Float before `..` with no preceding comma (no explicit step); step would be fractional and unknown. |
 | `[0, 0..5]`  | Semantic error | Step of zero produces an infinite loop; rejected at compile time.                                   |
 | `[0, 2..1]`  | Semantic error | Step (2) goes the wrong direction relative to end (1), so no elements would be produced.            |
+
+---
+
+# 23. **Chord Literals Truth Table**
+
+`<d1 d2 ... dn>` — N simultaneous degree values in one event slot. Spawns N synths at the same beat offset.
+
+| Code Snippet                   | Interpretation                            | Evaluation                                                                 | Result                                                    |
+| ------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `note x [<0 2 4>]`             | Single chord slot — triad.                | Three NoteEvents at the same beatOffset.                                   | Three simultaneous notes (MIDI 60, 64, 67 in C major/C5). |
+| `note x [<0 2 4> <1 3 6>]`     | Two chord slots, each a triad.            | Cycle: two slots; each produces three NoteEvents.                          | Chords timed like a 2-element list.                       |
+| `note x [<0 4~7> 2]`           | Chord with a generator element.           | `4~7` polled at cycle boundary (`'eager(1)`); degree 2 is the second slot. | First slot: chord (0, random 4–7); second slot: degree 2. |
+| `note x [0 <2 4> 7]`           | Mixed: scalars and chord inside one list. | Three slots; middle slot emits two simultaneous notes.                     | Slot 0: one note; slot 1: two notes; slot 2: one note.    |
+| `@scale(minor) note x [<0 2>]` | Chord in non-default scale context.       | Degrees resolved under minor scale.                                        | Two notes at minor-scale MIDI values for degrees 0 and 2. |
+| `note x [<0 2>]'legato(1.2)`   | Legato applied to chord.                  | Legato applies uniformly to all voices in the chord.                       | Both notes have `duration = slot × 1.2`.                  |
+
+**Error cases**
+
+| Code                 | Failure Type   | Why                                                                            |
+| -------------------- | -------------- | ------------------------------------------------------------------------------ |
+| `mono x [<0 2 4>]`   | Semantic error | Chords are not supported for mono content type.                                |
+| `note x [0] + <0 4>` | Parse error    | Chord literal is not valid as a transposition operand; the grammar rejects it. |
+| `note x [<>]`        | Parse error    | Empty chord — at least one element is required.                                |

@@ -686,7 +686,25 @@ type CompiledSymbol = {
 	beatOverride?: number;
 };
 
-type CompiledElement = CompiledScalar | CompiledSubsequence | CompiledRest | CompiledSymbol;
+/**
+ * A chord literal `<d1 d2 ... dn>` — N simultaneous degrees in one event slot.
+ * All voices share the same beat offset and duration.
+ * Each voice is a scalar runner (compiled independently).
+ */
+type CompiledChord = {
+	kind: 'chord';
+	/** One runner per chord voice, in order. */
+	voices: Array<{ runner: RunnerState; accidentalOffset: number }>;
+	/** Per-element weight for parent 'pick selection (default: 1). */
+	weight: RunnerState;
+};
+
+type CompiledElement =
+	| CompiledScalar
+	| CompiledSubsequence
+	| CompiledRest
+	| CompiledSymbol
+	| CompiledChord;
 
 /**
  * Read the `!n` inline-repetition count from a sequenceElement CST node.
@@ -737,6 +755,12 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 		const poll: PollFn = () => degree;
 		const weight = makeRunner(() => 1, { kind: 'lock' });
 		return { kind: 'scalar', runner: makeRunner(poll, inherited), accidentalOffset, weight };
+	}
+
+	// Check for chord literal: <d1 d2 ... dn>
+	const chordLitNode = ((elem.children.chordLiteral as CstNode[]) ?? [])[0];
+	if (chordLitNode) {
+		return compileChordLiteral(chordLitNode, inherited);
 	}
 
 	// Element-level modifiers come from the generatorExpr's modifierSuffix children.
@@ -829,6 +853,75 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 	const weight = weightFromElem(elem);
 
 	return { kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
+}
+
+/**
+ * Compile a chordLiteral CST node into a CompiledChord.
+ * Each chordElement becomes one voice (scalar runner).
+ */
+function compileChordLiteral(chordNode: CstNode, inherited: EagerMode): CompiledChord | null {
+	const chordElements = (chordNode.children.chordElement as CstNode[]) ?? [];
+	if (chordElements.length === 0) return null;
+
+	const voices: Array<{ runner: RunnerState; accidentalOffset: number }> = [];
+
+	for (const ce of chordElements) {
+		// Rest inside chord: skip (a rest voice contributes no sound but is valid syntax)
+		const restToks = (ce.children.Rest as IToken[]) ?? [];
+		if (restToks.length > 0) continue;
+
+		let accidentalOffset = 0;
+
+		// degreeLiteral: integer with optional accidental
+		const degreeLitNode = ((ce.children.degreeLiteral as CstNode[]) ?? [])[0];
+		if (degreeLitNode) {
+			const intTok = ((degreeLitNode.children.Integer as IToken[]) ?? [])[0];
+			if (!intTok) continue;
+			const degree = parseInt(intTok.image, 10);
+			const sharps = (degreeLitNode.children.Sharp as IToken[]) ?? [];
+			const flats = (degreeLitNode.children.Flat as IToken[]) ?? [];
+			accidentalOffset += sharps.length;
+			for (const f of flats) accidentalOffset -= f.image.length;
+			const poll: PollFn = () => degree;
+			voices.push({ runner: makeRunner(poll, inherited), accidentalOffset });
+			continue;
+		}
+
+		// generatorExpr
+		const genExpr = ((ce.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!genExpr) continue;
+
+		const elemMods = (genExpr.children.modifierSuffix as CstNode[]) ?? [];
+		const elemMode = extractEagerMode(elemMods);
+		const effectiveMode: EagerMode = elemMode ?? inherited;
+
+		const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+		if (!atomic) continue;
+
+		// utf8Generator as chord element
+		const utf8Gen = ((atomic.children.utf8Generator as CstNode[]) ?? [])[0];
+		if (utf8Gen) {
+			const poll = utf8GenToPollFn(utf8Gen);
+			if (!poll) continue;
+			voices.push({ runner: makeRunner(poll, effectiveMode), accidentalOffset: 0 });
+			continue;
+		}
+
+		// numericGenerator
+		const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
+		if (!numGen) continue;
+		const poll = numGenToPollFn(numGen);
+		if (!poll) continue;
+		voices.push({ runner: makeRunner(poll, effectiveMode), accidentalOffset: 0 });
+	}
+
+	if (voices.length === 0) return null;
+
+	return {
+		kind: 'chord',
+		voices,
+		weight: makeRunner(() => 1, { kind: 'lock' })
+	};
 }
 
 /**
@@ -1529,6 +1622,13 @@ function compilePattern(
 	const isCloud = ((patternNode.children.Cloud as IToken[]) ?? [])[0] !== undefined;
 	if (compiled.length === 0 && !isCloud) return 'pattern sequence is empty';
 
+	// Semantic error: chord literals are not valid in mono content type.
+	// Check for any chord element in the compiled sequence.
+	const isMono = ((patternNode.children.Mono as IToken[]) ?? [])[0] !== undefined;
+	if (isMono && compiled.some((el) => el.kind === 'chord')) {
+		return 'Chords are not supported for mono content type';
+	}
+
 	// Pattern-level modifiers (direct + continuation)
 	const allMods = collectPatternModifiers(patternNode);
 
@@ -1867,6 +1967,22 @@ function expandSlot(
 		if (p.synthdef !== null) ev.synthdef = p.synthdef;
 		if (p.noteParams !== undefined) ev.params = p.noteParams;
 		return [ev];
+	}
+
+	if (el.kind === 'chord') {
+		// Chord literal: N simultaneous notes, all sharing the same beat offset and duration.
+		// Each voice is evaluated independently as a scalar element at the same slot.
+		const out: ScheduledEvent[] = [];
+		for (const voice of el.voices) {
+			const syntheticScalar: CompiledScalar = {
+				kind: 'scalar',
+				runner: voice.runner,
+				accidentalOffset: voice.accidentalOffset,
+				weight: el.weight
+			};
+			out.push(...expandSlot(syntheticScalar, slotStart, slotDuration, p));
+		}
+		return out;
 	}
 
 	// scalar — pitch-bearing element for note, mono, slice
@@ -2239,10 +2355,11 @@ function compileSource(source: string): CompileResult {
 			const parentName = isDerived ? (genNameToks[1]?.image ?? null) : null;
 			const parent = parentName ? compiledByName.get(parentName) : undefined;
 			const compiled = compilePattern(node, parent);
-			if (typeof compiled !== 'string') {
-				compiledByName.set(compiled.name, compiled);
-				patternEntries.push({ kind: 'plain', compiled });
+			if (typeof compiled === 'string') {
+				return { ok: false, error: `Semantic error: ${compiled}` };
 			}
+			compiledByName.set(compiled.name, compiled);
+			patternEntries.push({ kind: 'plain', compiled });
 		}
 	}
 

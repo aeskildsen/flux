@@ -2784,3 +2784,93 @@ describe('range notation — nested inside outer list', () => {
 		expect(evs).toHaveLength(5);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 23. Chord literals <> — truth table
+// ---------------------------------------------------------------------------
+
+describe('chord literals — basic', () => {
+	it('note x [<0 2 4>] — single chord slot produces 3 simultaneous NoteEvents', () => {
+		const evs = eval0('note x [<0 2 4>]');
+		// Triad in C major/C5: C5=60, E5=64, G5=67
+		expect(evs).toHaveLength(3);
+		const sortedNotes = evs.map((e) => pitched(e).note).sort((a, b) => a - b);
+		expect(sortedNotes).toEqual([60, 64, 67]);
+	});
+
+	it('all chord voices share the same beatOffset', () => {
+		const evs = eval0('note x [<0 2 4>]');
+		expect(evs).toHaveLength(3);
+		const offsets = evs.map((e) => e.beatOffset);
+		expect(offsets[0]).toBe(offsets[1]);
+		expect(offsets[1]).toBe(offsets[2]);
+	});
+
+	it('note x [<0 2 4> <1 3 6>] — two chord slots, 6 total events', () => {
+		const evs = eval0('note x [<0 2 4> <1 3 6>]');
+		// 2 slots × 3 voices = 6 events
+		expect(evs).toHaveLength(6);
+	});
+
+	it('two chord slots have different beatOffsets', () => {
+		const evs = eval0('note x [<0 2 4> <1 3 6>]');
+		// First chord at beatOffset 0, second at beatOffset 0.5
+		const offsets = [...new Set(evs.map((e) => e.beatOffset))].sort((a, b) => a - b);
+		expect(offsets).toHaveLength(2);
+		expect(offsets[0]).toBeCloseTo(0);
+		expect(offsets[1]).toBeCloseTo(0.5);
+	});
+
+	it('note x [0 <2 4> 7] — mixed scalars and chord: 4 total events', () => {
+		const evs = eval0('note x [0 <2 4> 7]');
+		// 3 slots: slot 0 = 1 event, slot 1 = 2 events, slot 2 = 1 event
+		expect(evs).toHaveLength(4);
+	});
+
+	it('chord slot duration equals 1/n where n = number of top-level slots', () => {
+		// note x [<0 2>] — 1 top-level slot, duration = 1.0 * legato (0.8)
+		const evs = eval0('note x [<0 2>]');
+		expect(evs).toHaveLength(2);
+		// Each voice duration = 1/1 * 0.8 = 0.8
+		expect(evs[0].duration).toBeCloseTo(0.8);
+		expect(evs[1].duration).toBeCloseTo(0.8);
+	});
+
+	it("note x [<0 2 4>]'legato(1.2) — legato applies to all chord voices", () => {
+		const evs = eval0("note x [<0 2 4>]'legato(1.2)");
+		expect(evs).toHaveLength(3);
+		for (const ev of evs) {
+			expect(ev.duration).toBeCloseTo(1.2);
+		}
+	});
+});
+
+describe('chord literals — scale context', () => {
+	it('@scale(minor) note x [<0 2>] — voices resolved under minor scale', () => {
+		const evs = eval0('@scale(minor) note x [<0 2>]');
+		expect(evs).toHaveLength(2);
+		// C minor/C5: degree 0 = C5 = 60, degree 2 = Eb5 = 63
+		const sortedNotes = evs.map((e) => pitched(e).note).sort((a, b) => a - b);
+		expect(sortedNotes).toEqual([60, 63]);
+	});
+});
+
+describe('chord literals — error cases', () => {
+	it('mono x [<0 2 4>] — semantic error: chords not supported for mono', () => {
+		const i = createInstance('mono x [<0 2 4>]');
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('chord');
+		}
+	});
+
+	it('note x [0] + <0 4> — parse error: chord literal not valid as transposition operand', () => {
+		const i = createInstance('note x [0] + <0 4>');
+		expect(i.ok).toBe(false);
+	});
+
+	it('note x [<>] — parse error: empty chord', () => {
+		const i = createInstance('note x [<>]');
+		expect(i.ok).toBe(false);
+	});
+});

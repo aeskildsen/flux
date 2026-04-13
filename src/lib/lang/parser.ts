@@ -88,7 +88,9 @@ import {
 	LCurly,
 	RCurly,
 	DotDot,
-	Comma
+	Comma,
+	LAngle,
+	RAngle
 } from './lexer.js';
 
 // ---------------------------------------------------------------------------
@@ -771,8 +773,8 @@ class FluxParser extends CstParser {
 
 	sequenceElement = this.RULE('sequenceElement', () => {
 		// A degree literal (possibly with accidentals), a rest (_), a \symbol buffer ref,
-		// or a generator expression, with an optional `?weight` for 'wran lists and an
-		// optional `!n` repeat count.
+		// a chord literal (<d1 d2 ... dn>), or a generator expression, with an optional
+		// `?weight` for 'wran lists and an optional `!n` repeat count.
 		this.OR([
 			// rest: a silent slot — no pitch, no synth
 			{ ALT: () => this.CONSUME(Rest) },
@@ -780,6 +782,11 @@ class FluxParser extends CstParser {
 			{
 				GATE: () => this.hasDegreeAccidental(),
 				ALT: () => this.SUBRULE(this.degreeLiteral)
+			},
+			// chord literal: <d1 d2 ... dn> — N simultaneous degrees
+			{
+				GATE: () => this.LA(1).tokenType === LAngle,
+				ALT: () => this.SUBRULE(this.chordLiteral)
 			},
 			// \symbol buffer ref — for sample lists [\kick \hat \snare]
 			{ ALT: () => this.CONSUME(Symbol) },
@@ -795,6 +802,46 @@ class FluxParser extends CstParser {
 			this.CONSUME(Bang);
 			this.CONSUME(Integer);
 		});
+	});
+
+	/**
+	 * Chord literal: `<d1 d2 ... dn>` — N simultaneous degree values in one slot.
+	 *
+	 * Elements are the same as sequenceElement but without nesting (no chord inside chord).
+	 * Each element is an independent generator; modifiers are not valid on the chord itself
+	 * (use list-level modifiers instead).
+	 *
+	 * At least one element is required. An empty `<>` is a parse error.
+	 *
+	 * CST children:
+	 *   - LAngle[0]          — `<`
+	 *   - chordElement[]     — one or more chord elements
+	 *   - RAngle[0]          — `>`
+	 */
+	chordLiteral = this.RULE('chordLiteral', () => {
+		this.CONSUME(LAngle);
+		this.AT_LEAST_ONE(() => {
+			this.SUBRULE(this.chordElement);
+		});
+		this.CONSUME(RAngle);
+	});
+
+	/**
+	 * A single element inside a chord literal.
+	 * Accepts: rest, degreeLiteral, or a generator expression (including utf8, numeric).
+	 * Does NOT accept nested chord literals or \symbol buffer refs (those are not meaningful in chord position).
+	 *
+	 * CST children are the same shape as sequenceElement children.
+	 */
+	chordElement = this.RULE('chordElement', () => {
+		this.OR([
+			{ ALT: () => this.CONSUME(Rest) },
+			{
+				GATE: () => this.hasDegreeAccidental(),
+				ALT: () => this.SUBRULE(this.degreeLiteral)
+			},
+			{ ALT: () => this.SUBRULE(this.generatorExpr) }
+		]);
 	});
 
 	/**
