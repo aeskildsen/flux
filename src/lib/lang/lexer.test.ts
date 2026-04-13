@@ -41,7 +41,9 @@ import {
 	LCurly,
 	RCurly,
 	DotDot,
-	Comma
+	Comma,
+	LAngle,
+	RAngle
 } from './lexer.js';
 
 describe('FluxLexer', () => {
@@ -783,5 +785,31 @@ describe('Comma — range-specific separator token', () => {
 		expect(commaIdx).toBeGreaterThan(0);
 		expect(tokens[commaIdx - 1].tokenType).toBe(Integer);
 		expect(tokens[commaIdx + 1].tokenType).toBe(Integer);
+	});
+});
+
+describe('LAngle / RAngle — chord literal delimiters', () => {
+	it('tokenizes "<" as LAngle', () => {
+		const { tokens, errors } = FluxLexer.tokenize('<');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(LAngle);
+	});
+
+	it('tokenizes ">" as RAngle', () => {
+		const { tokens, errors } = FluxLexer.tokenize('>');
+		expect(errors).toHaveLength(0);
+		expect(tokens).toHaveLength(1);
+		expect(tokens[0].tokenType).toBe(RAngle);
+	});
+
+	it('tokenizes "<0 2 4>" as LAngle Integer Integer Integer RAngle', () => {
+		const { tokens, errors } = FluxLexer.tokenize('<0 2 4>');
+		expect(errors).toHaveLength(0);
+		expect(tokens[0].tokenType).toBe(LAngle);
+		expect(tokens[1].tokenType).toBe(Integer);
+		expect(tokens[2].tokenType).toBe(Integer);
+		expect(tokens[3].tokenType).toBe(Integer);
+		expect(tokens[4].tokenType).toBe(RAngle);
 	});
 });
