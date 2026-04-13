@@ -905,3 +905,45 @@ describe('range notation — parser', () => {
 		expect(parseErrors.length + lexErrors.length).toBeGreaterThan(0);
 	});
 });
+
+describe('chord literals <>', () => {
+	it('parses a chord inside a sequence list', () => {
+		const { parseErrors, lexErrors } = parse('note x [<0 2 4>]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses two chord slots in a list', () => {
+		const { parseErrors, lexErrors } = parse('note chords [<0 2 4> <1 3 6>]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses chord with generator element inside', () => {
+		const { parseErrors, lexErrors } = parse('note x [<0 4~7> 2]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses mixed scalar and chord in a list', () => {
+		const { parseErrors, lexErrors } = parse('note x [0 <2 4> 7]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses chord with mono keyword (semantic check is in evaluator)', () => {
+		const { parseErrors, lexErrors } = parse('mono x [<0 2 4>]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('rejects chord literal as transposition operand — parse error', () => {
+		const { parseErrors, lexErrors } = parse('note x [0 2 4] + <0 4>');
+		expect(parseErrors.length + lexErrors.length).toBeGreaterThan(0);
+	});
+
+	it('rejects empty chord — parse error', () => {
+		const { parseErrors, lexErrors } = parse('note x [<>]');
+		expect(parseErrors.length + lexErrors.length).toBeGreaterThan(0);
+	});
+});

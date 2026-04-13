@@ -491,6 +491,40 @@ note lead [0 1 2] + 3        // → 3, 4, 5
 
 **Double-negative** — `note [0] - -4` is a parse error; use `note [0] + 4` instead. This restriction applies only to `+` and `-` because the leading `-` on the RHS is syntactically ambiguous with a negative number literal; for `*`, `/`, `**`, and `%` the RHS must always be a positive scalar or a list generator.
 
+### Chord literals
+
+> _See truth table [23 (Chord literals)](DSL-truthtables.md#23-chord-literals-truth-table)._
+
+`<d1 d2 ... dn>` denotes N simultaneous degree values in a single event slot, spawning N synths at the same time. Purely additive — no timing implications; all voices fire at the same beat offset.
+
+```flux
+// produces two chord events where chords are timed like [0 1]
+note chords [<0 2 4> <1 3 6>]
+
+// Generator in chord, produces chord events like [<0 6> 2], [<0 4> 2], etc.
+note chords [<0 4~7> 2]
+
+// Produces error message: "Chords are not supported for mono content type"
+mono lead [<1 2 3>]
+```
+
+**Syntax:**
+
+```ebnf
+chordLiteral    = "<" chordElement+ ">" ;
+chordElement    = numericGenerator | degreeLiteral | rest ;
+```
+
+- `<>` must contain at least one element; a bare `<>` with no elements is a parse error.
+- Elements inside `<>` are separated by spaces (same as `[...]`).
+- Each element is an independent generator evaluated at cycle boundary under standard `'eager` semantics.
+- A chord literal is a **non-scalar** generator — it is valid wherever a sequence element (`[...]`) or standalone event body is valid.
+
+**Constraints:**
+
+- **`<>` with `mono`:** Semantic error — multiple simultaneous `.set` messages with different degree values to the same node produce non-deterministic behaviour. Must be caught at evaluate time: `"Chords are not supported for mono content type"`.
+- **`<>` as transposition operand:** Parse error — `note [0 2 4] + <0 4>` would imply voice multiplication, not a chord. The transposition rule does not accept chord literals on the RHS.
+
 ### Accidentals
 
 > _See truth table [15 (Accidentals)](DSL-truthtables.md#15-accidentals-truth-table)._

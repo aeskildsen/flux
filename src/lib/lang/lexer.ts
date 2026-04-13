@@ -593,6 +593,20 @@ export const DotDot = createToken({
 	// Monaco scope: 'operator'
 });
 
+/** `<` — opens a chord literal: `<0 2 4>`. */
+export const LAngle = createToken({
+	name: 'LAngle',
+	pattern: /</
+	// Monaco scope: 'delimiter.bracket'
+});
+
+/** `>` — closes a chord literal: `<0 2 4>`. */
+export const RAngle = createToken({
+	name: 'RAngle',
+	pattern: />/
+	// Monaco scope: 'delimiter.bracket'
+});
+
 /**
  * `,` — range-step separator: `[0, 2..10]`.
  * Only meaningful inside a range expression; the parser treats a bare `,`
@@ -782,6 +796,9 @@ export const allTokens = [
 	// Range operators — DotDot before Float so '..' is not eaten by the Float pattern
 	DotDot, // '..' — range separator
 	Comma, // ',' — range step separator
+	// Chord literal delimiters
+	LAngle, // '<' — opens chord literal
+	RAngle, // '>' — closes chord literal
 	// Literals — Float before Integer
 	Float,
 	Integer,
