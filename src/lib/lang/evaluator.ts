@@ -1516,6 +1516,18 @@ function extractBufName(decoratorLayers: CstNode[][]): string | null {
 	return null;
 }
 
+/**
+ * Returns true if any element in the list (or recursively in nested subsequences)
+ * is a CompiledChord. Used to enforce the mono + chord semantic error.
+ */
+function hasChordElement(elements: CompiledElement[]): boolean {
+	for (const el of elements) {
+		if (el.kind === 'chord') return true;
+		if (el.kind === 'sequence' && hasChordElement(el.elements)) return true;
+	}
+	return false;
+}
+
 function compilePattern(
 	patternNode: CstNode,
 	parentPattern?: CompiledPattern,
@@ -1623,9 +1635,9 @@ function compilePattern(
 	if (compiled.length === 0 && !isCloud) return 'pattern sequence is empty';
 
 	// Semantic error: chord literals are not valid in mono content type.
-	// Check for any chord element in the compiled sequence.
+	// Check recursively for any chord element in the compiled sequence (including nested subsequences).
 	const isMono = ((patternNode.children.Mono as IToken[]) ?? [])[0] !== undefined;
-	if (isMono && compiled.some((el) => el.kind === 'chord')) {
+	if (isMono && hasChordElement(compiled)) {
 		return 'Chords are not supported for mono content type';
 	}
 

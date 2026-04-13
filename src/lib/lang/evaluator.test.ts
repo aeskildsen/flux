@@ -2873,4 +2873,12 @@ describe('chord literals — error cases', () => {
 		const i = createInstance('note x [<>]');
 		expect(i.ok).toBe(false);
 	});
+
+	it('mono x [[<0 2>]] — chord nested inside subsequence is also a semantic error', () => {
+		const i = createInstance('mono x [[<0 2>]]');
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('chord');
+		}
+	});
 });

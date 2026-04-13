@@ -511,7 +511,7 @@ mono lead [<1 2 3>]
 **Syntax:**
 
 ```ebnf
-chordLiteral    = "<" chordElement chordElement+ ">" ;
+chordLiteral    = "<" chordElement+ ">" ;
 chordElement    = numericGenerator | degreeLiteral | rest ;
 ```
 
