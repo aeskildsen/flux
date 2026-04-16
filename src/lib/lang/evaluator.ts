@@ -927,6 +927,16 @@ function getSeriesLength(numGen: CstNode): number | null {
  * This replaces compileElement at the call sites inside compilePattern's element loop.
  */
 function compileElementWithSpread(elem: CstNode, inherited: EagerMode): CompiledElement[] | string {
+	// Semantic error: 'arp on a scalar generator inside a list.
+	// 'arp is a list-level modifier — it must be attached to the list itself, not to an element.
+	const genExprForArp = ((elem.children.generatorExpr as CstNode[]) ?? [])[0];
+	const elemModsForArp = genExprForArp
+		? ((genExprForArp.children.modifierSuffix as CstNode[]) ?? [])
+		: [];
+	if (hasModifier(elemModsForArp, 'arp')) {
+		return "'arp is a list-level modifier — attach it to the list [...], not to a scalar generator inside the list (e.g. use [0rand7]'arp, not [0rand7'arp])";
+	}
+
 	// Check for 'spread modifier.
 	// 'spread can appear in two places:
 	//   1. genExpr.modifierSuffix — for scalar generators (0rand7'spread)
@@ -1462,7 +1472,7 @@ function applySetStatement(setNode: CstNode, ctx: ScaleContext, cycle: number): 
 // ---------------------------------------------------------------------------
 
 /** Get the effective modifier name from a modifierSuffix node.
- * Handles both direct (Tick + Identifier) and atModifier sub-node cases.
+ * Handles both direct (Tick + Identifier) and atModifier/arpModifier sub-node cases.
  */
 function getModifierName(mod: CstNode): string | null {
 	// Direct Identifier on mod
@@ -1473,6 +1483,12 @@ function getModifierName(mod: CstNode): string | null {
 	if (atMod) {
 		const atId = ((atMod.children.Identifier as IToken[]) ?? [])[0];
 		if (atId) return atId.image;
+	}
+	// arpModifier sub-node
+	const arpMod = ((mod.children.arpModifier as CstNode[]) ?? [])[0];
+	if (arpMod) {
+		const arpId = ((arpMod.children.Identifier as IToken[]) ?? [])[0];
+		if (arpId) return arpId.image;
 	}
 	return null;
 }
@@ -1490,6 +1506,61 @@ function findModifier(mods: CstNode[], name: string): CstNode | null {
 /** Check if a modifier with a given name exists. */
 function hasModifier(mods: CstNode[], name: string): boolean {
 	return mods.some((mod) => getModifierName(mod) === name);
+}
+
+/**
+ * Extract the ArpConfig from a list of modifier nodes.
+ * Looks for an 'arp modifier (via arpModifier sub-node) and extracts:
+ *   - algorithm: the \symbol argument (stripped of '\'), default 'up'
+ *   - lengthOverride: integer argument, or null if absent
+ * Returns null if no 'arp modifier is present.
+ * Returns a string error message if the algorithm or length override is invalid.
+ */
+function extractArpConfig(mods: CstNode[]): ArpConfig | null | string {
+	const arpMod = mods.find((mod) => getModifierName(mod) === 'arp');
+	if (!arpMod) return null;
+
+	// Get the arpModifier sub-node
+	const arpModNode = ((arpMod.children.arpModifier as CstNode[]) ?? [])[0];
+	if (!arpModNode) {
+		// Bare 'arp — use default algorithm
+		return { algorithm: 'up', lengthOverride: null };
+	}
+
+	// Extract the Symbol token (algorithm)
+	const symTok = ((arpModNode.children.Symbol as IToken[]) ?? [])[0];
+	let algorithm: ArpAlgorithm = 'up';
+	if (symTok) {
+		const symName = symTok.image.slice(1); // strip leading '\'
+		const validAlgorithms: ArpAlgorithm[] = [
+			'up',
+			'down',
+			'inward',
+			'outward',
+			'updown',
+			'converge',
+			'diverge'
+		];
+		if (!validAlgorithms.includes(symName as ArpAlgorithm)) {
+			return `'arp: unknown algorithm '\\${symName}' — valid algorithms: \\up, \\down, \\inward, \\outward, \\updown, \\converge, \\diverge`;
+		}
+		algorithm = symName as ArpAlgorithm;
+	}
+
+	// Extract optional Integer (length override) — may have a leading Minus (semantic error)
+	const intTok = ((arpModNode.children.Integer as IToken[]) ?? [])[0];
+	let lengthOverride: number | null = null;
+	if (intTok) {
+		const minusTok = ((arpModNode.children.Minus as IToken[]) ?? [])[0];
+		const raw = parseInt(intTok.image, 10);
+		const n = minusTok ? -raw : raw;
+		if (n <= 0) {
+			return `'arp: length override must be a positive integer ≥ 1, got ${n}`;
+		}
+		lengthOverride = n;
+	}
+
+	return { algorithm, lengthOverride };
 }
 
 /** Extract a scalar number from a modifierSuffix's generatorExpr, with a default. */
@@ -1755,6 +1826,19 @@ function compileSequenceElementToPollFn(elem: CstNode): PollFn | null {
 /** List-level traversal modifier. */
 type TraversalMode = 'seq' | 'shuf' | 'pick';
 
+/** Arp algorithm — determines traversal order from deduped input values. */
+type ArpAlgorithm = 'up' | 'down' | 'inward' | 'outward' | 'updown' | 'converge' | 'diverge';
+
+/**
+ * Configuration for the 'arp list-level modifier.
+ * algorithm: traversal algorithm (default 'up')
+ * lengthOverride: if not null, cycle/wrap the natural traversal to produce exactly n values
+ */
+type ArpConfig = {
+	algorithm: ArpAlgorithm;
+	lengthOverride: number | null;
+};
+
 type ContentType = 'note' | 'mono' | 'sample' | 'slice' | 'cloud';
 
 type CompiledPattern = {
@@ -1763,6 +1847,7 @@ type CompiledPattern = {
 	elements: CompiledElement[];
 	listMode: EagerMode; // mode from list-level modifiers (inherited by elements)
 	traversal: TraversalMode;
+	arpConfig: ArpConfig | null; // null = no 'arp modifier
 	stutRunner: RunnerState | null; // null = no stutter
 	maybeRunner: RunnerState | null; // null = no maybe filter
 	legatoRunner: RunnerState | null; // null = default legato (0.8 for note)
@@ -1877,6 +1962,16 @@ function compilePattern(
 	let traversal: TraversalMode = 'seq';
 	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
 	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
+
+	// 'arp modifier — arpeggiation traversal
+	const arpResult = extractArpConfig(listMods);
+	if (typeof arpResult === 'string') return arpResult; // semantic error
+	const arpConfig: ArpConfig | null = arpResult;
+
+	// Semantic error: 'arp cannot be combined with 'shuf or 'pick — they are all traversal strategies
+	if (arpConfig !== null && (traversal === 'shuf' || traversal === 'pick')) {
+		return `'arp cannot be combined with '${traversal} — choose one traversal strategy`;
+	}
 
 	// Warn when `?` weights are present on a list without 'pick — the weight
 	// is meaningless there and silently ignored. Matches spec truth table 4.
@@ -2068,6 +2163,7 @@ function compilePattern(
 		elements: compiled,
 		listMode,
 		traversal,
+		arpConfig,
 		stutRunner,
 		maybeRunner,
 		legatoRunner,
@@ -2194,6 +2290,137 @@ function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number
 		wetDry: compiledFx.wetDry,
 		cycleOffset: atOffset // always present on FX events
 	};
+}
+
+// ---------------------------------------------------------------------------
+// 'arp algorithm implementations
+// ---------------------------------------------------------------------------
+
+/**
+ * Given a deduped array of (value, element) pairs (sorted by index of first
+ * occurrence), compute the traversal order for the given algorithm.
+ *
+ * Returns an array of CompiledElement[] in traversal order.
+ * For algorithms with a natural length != N (e.g. \updown → 2*(N-1)), the
+ * output length may differ from the input length.
+ */
+function applyArpAlgorithm(
+	items: Array<{ value: number; element: CompiledElement }>,
+	algorithm: ArpAlgorithm
+): CompiledElement[] {
+	// Normalise \converge → \inward and \diverge → \outward
+	const algo: ArpAlgorithm =
+		algorithm === 'converge' ? 'inward' : algorithm === 'diverge' ? 'outward' : algorithm;
+
+	// Sort items by numeric value for sorted-order algorithms
+	const sorted = [...items].sort((a, b) => a.value - b.value);
+	const N = sorted.length;
+
+	if (algo === 'up') {
+		return sorted.map((x) => x.element);
+	}
+
+	if (algo === 'down') {
+		return sorted.map((x) => x.element).reverse();
+	}
+
+	if (algo === 'updown') {
+		// Palindrome: ascending then descending, no repeated endpoints
+		// For N elements: [0, 1, ..., N-1, N-2, ..., 1] → 2*(N-1) total
+		// For N=1: just [0] (single element — no-op)
+		if (N <= 1) return sorted.map((x) => x.element);
+		const asc = sorted.map((x) => x.element);
+		const desc = sorted
+			.slice(1, N - 1)
+			.reverse()
+			.map((x) => x.element);
+		return [...asc, ...desc];
+	}
+
+	if (algo === 'inward') {
+		// Pincer from both ends toward middle
+		// For N=11 (odd): a0, a10, a1, a9, ..., a5 (middle)
+		// For N=10 (even): a0, a9, a1, a8, ..., a4, a5 (middle pair)
+		const result: CompiledElement[] = [];
+		let lo = 0;
+		let hi = N - 1;
+		while (lo <= hi) {
+			if (lo === hi) {
+				// Odd: single middle element
+				result.push(sorted[lo].element);
+				lo++;
+			} else {
+				result.push(sorted[lo].element);
+				result.push(sorted[hi].element);
+				lo++;
+				hi--;
+			}
+		}
+		return result;
+	}
+
+	if (algo === 'outward') {
+		// Reverse of inward: start from middle, expand outward
+		const inward = applyArpAlgorithm(items, 'inward');
+		return [...inward].reverse();
+	}
+
+	return sorted.map((x) => x.element); // fallback
+}
+
+/**
+ * Apply 'arp transformation to a list of compiled elements.
+ *
+ * Steps:
+ *   1. Sample each element's runner to get numeric values.
+ *   2. Separate rests from pitched elements.
+ *   3. If all elements are rests → return [ZERO_WEIGHT_REST] (one rest event).
+ *   4. Deduplicate pitched elements by numeric equality (first occurrence wins).
+ *   5. Apply the arp algorithm to produce a traversal order.
+ *   6. If lengthOverride is set, cycle/wrap to produce exactly n elements.
+ *
+ * Returns an ordered CompiledElement[] ready for slot expansion.
+ */
+function applyArp(
+	elements: CompiledElement[],
+	arpConfig: ArpConfig,
+	cycle: number
+): CompiledElement[] {
+	// Step 1: Sample values from scalar elements; collect rests
+	type Item = { value: number; element: CompiledElement };
+	const pitched: Item[] = [];
+
+	for (const el of elements) {
+		if (el.kind === 'rest') continue; // skip rests
+		if (el.kind === 'scalar') {
+			const value = sampleRunner(el.runner, cycle);
+			// Deduplicate: only keep first occurrence of each value
+			const isDup = pitched.some((p) => p.value === value);
+			if (!isDup) {
+				pitched.push({ value, element: el });
+			}
+		} else {
+			// Subsequences, symbols, chords: include as-is (not arpeggiated)
+			// Treat them as non-numeric items; add without dedup
+			pitched.push({ value: NaN, element: el });
+		}
+	}
+
+	// Step 3: All rests → single rest event
+	if (pitched.length === 0) {
+		return [ZERO_WEIGHT_REST];
+	}
+
+	// Step 4: Apply arp algorithm to get traversal order
+	const traversal = applyArpAlgorithm(pitched, arpConfig.algorithm);
+
+	// Step 5: Apply length override (cycle/wrap)
+	if (arpConfig.lengthOverride !== null) {
+		const n = arpConfig.lengthOverride;
+		return Array.from({ length: n }, (_, i) => traversal[i % traversal.length]);
+	}
+
+	return traversal;
 }
 
 // ---------------------------------------------------------------------------
@@ -2436,7 +2663,10 @@ function evaluateCompiledPattern(
 	const maybeProb = maybeRunner ? sampleRunner(maybeRunner, cycle) : null;
 
 	// Determine the ordered sequence of elements (traversal strategy)
-	const orderedElements = orderedSubElements(elements, compiled.traversal, cycle);
+	// If 'arp is present it takes precedence and computes its own ordering.
+	const orderedElements = compiled.arpConfig
+		? applyArp(elements, compiled.arpConfig, cycle)
+		: orderedSubElements(elements, compiled.traversal, cycle);
 
 	// Apply 'stut: expand each element into stutCount copies
 	const expandedElements: CompiledElement[] = [];

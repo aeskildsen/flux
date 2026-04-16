@@ -143,6 +143,32 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 		kind: 'keyword'
 	},
 	{
+		label: 'arp',
+		insertText: 'arp',
+		detail: "'arp — arpeggiate list values (default \\up)",
+		documentation:
+			"Collects cycle output, removes duplicates, and traverses in a pattern. Algorithms: \\up, \\down, \\inward, \\outward, \\updown, \\converge, \\diverge. Use 'arp(\\algorithm n) for a length override.",
+		kind: 'keyword'
+	},
+	{
+		label: 'arp(algorithm)',
+		insertText: 'arp(\\${1:up})',
+		isSnippet: true,
+		detail: "'arp(algorithm) — arpeggiate with explicit algorithm",
+		documentation:
+			'Algorithms: \\up (default), \\down, \\inward, \\outward, \\updown, \\converge (alias \\inward), \\diverge (alias \\outward).',
+		kind: 'snippet'
+	},
+	{
+		label: 'arp(algorithm n)',
+		insertText: 'arp(\\${1:down} ${2:16})',
+		isSnippet: true,
+		detail: "'arp(algorithm n) — arpeggiate with length override",
+		documentation:
+			'Produces exactly n values by cycling the natural traversal. n must be a positive integer ≥ 1.',
+		kind: 'snippet'
+	},
+	{
 		label: 'tail(s)',
 		insertText: 'tail(${1:4})',
 		isSnippet: true,
