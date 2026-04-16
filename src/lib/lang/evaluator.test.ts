@@ -3067,3 +3067,249 @@ describe("'spread error cases", () => {
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 13. 'arp modifier — arpeggiation from cycle output (truth table 25)
+// ---------------------------------------------------------------------------
+//
+// Input [0..10] = [0 1 2 3 4 5 6 7 8 9 10] (11 elements, deduped = same)
+// Default C major, C5 context. Degree → MIDI: 0→60, 1→62, 2→64, 3→65, 4→67,
+//   5→69, 6→71, 7→72, 8→74, 9→76, 10→77.
+//
+// Each algorithm produces a specific traversal order from the deduped inputs.
+// ---------------------------------------------------------------------------
+
+/** Evaluate arp pattern and return degree-ordered MIDI notes per cycle. */
+function arpNotes(source: string): number[] {
+	return eval0(source).map((e) => pitched(e).note);
+}
+
+describe("'arp — arpeggiation modifier (truth table 25)", () => {
+	// Algorithm \up: sorted ascending
+	it("\\up (default): [0..10]'arp — degrees 0..10 ascending", () => {
+		const ns = arpNotes("note x [0..10]'arp");
+		expect(ns).toEqual([60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77]);
+	});
+
+	it("\\up explicit: [0..10]'arp(\\up) — same as bare 'arp", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\up)");
+		expect(ns).toEqual([60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77]);
+	});
+
+	// Algorithm \down: sorted descending
+	it("\\down: [0..10]'arp(\\down) — degrees 10..0 descending", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\down)");
+		expect(ns).toEqual([77, 76, 74, 72, 71, 69, 67, 65, 64, 62, 60]);
+	});
+
+	// Algorithm \inward: outer to inner (pincer from both ends)
+	// Input [0..10]: a0=0, a1=1, ..., a10=10 (N=11, odd — ends on middle a5=5)
+	// inward: a0, a10, a1, a9, a2, a8, a3, a7, a4, a6, a5
+	// → degrees: 0, 10, 1, 9, 2, 8, 3, 7, 4, 6, 5
+	it("\\inward: [0..10]'arp(\\inward) — outer to inner", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\inward)");
+		// degrees: 0, 10, 1, 9, 2, 8, 3, 7, 4, 6, 5 → MIDI:
+		expect(ns).toEqual([60, 77, 62, 76, 64, 74, 65, 72, 67, 71, 69]);
+	});
+
+	// Algorithm \outward: inner to outer (reverse of inward)
+	// inward on [0..10]: 0, 10, 1, 9, 2, 8, 3, 7, 4, 6, 5
+	// outward = reverse of inward: 5, 6, 4, 7, 3, 8, 2, 9, 1, 10, 0
+	it("\\outward: [0..10]'arp(\\outward) — inner to outer (reverse of inward)", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\outward)");
+		// degrees: 5, 6, 4, 7, 3, 8, 2, 9, 1, 10, 0 → MIDI:
+		expect(ns).toEqual([69, 71, 67, 72, 65, 74, 64, 76, 62, 77, 60]);
+	});
+
+	// Algorithm \updown: palindrome, no repeated endpoints
+	// [0..10] → 0 1 2 3 4 5 6 7 8 9 10 9 8 7 6 5 4 3 2 1 (20 values)
+	// ascending: 11 values (0..10), descending: 9 values (9..1, no repeated endpoints)
+	it("\\updown: [0..10]'arp(\\updown) — palindrome no repeated endpoints (20 values)", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\updown)");
+		expect(ns).toHaveLength(20);
+		// ascending half (indices 0..10)
+		expect(ns.slice(0, 11)).toEqual([60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77]);
+		// descending half (no repeated top or bottom): degrees 9,8,7,6,5,4,3,2,1
+		expect(ns.slice(11)).toEqual([76, 74, 72, 71, 69, 67, 65, 64, 62]);
+	});
+
+	// \converge is an alias for \inward
+	it("\\converge: [0..10]'arp(\\converge) — same as \\inward", () => {
+		expect(arpNotes("note x [0..10]'arp(\\converge)")).toEqual(
+			arpNotes("note x [0..10]'arp(\\inward)")
+		);
+	});
+
+	// \diverge is an alias for \outward
+	it("\\diverge: [0..10]'arp(\\diverge) — same as \\outward", () => {
+		expect(arpNotes("note x [0..10]'arp(\\diverge)")).toEqual(
+			arpNotes("note x [0..10]'arp(\\outward)")
+		);
+	});
+
+	// Inward/outward on even-length input
+	// [0..9] = 10 elements, N=10 (even)
+	// inward: a0, a9, a1, a8, a2, a7, a3, a6, a4, a5
+	// → degrees: 0, 9, 1, 8, 2, 7, 3, 6, 4, 5
+	it('\\inward on even-length [0..9]: pincer pairs ending at middle pair', () => {
+		const ns = arpNotes("note x [0..9]'arp(\\inward)");
+		// degrees: 0, 9, 1, 8, 2, 7, 3, 6, 4, 5
+		expect(ns).toEqual([60, 76, 62, 74, 64, 72, 65, 71, 67, 69]);
+	});
+
+	// outward on even-length [0..9]: reverse of inward
+	// inward [0..9]: 0, 9, 1, 8, 2, 7, 3, 6, 4, 5
+	// outward = reverse: 5, 4, 6, 3, 7, 2, 8, 1, 9, 0
+	it('\\outward on even-length [0..9]: reverse of \\inward', () => {
+		const ns = arpNotes("note x [0..9]'arp(\\outward)");
+		// degrees: 5, 4, 6, 3, 7, 2, 8, 1, 9, 0
+		expect(ns).toEqual([69, 67, 71, 65, 72, 64, 74, 62, 76, 60]);
+	});
+
+	// Length override: 'arp(\down 16) on [0..10] → 16 values cycling \down traversal
+	// \down traversal: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0] (11 natural), cycling for 16:
+	// [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 10, 9, 8, 7, 6]
+	it("\\down 16: [0..10]'arp(\\down 16) — 16 values cycling", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\down 16)");
+		expect(ns).toHaveLength(16);
+		// First 11: the natural down traversal
+		expect(ns.slice(0, 11)).toEqual([77, 76, 74, 72, 71, 69, 67, 65, 64, 62, 60]);
+		// Wrapped: 10, 9, 8, 7, 6 (indices 0..4 of the traversal array)
+		expect(ns.slice(11)).toEqual([77, 76, 74, 72, 71]);
+	});
+
+	it("\\up 5: [0..10]'arp(\\up 5) — first 5 values of up traversal", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\up 5)");
+		expect(ns).toHaveLength(5);
+		expect(ns).toEqual([60, 62, 64, 65, 67]);
+	});
+
+	// Duplicate removal: preserves order of first occurrence
+	// [5 3 7 3 1] → deduped = [5 3 7 1]
+	// \up: sorted ascending = [1 3 5 7] → degrees: 1, 3, 5, 7
+	it("dedup: [5 3 7 3 1]'arp — removes duplicates by first occurrence", () => {
+		const ns = arpNotes("note x [5 3 7 3 1]'arp");
+		// \up: sorted numerically → degrees 1, 3, 5, 7 → MIDI 62, 65, 69, 72
+		expect(ns).toEqual([62, 65, 69, 72]);
+	});
+
+	// Single-element input: 'arp is a no-op (yields that single value)
+	it("single element: [4]'arp — no-op, yields degree 4", () => {
+		const ns = arpNotes("note x [4]'arp");
+		expect(ns).toEqual([67]); // degree 4 = G5 = MIDI 67
+	});
+
+	// Rests are filtered out before arpeggiation
+	// [0 _ 4 _ 8] → rests filtered → [0 4 8] → \up: [0 4 8]
+	it("rests filtered: [0 _ 4 _ 8]'arp — rests removed before arpeggiation", () => {
+		const ns = arpNotes("note x [0 _ 4 _ 8]'arp");
+		// degrees: 0, 4, 8 → MIDI: 60, 67, 74
+		expect(ns).toEqual([60, 67, 74]);
+	});
+
+	// All-rest input: yields a single rest event
+	it("all rests: [_ _ _]'arp — yields one rest event", () => {
+		const evs = eval0("note x [_ _ _]'arp");
+		expect(evs).toHaveLength(1);
+		expect(evs[0].contentType).toBe('rest');
+	});
+
+	// 'arp composes with 'stut at list level: 'arp runs first
+	it("'arp composes with 'stut: [0..3]'arp'stut(2) — 8 events (4 arped × 2)", () => {
+		const evs = eval0("note x [0..3]'arp'stut(2)");
+		expect(evs).toHaveLength(8);
+	});
+
+	// 'arp is list-level — attaching to a scalar inside a list is a semantic error
+	it("scalar generator with 'arp: [0rand7'arp] — semantic error", () => {
+		const i = createInstance("note x [0rand7'arp]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// 'arp on same list as 'shuf is a semantic error
+	it("'arp'shuf combination — semantic error: cannot combine", () => {
+		const i = createInstance("note x [0..5]'arp'shuf");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// 'arp on same list as 'pick is a semantic error
+	it("'arp'pick combination — semantic error: cannot combine", () => {
+		const i = createInstance("note x [0..5]'arp'pick");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// Length override n=0 is a semantic error
+	it("'arp(\\up 0) — semantic error: n=0", () => {
+		const i = createInstance("note x [0..5]'arp(\\up 0)");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// Length override n negative is a semantic error
+	it("'arp(\\up -3) — semantic error: negative length", () => {
+		const i = createInstance("note x [0..5]'arp(\\up -3)");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// Unknown algorithm symbol is a semantic error
+	it("'arp(\\bogus) — semantic error: unknown algorithm", () => {
+		const i = createInstance("note x [0..5]'arp(\\bogus)");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// 'arp on a scalar top-level generator (not inside a list) — semantic error
+	it("'arp on scalar generator (not in a list) — semantic error", () => {
+		// The parser will see the modifierSuffix on the generator expression inside []
+		// When 'arp is placed on a scalar element inside a list, it's a semantic error
+		// (cannot attach to a non-list generator since 'arp is list-level only)
+		const i = createInstance("note x [0rand7'arp]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('arp');
+		}
+	});
+
+	// \updown length override
+	it("\\updown 5: [0..10]'arp(\\updown 5) — 5 values cycling updown traversal", () => {
+		const ns = arpNotes("note x [0..10]'arp(\\updown 5)");
+		expect(ns).toHaveLength(5);
+		// updown traversal for [0..10]: 0 1 2 3 4 5 6 7 8 9 10 9 8 7 6 5 4 3 2 1 (20 values)
+		// first 5: degrees 0, 1, 2, 3, 4 → MIDI 60, 62, 64, 65, 67
+		expect(ns).toEqual([60, 62, 64, 65, 67]);
+	});
+
+	// 'arp is evaluated at cycle boundary (repeatable across cycles)
+	it("'arp produces same result across multiple cycles", () => {
+		const i = inst("note x [0..4]'arp");
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		if (!r0.ok || !r1.ok) throw new Error('eval failed');
+		expect(r0.events.map((e) => pitched(e).note)).toEqual(r1.events.map((e) => pitched(e).note));
+	});
+
+	// Truth table row: dedup + \inward
+	// [5 3 7 3 1] → deduped = [5 3 7 1] (first-occurrence order)
+	// sorted = [1 3 5 7], then \inward: a0=1, a3=7, a1=3, a2=5 → [1, 7, 3, 5]
+	// degrees: 1→62, 7→72, 3→65, 5→69
+	it("dedup + \\inward: [5 3 7 3 1]'arp(\\inward) — sort deduplicated then inward", () => {
+		const ns = arpNotes("note x [5 3 7 3 1]'arp(\\inward)");
+		expect(ns).toEqual([62, 72, 65, 69]);
+	});
+});

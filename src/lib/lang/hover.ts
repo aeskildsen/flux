@@ -226,7 +226,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'',
 		'Attaches a modifier to the immediately preceding token.',
 		'',
-		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`'
+		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `arp`'
 	].join('\n'),
 
 	At: [
@@ -316,6 +316,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		"[1 2 3]'shuf      // shuffle then traverse",
 		"[1 2 3]'pick      // uniform random element each time",
 		"[1 2?2 3]'pick    // weighted random (probs 0.25/0.5/0.25)",
+		"[0..10]'arp       // arpeggiate ascending (default \\up)",
 		'```'
 	].join('\n'),
 
@@ -445,6 +446,31 @@ const MODIFIER_DOCS: Record<string, string> = {
 		"[1 2 3 4]'pick        // uniform",
 		"[1 2?2 3]'pick        // probs 0.25 / 0.5 / 0.25",
 		"[1?0.5 2?1 3?2]'pick  // probs 0.14 / 0.29 / 0.57",
+		'```'
+	].join('\n'),
+
+	arp: [
+		"**`'arp`** — arpeggiate: collect cycle output, deduplicate, and traverse.",
+		'',
+		'Default algorithm is `\\up`. Rests are filtered before arpeggiation.',
+		'Duplicates are removed by numeric equality (first-occurrence order preserved).',
+		"Cannot be combined with `'shuf` or `'pick` — choose one traversal strategy.",
+		'',
+		'**Algorithms:**',
+		'- `\\up` — ascending (default)',
+		'- `\\down` — descending',
+		'- `\\inward` / `\\converge` — pincer from both ends toward the middle',
+		'- `\\outward` / `\\diverge` — starts at middle, expands outward',
+		'- `\\updown` — ascending then descending palindrome, no repeated endpoints (natural length = 2×(N−1))',
+		'',
+		"**Length override** `'arp(\\algorithm n)`: cycles the natural traversal to produce exactly n values.",
+		'',
+		'```flux',
+		"[0..10]'arp              // \\up — 0 1 2 3 4 5 6 7 8 9 10",
+		"[0..10]'arp(\\down)       // 10 9 8 7 6 5 4 3 2 1 0",
+		"[0..10]'arp(\\updown)     // 0..10..1 (20 values)",
+		"[0..10]'arp(\\down 16)    // 16 values, cycling \\down traversal",
+		"[0 5 2 7]'arp(\\inward)   // inward from sorted [0 2 5 7]",
 		'```'
 	].join('\n'),
 
