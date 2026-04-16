@@ -855,6 +855,316 @@ function compileElement(elem: CstNode, inherited: EagerMode): CompiledElement | 
 	return { kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset, weight };
 }
 
+// ---------------------------------------------------------------------------
+// 'spread: per-element expansion modifier
+// ---------------------------------------------------------------------------
+
+/**
+ * Parsed result of a 'spread modifier on an element.
+ * - bare: true  → bare 'spread — use the generator's natural iteration length
+ * - n: number   → explicit 'spread(n) — expand to exactly n values
+ */
+type SpreadSpec = { bare: true; explicit: false } | { bare: false; explicit: true; n: number };
+
+/**
+ * Detect a 'spread modifier in a list of modifierSuffix nodes.
+ * Returns SpreadSpec if found, null otherwise.
+ * Also validates the count argument:
+ *   - list generator as count → returns error string
+ *   - n <= 0 → returns error string
+ */
+function extractSpread(mods: CstNode[]): SpreadSpec | string | null {
+	for (const mod of mods) {
+		if (getModifierName(mod) !== 'spread') continue;
+		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
+		if (!genExpr) {
+			// Bare 'spread
+			return { bare: true, explicit: false };
+		}
+		// Validate: count must be a scalar generator, not a list generator
+		const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+		if (atomic) {
+			const seqGen = ((atomic.children.sequenceGenerator as CstNode[]) ?? [])[0];
+			if (seqGen) {
+				return "'spread(n): the count argument must be a scalar generator, not a list generator";
+			}
+		}
+		const n = extractConstantNumber(genExpr);
+		if (n === null) {
+			// Non-constant scalar (e.g. 2rand4) — for now use poll directly
+			// We require a constant for spread count; non-constant is treated as bare
+			return { bare: true, explicit: false };
+		}
+		const rounded = Math.round(n);
+		if (rounded <= 0) {
+			return `'spread(${rounded}): count must be a positive integer ≥ 1`;
+		}
+		return { bare: false, explicit: true, n: rounded };
+	}
+	return null;
+}
+
+/**
+ * Get the natural iteration length of a numericGenerator (step/mul/lin/geo).
+ * Returns null if the generator is not a series type with an explicit length.
+ */
+function getSeriesLength(numGen: CstNode): number | null {
+	for (const key of ['stepGen', 'mulGen', 'linGen', 'geoGen'] as const) {
+		const node = ((numGen.children[key] as CstNode[]) ?? [])[0];
+		if (!node) continue;
+		const lits = (node.children.numericLiteral as CstNode[]) ?? [];
+		const len = lits[1] ? litToNumber(lits[1]) : null;
+		if (len !== null && len >= 1) return Math.round(len);
+	}
+	return null;
+}
+
+/**
+ * Compile a sequenceElement CST node with 'spread support.
+ * Returns CompiledElement[] (one entry = no spread; multiple = spread expanded).
+ * Returns a string on semantic error.
+ *
+ * This replaces compileElement at the call sites inside compilePattern's element loop.
+ */
+function compileElementWithSpread(elem: CstNode, inherited: EagerMode): CompiledElement[] | string {
+	// Check for 'spread modifier.
+	// 'spread can appear in two places:
+	//   1. genExpr.modifierSuffix — for scalar generators (0rand7'spread)
+	//   2. seqGen.modifierSuffix  — for list generators ([0 2 4]'spread)
+	//      because the parser's sequenceGenerator MANY2 consumes the modifier
+	//      before generatorExpr's MANY gets a chance.
+	const genExpr = ((elem.children.generatorExpr as CstNode[]) ?? [])[0];
+	const elemMods = genExpr ? ((genExpr.children.modifierSuffix as CstNode[]) ?? []) : [];
+
+	// Peek at the inner sequenceGenerator's modifiers (if any) to find 'spread
+	// when the element is a list generator.
+	let seqGenSpread: SpreadSpec | string | null = null;
+	if (genExpr) {
+		const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+		if (atomic) {
+			const innerSeqGen = ((atomic.children.sequenceGenerator as CstNode[]) ?? [])[0];
+			if (innerSeqGen) {
+				// Check rangeExpr mods first (for [0..3]'spread)
+				const innerRangeNode = ((innerSeqGen.children.rangeExpr as CstNode[]) ?? [])[0];
+				const seqMods = innerRangeNode
+					? ((innerRangeNode.children.modifierSuffix as CstNode[]) ?? [])
+					: ((innerSeqGen.children.modifierSuffix as CstNode[]) ?? []);
+				seqGenSpread = extractSpread(seqMods);
+			}
+		}
+	}
+
+	// Prefer seqGenSpread (list generator modifier) over elemMods spread
+	const spreadFromElemMods = extractSpread(elemMods);
+	const spreadResult = seqGenSpread !== null ? seqGenSpread : spreadFromElemMods;
+
+	if (typeof spreadResult === 'string') {
+		return spreadResult; // semantic error from extractSpread
+	}
+
+	if (spreadResult === null) {
+		// No 'spread — compile normally
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+
+	// 'spread is present — need to expand
+	// First, determine what kind of generator we have
+
+	// Guard: rest, degreeLiteral, symbol, chord — not expandable with 'spread
+	const restToks = (elem.children.Rest as IToken[]) ?? [];
+	if (restToks.length > 0) {
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+	const symTok = ((elem.children.Symbol as IToken[]) ?? [])[0];
+	if (symTok) {
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+	const chordLitNode = ((elem.children.chordLiteral as CstNode[]) ?? [])[0];
+	if (chordLitNode) {
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+	const degreeLitNode = ((elem.children.degreeLiteral as CstNode[]) ?? [])[0];
+	if (degreeLitNode) {
+		// Degree literal is a scalar — no-op + warning for bare spread
+		if (spreadResult.bare) {
+			console.warn(
+				"[flux] 'spread on a scalar generator has no effect (no natural iteration length)"
+			);
+			const ce = compileElement(elem, inherited);
+			if (!ce) return [];
+			return [ce];
+		}
+		// 'spread(n) on scalar: n polls of the same literal
+		const intTok = ((degreeLitNode.children.Integer as IToken[]) ?? [])[0];
+		if (!intTok) return [];
+		const degree = parseInt(intTok.image, 10);
+		const sharps = (degreeLitNode.children.Sharp as IToken[]) ?? [];
+		const flats = (degreeLitNode.children.Flat as IToken[]) ?? [];
+		let accidentalOffset = sharps.length;
+		for (const f of flats) accidentalOffset -= f.image.length;
+		const count = spreadResult.n;
+		const weight = makeRunner(() => 1, { kind: 'lock' });
+		return Array.from({ length: count }, () => ({
+			kind: 'scalar' as const,
+			runner: makeRunner(() => degree, inherited),
+			accidentalOffset,
+			weight
+		}));
+	}
+
+	if (!genExpr) {
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+
+	const effectiveMode: EagerMode = extractEagerMode(elemMods) ?? inherited;
+	const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
+	if (!atomic) {
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+
+	// utf8Generator — scalar, no natural length
+	const utf8Gen = ((atomic.children.utf8Generator as CstNode[]) ?? [])[0];
+	if (utf8Gen) {
+		const poll = utf8GenToPollFn(utf8Gen);
+		if (!poll) return [];
+		if (spreadResult.bare) {
+			console.warn(
+				"[flux] 'spread on a scalar generator has no effect (no natural iteration length)"
+			);
+			const weight = weightFromElem(elem);
+			return [
+				{ kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset: 0, weight }
+			];
+		}
+		// 'spread(n): n polls
+		const count = spreadResult.n;
+		return Array.from({ length: count }, () => ({
+			kind: 'scalar' as const,
+			runner: makeRunner(poll, effectiveMode),
+			accidentalOffset: 0,
+			weight: makeRunner(() => 1, { kind: 'lock' })
+		}));
+	}
+
+	// Nested sequence generator (inner list): spread flattens it into parent slots
+	const seqGen = ((atomic.children.sequenceGenerator as CstNode[]) ?? [])[0];
+	if (seqGen) {
+		// Get all elements from the inner list
+		const subRangeNode = ((seqGen.children.rangeExpr as CstNode[]) ?? [])[0];
+		let innerElements: CompiledElement[];
+
+		if (subRangeNode) {
+			// Range expression: expand first
+			const subListMods = (subRangeNode.children.modifierSuffix as CstNode[]) ?? [];
+			const subListMode = extractEagerMode(subListMods) ?? inherited;
+			const expandedValues = expandRangeExpr(subRangeNode);
+			if (typeof expandedValues === 'string')
+				return `Semantic error in nested range: ${expandedValues}`;
+			innerElements = expandedValues.map((v) => ({
+				kind: 'scalar' as const,
+				runner: makeRunner(() => v, subListMode),
+				accidentalOffset: 0,
+				weight: makeRunner(() => 1, { kind: 'lock' })
+			}));
+		} else {
+			const subListMods = (seqGen.children.modifierSuffix as CstNode[]) ?? [];
+			const subListMode = extractEagerMode(subListMods) ?? inherited;
+			const subElemNodes = (seqGen.children.sequenceElement as CstNode[]) ?? [];
+			innerElements = [];
+			for (const se of subElemNodes) {
+				const ce = compileElement(se, subListMode);
+				if (!ce) continue;
+				const n = repeatCountFromElem(se);
+				for (let k = 0; k < n; k++) innerElements.push(ce);
+			}
+		}
+
+		if (innerElements.length === 0) return [];
+
+		if (spreadResult.bare) {
+			// Flatten all inner elements into parent slots
+			return innerElements;
+		}
+
+		// 'spread(n): wrap around to take exactly n elements
+		const count = spreadResult.n;
+		return Array.from({ length: count }, (_, i) => innerElements[i % innerElements.length]);
+	}
+
+	// Numeric generator (step/mul/lin/geo or scalar rand/gau/exp/bro/literal)
+	const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
+	if (!numGen) {
+		const ce = compileElement(elem, inherited);
+		if (!ce) return [];
+		return [ce];
+	}
+
+	const seriesLength = getSeriesLength(numGen);
+
+	if (seriesLength === null) {
+		// Scalar generator (rand, gau, exp, bro, literal without series)
+		const poll = numGenToPollFn(numGen);
+		if (!poll) return [];
+
+		if (spreadResult.bare) {
+			console.warn(
+				"[flux] 'spread on a scalar generator has no effect (no natural iteration length)"
+			);
+			const weight = weightFromElem(elem);
+			return [
+				{ kind: 'scalar', runner: makeRunner(poll, effectiveMode), accidentalOffset: 0, weight }
+			];
+		}
+
+		// 'spread(n): n independent polls of the same scalar generator
+		const count = spreadResult.n;
+		return Array.from({ length: count }, () => ({
+			kind: 'scalar' as const,
+			runner: makeRunner(poll, effectiveMode),
+			accidentalOffset: 0,
+			weight: makeRunner(() => 1, { kind: 'lock' })
+		}));
+	}
+
+	// Series generator with explicit length
+	const poll = numGenToPollFn(numGen);
+	if (!poll) return [];
+
+	const expandCount = spreadResult.bare ? seriesLength : spreadResult.n;
+
+	// Poll the series generator `expandCount` times, respecting wrap-around.
+	// Each element shares the same underlying poll function (it advances state).
+	// We need each to return the next value in sequence, so we create a shared
+	// poll that advances, and each element calls it once.
+	//
+	// Strategy: eagerly poll the series for one full iteration upfront,
+	// then create constant runners for each expanded slot.
+	// This matches "consumes one full iteration per cycle" semantics.
+	const iterationValues: number[] = [];
+	for (let i = 0; i < expandCount; i++) {
+		iterationValues.push(poll());
+	}
+
+	return iterationValues.map((v) => ({
+		kind: 'scalar' as const,
+		runner: makeRunner(() => v, { kind: 'lock' }),
+		accidentalOffset: 0,
+		weight: makeRunner(() => 1, { kind: 'lock' })
+	}));
+}
+
 /**
  * Compile a chordLiteral CST node into a CompiledChord.
  * Each chordElement becomes one voice (scalar runner).
@@ -1568,6 +1878,12 @@ function compilePattern(
 		console.warn("[flux] `?` weight ignored: weights are only meaningful on lists with 'pick");
 	}
 
+	// Semantic error: 'spread on the top-level list has no enclosing list to spread into.
+	// This covers both [0 2 4]'spread (spread on sequenceExpr) and derived forms.
+	if (hasModifier(listMods, 'spread')) {
+		return "'spread on a top-level list is not valid — 'spread must be applied to an element inside a [...] list";
+	}
+
 	const compiled: CompiledElement[] = [];
 
 	if (rangeNode) {
@@ -1586,10 +1902,12 @@ function compilePattern(
 	} else if (seqNode) {
 		const elements = (seqNode.children.sequenceElement as CstNode[]) ?? [];
 		for (const elem of elements) {
-			const ce = compileElement(elem, listMode);
-			if (!ce) continue;
+			const expanded = compileElementWithSpread(elem, listMode);
+			if (typeof expanded === 'string') return `Semantic error: ${expanded}`;
 			const n = repeatCountFromElem(elem);
-			for (let k = 0; k < n; k++) compiled.push(ce);
+			for (const ce of expanded) {
+				for (let k = 0; k < n; k++) compiled.push(ce);
+			}
 		}
 	} else if (relNode) {
 		const elems = (relNode.children.timedElement as CstNode[]) ?? [];
