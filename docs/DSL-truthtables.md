@@ -530,3 +530,60 @@ Compact `[start..end]` / `[start, step..end]` syntax. All bounds inclusive. Eage
 | `mono x [<0 2 4>]`   | Semantic error | Chords are not supported for mono content type.                                |
 | `note x [0] + <0 4>` | Parse error    | Chord literal is not valid as a transposition operand; the grammar rejects it. |
 | `note x [<>]`        | Parse error    | Empty chord — at least one element is required.                                |
+
+---
+
+# 24. **`'spread` Truth Table**
+
+`'spread` is a per-element modifier inside `[...]` that expands a multi-value generator's single iteration into multiple consecutive sibling cycle slots.
+
+## Basic cases — series generators
+
+| Code Snippet                  | Interpretation                                       | Evaluation                                                               | Result                                                     |
+| ----------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `note x [0step1x4'spread]`    | Bare spread on step generator (length 4).            | Consume one full iteration: [0,1,2,3]. Each value gets 1/4 of the cycle. | 4 events: degrees 0,1,2,3; beatOffsets 0, 0.25, 0.5, 0.75. |
+| `note x [0step1x4'spread(2)]` | Explicit count 2 — take 2 values from one iteration. | Consume 2 values: [0,1]. Each gets 1/2 of the cycle.                     | 2 events: degrees 0,1; beatOffsets 0, 0.5.                 |
+| `note x [0step1x4'spread(6)]` | Explicit count 6 — wraps around (length 4 < 6).      | 6 polls with wrap: [0,1,2,3,0,1]. Each gets 1/6 of the cycle.            | 6 events: degrees 0,1,2,3,0,1.                             |
+| `note x [A 0step1x4'spread]`  | Mixed: scalar A + 4 spread values.                   | List has 5 total slots: A, 0, 1, 2, 3. Each gets 1/5 of the cycle.       | 5 events; slot 0 = degree A, slots 1–4 = 0,1,2,3.          |
+| `note x [0mul2x4'spread]`     | Geometric series of length 4: 0,0,0,0 (start=0).     | Consume one full iteration.                                              | 4 events.                                                  |
+| `note x [1mul2x4'spread]`     | Geometric series: 1,2,4,8.                           | Consume full iteration.                                                  | 4 events: degrees 1,2,4,8.                                 |
+| `note x [2lin7x4'spread]`     | Linear interpolation, length 4: 2,4,5,7 (rounded).   | Consume full iteration.                                                  | 4 events.                                                  |
+
+## Basic cases — list generators
+
+| Code Snippet                 | Interpretation                                          | Evaluation                                      | Result                                            |
+| ---------------------------- | ------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| `note x [[0 2 4]'spread]`    | Inner list spread into outer — equivalent to `[0 2 4]`. | Inner list [0,2,4] flattened into parent slots. | 3 events: degrees 0,2,4; beatOffsets 0, 1/3, 2/3. |
+| `note x [A [0 2 4]'spread]`  | A plus spread inner list.                               | 4 slots total: A, 0, 2, 4.                      | 4 events; slot 0 = A, slots 1–3 = 0,2,4.          |
+| `note x [[0..3]'spread]`     | Range notation: `[0..3]` is `[0 1 2 3]`, then spread.   | 4 values spread into parent.                    | 4 events: degrees 0,1,2,3.                        |
+| `note x [[0 2 4]'spread(2)]` | Explicit count 2 on list (first 2 elements).            | Take 2 values: [0,2]. 2 slots.                  | 2 events: degrees 0,2.                            |
+| `note x [[0 2 4]'spread(5)]` | Explicit count 5 > list length 3 — wraps.               | 5 polls with wrap: [0,2,4,0,2].                 | 5 events: degrees 0,2,4,0,2.                      |
+
+## Scalar generators — no-op warning
+
+| Code Snippet                | Interpretation                                       | Evaluation                                            | Result                                                                 |
+| --------------------------- | ---------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| `note x [4'spread]`         | Bare spread on scalar literal — no natural length.   | Warning emitted; `'spread` ignored; 1 slot as normal. | 1 event: degree 4. Console warning: `'spread on scalar has no effect`. |
+| `note x [0rand7'spread]`    | Bare spread on rand — scalar, no natural length.     | Warning emitted; `'spread` ignored; 1 slot as normal. | 1 event. Console warning.                                              |
+| `note x [utf8{hi}'spread]`  | Bare spread on utf8 generator — scalar.              | Warning emitted; `'spread` ignored; 1 slot as normal. | 1 event. Console warning.                                              |
+| `note x [4'spread(3)]`      | Explicit count on scalar literal — valid.            | 3 polls of the literal: [4,4,4]. 3 slots.             | 3 events: all degree 4.                                                |
+| `note x [0rand7'spread(3)]` | Explicit count on rand — valid; 3 independent polls. | 3 random polls. 3 slots.                              | 3 events with random degrees.                                          |
+
+## `'spread` × `'stut` interaction
+
+| Code Snippet                         | Interpretation                                                        | Evaluation                                                     | Result                                                          |
+| ------------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------- |
+| `note x [0step1x4'spread]'stut(2)`   | Spread inside list expands to 4 slots; outer `'stut(2)` doubles each. | After spread: [0,1,2,3]. After stut(2): [0,0,1,1,2,2,3,3].     | 8 events: degrees [0,0,1,1,2,2,3,3]; beatOffsets at 0,1/8,2/8,… |
+| `note x [A 0step1x4'spread]'stut(2)` | A + 4 spread = 5 slots; stut doubles each to 10 slots.                | After spread: [A,0,1,2,3]. After stut(2): each repeated twice. | 10 events.                                                      |
+| `note x [[0 2 4]'spread]'stut(2)`    | List spread into 3 slots; outer stut doubles each.                    | After spread: [0,2,4]. After stut(2): [0,0,2,2,4,4].           | 6 events.                                                       |
+
+## Error cases
+
+| Code                               | Failure Type   | Why                                                                                                                                                                                              |
+| ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `note x [0 2 4]'spread`            | Semantic error | `'spread` attaches to the outer list — there is no enclosing list to spread into. Emits: `'spread on a top-level list is not valid — 'spread must be applied to an element inside a [...] list`. |
+| `note x 0step1x4'spread`           | Parse error    | The grammar requires `[...]` as the pattern body; a bare generator with `'spread` does not parse. (Surfaced as a parse error rather than a semantic error.)                                      |
+| `note x [0step1x4'spread(0)]`      | Semantic error | Count of 0 produces no events; must be ≥ 1 (consistent with `'stut(0)`).                                                                                                                         |
+| `note x [0step1x4'spread(-1)]`     | Semantic error | Negative count is not meaningful.                                                                                                                                                                |
+| `note x [0step1x4'spread([1 2])]`  | Semantic error | Count argument must be a scalar generator, not a list.                                                                                                                                           |
+| `note x [0step1x4'stut(2)'spread]` | Semantic error | `'stut` and `'spread` on the same element are ambiguous. Use list-level `'stut` instead: `[0step1x4'spread]'stut(2)`.                                                                            |
