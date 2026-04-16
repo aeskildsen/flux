@@ -1070,8 +1070,7 @@ function compileElementWithSpread(elem: CstNode, inherited: EagerMode): Compiled
 			const subListMods = (subRangeNode.children.modifierSuffix as CstNode[]) ?? [];
 			const subListMode = extractEagerMode(subListMods) ?? inherited;
 			const expandedValues = expandRangeExpr(subRangeNode);
-			if (typeof expandedValues === 'string')
-				return `Semantic error in nested range: ${expandedValues}`;
+			if (typeof expandedValues === 'string') return `nested range error: ${expandedValues}`;
 			innerElements = expandedValues.map((v) => ({
 				kind: 'scalar' as const,
 				runner: makeRunner(() => v, subListMode),
@@ -1889,7 +1888,7 @@ function compilePattern(
 	if (rangeNode) {
 		// Range expression: eagerly expand to a flat value array
 		const values = expandRangeExpr(rangeNode);
-		if (typeof values === 'string') return `Semantic error: ${values}`;
+		if (typeof values === 'string') return values;
 		for (const v of values) {
 			const val = v;
 			compiled.push({
@@ -1903,7 +1902,7 @@ function compilePattern(
 		const elements = (seqNode.children.sequenceElement as CstNode[]) ?? [];
 		for (const elem of elements) {
 			const expanded = compileElementWithSpread(elem, listMode);
-			if (typeof expanded === 'string') return `Semantic error: ${expanded}`;
+			if (typeof expanded === 'string') return expanded;
 			const n = repeatCountFromElem(elem);
 			for (const ce of expanded) {
 				for (let k = 0; k < n; k++) compiled.push(ce);

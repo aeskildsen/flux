@@ -3039,4 +3039,21 @@ describe("'spread error cases", () => {
 			expect(i.error.toLowerCase()).toContain('spread');
 		}
 	});
+
+	it("note x 0step1x4'spread — semantic error: spread on top-level generator (no enclosing list)", () => {
+		// The grammar cannot parse a bare generator with 'spread as a top-level pattern body
+		// (sequenceExpr requires '[...]'), so this is a parse error.
+		const i = createInstance("note x 0step1x4'spread");
+		expect(i.ok).toBe(false);
+	});
+
+	it("note x [0step1x4'spread([1 2])] — semantic error: list as spread count argument", () => {
+		const i = createInstance("note x [0step1x4'spread([1 2])]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
+			// Error message must NOT be doubled — "Semantic error:" prefix appears exactly once
+			expect(i.error.indexOf('Semantic error')).toBe(i.error.lastIndexOf('Semantic error'));
+		}
+	});
 });
