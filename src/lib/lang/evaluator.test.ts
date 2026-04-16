@@ -13,6 +13,7 @@
  *   9. Structural — note'n statement, continuation modifier lines
  *  10. FX pipe
  *  11. Cross-cutting interactions
+ *  12. 'spread modifier (truth table 24)
  *
  * All tests use C major / C5 = MIDI 60 as the default pitch context unless
  * otherwise stated.
@@ -2879,6 +2880,190 @@ describe('chord literals — error cases', () => {
 		expect(i.ok).toBe(false);
 		if (!i.ok) {
 			expect(i.error.toLowerCase()).toContain('chord');
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 12. 'spread modifier (truth table 24)
+// ---------------------------------------------------------------------------
+
+describe("'spread — series generators (step/mul/lin/geo)", () => {
+	it("bare 'spread on step(x4) expands all 4 values into 4 slots", () => {
+		const evs = eval0("note x [0step1x4'spread]");
+		expect(evs).toHaveLength(4);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 62, 64, 65]); // degrees 0,1,2,3 in C major
+	});
+
+	it("'spread fills beatOffsets evenly: 0, 0.25, 0.5, 0.75", () => {
+		const evs = eval0("note x [0step1x4'spread]");
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.25);
+		expect(evs[2].beatOffset).toBeCloseTo(0.5);
+		expect(evs[3].beatOffset).toBeCloseTo(0.75);
+	});
+
+	it("'spread(2) on step(x4) takes the first 2 values only", () => {
+		const evs = eval0("note x [0step1x4'spread(2)]");
+		expect(evs).toHaveLength(2);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 62]); // degrees 0,1
+	});
+
+	it("'spread(6) wraps around when count exceeds generator length", () => {
+		const evs = eval0("note x [0step1x4'spread(6)]");
+		expect(evs).toHaveLength(6);
+		// degrees: 0,1,2,3,0,1 → MIDI notes in C major
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 62, 64, 65, 60, 62]);
+	});
+
+	it('mixed: scalar + spread yields combined slot count', () => {
+		// note x [0 0step1x4'spread] → 1 + 4 = 5 slots
+		const evs = eval0("note x [0 0step1x4'spread]");
+		expect(evs).toHaveLength(5);
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.2);
+		expect(evs[4].beatOffset).toBeCloseTo(0.8);
+	});
+
+	it("mul series: 1mul2x4'spread → degrees 1,2,4,8", () => {
+		const evs = eval0("note x [1mul2x4'spread]");
+		expect(evs).toHaveLength(4);
+		// degrees 1,2,4,8 in C major C5: D5=62, E5=64, G5=67, D6=74
+		// (degree 8 = 1 above the octave: C major scale degree 1 up an octave = D6=74)
+		expect(evs.map((e) => pitched(e).note)).toEqual([62, 64, 67, 74]);
+	});
+});
+
+describe("'spread — list generators", () => {
+	it("[[0 2 4]'spread] flattens list into 3 slots (equivalent to [0 2 4])", () => {
+		const evs = eval0("note x [[0 2 4]'spread]");
+		expect(evs).toHaveLength(3);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 64, 67]); // C5, E5, G5
+	});
+
+	it("[A [0 2 4]'spread] yields 4 slots: A + 3 spread values", () => {
+		const evs = eval0("note x [7 [0 2 4]'spread]");
+		expect(evs).toHaveLength(4);
+		// slot 0: degree 7 = C6=72, slots 1-3: C5=60, E5=64, G5=67
+		expect(evs.map((e) => pitched(e).note)).toEqual([72, 60, 64, 67]);
+	});
+
+	it("[[0..3]'spread] expands range then spreads: 4 slots", () => {
+		const evs = eval0("note x [[0..3]'spread]");
+		expect(evs).toHaveLength(4);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 62, 64, 65]); // degrees 0,1,2,3
+	});
+
+	it("[[0 2 4]'spread(2)] takes first 2 elements", () => {
+		const evs = eval0("note x [[0 2 4]'spread(2)]");
+		expect(evs).toHaveLength(2);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 64]);
+	});
+
+	it("[[0 2 4]'spread(5)] wraps: [0,2,4,0,2]", () => {
+		const evs = eval0("note x [[0 2 4]'spread(5)]");
+		expect(evs).toHaveLength(5);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 64, 67, 60, 64]);
+	});
+});
+
+describe("'spread — scalar generators (no-op warning)", () => {
+	it("bare 'spread on integer literal is a no-op: 1 event, console.warn called", () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const evs = eval0("note x [4'spread]");
+		expect(evs).toHaveLength(1);
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('spread'));
+		warnSpy.mockRestore();
+	});
+
+	it("bare 'spread on rand is a no-op: 1 event, console.warn called", () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const evs = eval0("note x [0rand7'spread]");
+		expect(evs).toHaveLength(1);
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('spread'));
+		warnSpy.mockRestore();
+	});
+
+	it("'spread(3) on scalar literal: 3 polls of the literal → 3 identical events", () => {
+		const evs = eval0("note x [4'spread(3)]");
+		expect(evs).toHaveLength(3);
+		// all degree 4 = G5 = 67
+		expect(evs.map((e) => pitched(e).note)).toEqual([67, 67, 67]);
+	});
+});
+
+describe("'spread × 'stut interaction", () => {
+	it("[0step1x4'spread]'stut(2) → spread first (4 slots), stut doubles (8 slots)", () => {
+		const evs = eval0("note x [0step1x4'spread]'stut(2)");
+		expect(evs).toHaveLength(8);
+		// degrees: 0,0,1,1,2,2,3,3 → MIDI: 60,60,62,62,64,64,65,65
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 60, 62, 62, 64, 64, 65, 65]);
+	});
+
+	it("[[0 2 4]'spread]'stut(2) → 3 spread slots × stut(2) = 6 slots", () => {
+		const evs = eval0("note x [[0 2 4]'spread]'stut(2)");
+		expect(evs).toHaveLength(6);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 60, 64, 64, 67, 67]);
+	});
+
+	it('beat offsets are correct after spread + stut', () => {
+		const evs = eval0("note x [0step1x4'spread]'stut(2)");
+		// 8 slots each of duration 1/8
+		for (let i = 0; i < 8; i++) {
+			expect(evs[i].beatOffset).toBeCloseTo(i / 8);
+		}
+	});
+});
+
+describe("'spread error cases", () => {
+	it("note x [0 2 4]'spread — semantic error: spread on top-level list", () => {
+		const i = createInstance("note x [0 2 4]'spread");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
+		}
+	});
+
+	it("note x [0step1x4'spread(0)] — semantic error: count of 0", () => {
+		const i = createInstance("note x [0step1x4'spread(0)]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
+		}
+	});
+
+	it("note x [0step1x4'spread(-1)] — semantic error: negative count", () => {
+		const i = createInstance("note x [0step1x4'spread(-1)]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
+		}
+	});
+
+	it("note x 0step1x4'spread — semantic error: spread on top-level generator (no enclosing list)", () => {
+		// The grammar cannot parse a bare generator with 'spread as a top-level pattern body
+		// (sequenceExpr requires '[...]'), so this is a parse error.
+		const i = createInstance("note x 0step1x4'spread");
+		expect(i.ok).toBe(false);
+	});
+
+	it("note x [0step1x4'spread([1 2])] — semantic error: list as spread count argument", () => {
+		const i = createInstance("note x [0step1x4'spread([1 2])]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
+			// Error message must NOT be doubled — "Semantic error:" prefix appears exactly once
+			expect(i.error.indexOf('Semantic error')).toBe(i.error.lastIndexOf('Semantic error'));
+		}
+	});
+
+	it("note x [0step1x4'stut(2)'spread] — semantic error: 'stut on element before 'spread", () => {
+		// Spec §'spread and 'stut interaction: composing 'stut and 'spread on the same
+		// element (not list-level 'stut) is declared a semantic error. Use list-level 'stut instead.
+		const i = createInstance("note x [0step1x4'stut(2)'spread]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
 		}
 	});
 });

@@ -192,6 +192,7 @@ A number of generators work by filtering events that come from upstream generato
 
 - `'stut` — repeat each element n times
 - `'maybe` — pass each element through with a given probability, otherwise skip it
+- `'spread` — expand a multi-value generator's iteration into multiple sibling cycle slots
 
 #### Stuttering (`'stut`)
 
@@ -226,6 +227,63 @@ The stutter count must be a positive integer ≥ 1. A count of 0 or a negative v
 #### Probability (`'maybe`)
 
 The `'maybe(p)` modifier passes each element through with probability `p` (0.0–1.0) and skips it otherwise. Default: p = 0.5. The bare form `'maybe` is valid and equivalent to `'maybe(0.5)`.
+
+#### Spread (`'spread`)
+
+> _See truth table [24 (`'spread`)](DSL-truthtables.md#24-spread-truth-table)._
+
+The `'spread` modifier expands a multi-value generator's single iteration into multiple consecutive cycle slots, each getting equal time. Without `'spread`, a generator occupies one event slot per cycle regardless of how many values it could produce in one iteration.
+
+`'spread` is a **per-element modifier** — it attaches to a generator that is an element of a `[...]` list. Attaching `'spread` to a top-level generator (with no enclosing `[...]`) is a semantic error: there are no sibling slots to spread into.
+
+```flux
+// 0step1x4 has a natural iteration of 4 values; 'spread expands all 4 into the cycle.
+// Equivalent to note lead [0 1 2 3].
+note lead [0step1x4'spread]
+
+// Explicit count: expand exactly 2 values (Pshunce-style wrapping if n > length).
+note lead [0step1x4'spread(2)]
+
+// List element: the inner list's 3 elements become 3 sibling slots in the outer list.
+// [A [0 2 4]'spread] yields 4 slots (A, 0, 2, 4) — not 2 slots where [0 2 4] subdivides.
+note lead [A [0 2 4]'spread]
+
+// Combined: [A 0step1x4'spread] → A + 4 spread values = 5 slots.
+note lead [A 0step1x4'spread]
+```
+
+**What `'spread` operates on:**
+
+- **Series generators** (`step`, `mul`, `lin`, `geo`): bare `'spread` expands all N values of one complete iteration (the `xN` length) into N consecutive sibling slots.
+- **List generators** (`[...]`, including range notation `[0..7]`): bare `'spread` flattens the list's elements into the parent list's slots. `[[0 2 4]'spread]` is equivalent to `[0 2 4]`; more usefully, `[A [0 2 4]'spread]` yields 4 slots (A, 0, 2, 4).
+- **Scalar generators** (`rand`, `gau`, `exp`, `bro`, integer/float literals, `utf8{word}`): bare `'spread` is a **no-op with a console warning** — scalar generators have no natural iteration length. `'spread(n)` on a scalar IS valid and expands to n consecutive polls of the same generator.
+
+**`'spread(n)` — explicit count:**
+
+`'spread(n)` expands exactly n values. For series generators, if n exceeds the generator's natural length, values wrap around (Pshunce-style). For list generators, values wrap around if n > list length. For scalar generators, n polls of the generator are emitted.
+
+- `n = 0` is a semantic error (consistent with `'stut(0)`).
+- `n < 0` is a semantic error.
+- `n` must be a scalar generator — a list generator as the count argument is a semantic error.
+
+**Per-cycle consumption:**
+
+`'spread` consumes one full iteration per cycle. Series generators reset and re-seed at cycle boundaries per existing `'eager(1)` default rules. Bare `'spread` on a series generator is equivalent to drawing all N values of that iteration.
+
+**Validity:**
+
+- Valid: `'spread` on a generator that is an element of a `[...]` list (including nested lists — `[[0 2 4]'spread]` works because the inner list is an element of the outer list).
+- Semantic error: `'spread` on a top-level list with no enclosing `[...]` context, e.g. `note lead [0 2 4]'spread` (attaches to the outer list — nothing to spread into). A clear error message is emitted.
+- Parse error: `note lead 0step1x4'spread` — the grammar requires `[...]` as the pattern body; a bare generator expression with a modifier suffix does not parse as a valid pattern.
+
+**`'spread` and `'stut` interaction:**
+
+`'spread` and `'stut` can both be applied to elements in the same list:
+
+- `'spread` applied first (attaches to the element), then `'stut` applied to the containing list: spread expands the element's values into slots first, then stut repeats each slot. `[0step1x4'spread]'stut(2)` → 8 slots: `[0,0, 1,1, 2,2, 3,3]`.
+- `'stut` applied to the element, then `'spread` applied to the element: `0step1x4'stut(2)'spread` — `'stut` is chained on the step generator before `'spread`, making each step value repeat twice. Since the step generator is still a series of length 4 but `'stut` is a per-slot repetition modifier (not a value-expansion modifier), `'spread` sees the underlying series length and expands 4 values. The `'stut` on the generator itself (not the list) is ignored by `'spread` expansion. This composition is declared a **semantic error** if encountered — use list-level `'stut` instead.
+
+See truth table [24 (`'spread`)](DSL-truthtables.md#24-spread-truth-table) for the complete interaction truth table.
 
 ---
 
