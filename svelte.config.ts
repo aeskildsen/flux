@@ -1,7 +1,7 @@
 import { mdsvex } from 'mdsvex';
 import adapter from '@sveltejs/adapter-static';
 import type { Config } from '@sveltejs/kit';
-import { highlightFlux } from './src/lib/lang/highlighter.ts';
+import { escapeHtml, highlightFlux } from './src/lib/lang/highlighter.ts';
 
 const config: Config = {
 	kit: {
@@ -19,7 +19,7 @@ const config: Config = {
 			extensions: ['.svx', '.md'],
 			highlight: {
 				highlighter: (code, lang) =>
-					lang === 'flux' ? highlightFlux(code) : `<pre><code>${code}</code></pre>`
+					lang === 'flux' ? highlightFlux(code) : `<pre><code>${escapeHtml(code)}</code></pre>`
 			}
 		})
 	],
