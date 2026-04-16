@@ -3303,4 +3303,13 @@ describe("'arp — arpeggiation modifier (truth table 25)", () => {
 		if (!r0.ok || !r1.ok) throw new Error('eval failed');
 		expect(r0.events.map((e) => pitched(e).note)).toEqual(r1.events.map((e) => pitched(e).note));
 	});
+
+	// Truth table row: dedup + \inward
+	// [5 3 7 3 1] → deduped = [5 3 7 1] (first-occurrence order)
+	// sorted = [1 3 5 7], then \inward: a0=1, a3=7, a1=3, a2=5 → [1, 7, 3, 5]
+	// degrees: 1→62, 7→72, 3→65, 5→69
+	it("dedup + \\inward: [5 3 7 3 1]'arp(\\inward) — sort deduplicated then inward", () => {
+		const ns = arpNotes("note x [5 3 7 3 1]'arp(\\inward)");
+		expect(ns).toEqual([62, 72, 65, 69]);
+	});
 });
