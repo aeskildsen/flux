@@ -273,7 +273,8 @@ note lead [A 0step1x4'spread]
 **Validity:**
 
 - Valid: `'spread` on a generator that is an element of a `[...]` list (including nested lists — `[[0 2 4]'spread]` works because the inner list is an element of the outer list).
-- Semantic error: `'spread` on a top-level generator with no enclosing `[...]`, e.g. `note lead [0 2 4]'spread` (attaches to the outer list, which is the cycle structure — nothing to spread into) or `note lead 0step1x4'spread` (no enclosing list). A clear error message is emitted.
+- Semantic error: `'spread` on a top-level list with no enclosing `[...]` context, e.g. `note lead [0 2 4]'spread` (attaches to the outer list — nothing to spread into). A clear error message is emitted.
+- Parse error: `note lead 0step1x4'spread` — the grammar requires `[...]` as the pattern body; a bare generator expression with a modifier suffix does not parse as a valid pattern.
 
 **`'spread` and `'stut` interaction:**
 

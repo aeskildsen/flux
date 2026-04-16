@@ -3056,4 +3056,14 @@ describe("'spread error cases", () => {
 			expect(i.error.indexOf('Semantic error')).toBe(i.error.lastIndexOf('Semantic error'));
 		}
 	});
+
+	it("note x [0step1x4'stut(2)'spread] — semantic error: 'stut on element before 'spread", () => {
+		// Spec §'spread and 'stut interaction: composing 'stut and 'spread on the same
+		// element (not list-level 'stut) is declared a semantic error. Use list-level 'stut instead.
+		const i = createInstance("note x [0step1x4'stut(2)'spread]");
+		expect(i.ok).toBe(false);
+		if (!i.ok) {
+			expect(i.error.toLowerCase()).toContain('spread');
+		}
+	});
 });

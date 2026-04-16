@@ -969,6 +969,13 @@ function compileElementWithSpread(elem: CstNode, inherited: EagerMode): Compiled
 		return [ce];
 	}
 
+	// Semantic error: 'stut on the same element as 'spread is not allowed.
+	// The composition 0step1x4'stut(2)'spread is ambiguous — use list-level 'stut instead:
+	// [0step1x4'spread]'stut(2)
+	if (spreadFromElemMods !== null && hasModifier(elemMods, 'stut')) {
+		return "'stut and 'spread cannot both be applied to the same element — use list-level 'stut instead: [generator'spread]'stut(n)";
+	}
+
 	// 'spread is present — need to expand
 	// First, determine what kind of generator we have
 
