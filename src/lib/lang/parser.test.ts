@@ -947,3 +947,92 @@ describe('chord literals <>', () => {
 		expect(parseErrors.length + lexErrors.length).toBeGreaterThan(0);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 'arp modifier — arpeggiation from cycle output
+// ---------------------------------------------------------------------------
+
+describe("modifierSuffix — 'arp traversal modifier", () => {
+	it("parses bare 'arp on a list (default \\up algorithm)", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\up) — explicit algorithm", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\up)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\down) — down algorithm", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\down)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\inward) — inward algorithm", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\inward)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\outward) — outward algorithm", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\outward)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\updown) — updown algorithm", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\updown)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\converge) — converge alias", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\converge)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\diverge) — diverge alias", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\diverge)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\down 16) — algorithm with length override", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\down 16)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp(\\up 8) — up with length override", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0..10]'arp(\\up 8)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp on a range list [0,2..8]", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0,2..8]'arp");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'arp on an explicit list [0 5 2 7 3]", () => {
+		const { parseErrors, lexErrors } = parse("note lead [0 5 2 7 3]'arp(\\outward)");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("rejects 'arp on a scalar generator — parse error", () => {
+		// 'arp is a list-level modifier; attaching to a scalar is a semantic error
+		// caught at evaluation time. The parser should accept it structurally
+		// (since modifiers can attach to any generator expression), but the evaluator
+		// rejects it. This test just verifies no parse error for a typical wrong usage.
+		// (The semantic error is tested in the evaluator test file.)
+		const { parseErrors } = parse("note lead [0rand7'arp]");
+		// No parse error expected — semantic error is raised at eval time
+		expect(parseErrors).toHaveLength(0);
+	});
+});

@@ -587,3 +587,72 @@ Compact `[start..end]` / `[start, step..end]` syntax. All bounds inclusive. Eage
 | `note x [0step1x4'spread(-1)]`     | Semantic error | Negative count is not meaningful.                                                                                                                                                                |
 | `note x [0step1x4'spread([1 2])]`  | Semantic error | Count argument must be a scalar generator, not a list.                                                                                                                                           |
 | `note x [0step1x4'stut(2)'spread]` | Semantic error | `'stut` and `'spread` on the same element are ambiguous. Use list-level `'stut` instead: `[0step1x4'spread]'stut(2)`.                                                                            |
+
+---
+
+# 25. **`'arp` Truth Table**
+
+`'arp` collects a list's cycle output, removes duplicate numeric values (preserving order of first occurrence), filters rests, and traverses the result via the chosen algorithm.
+
+**Canonical input:** `[0..10]` = `[0 1 2 3 4 5 6 7 8 9 10]` (11 elements, N=11, odd).
+Default pitch context: C major / C5. Degree → MIDI: 0→60, 1→62, 2→64, 3→65, 4→67, 5→69, 6→71, 7→72, 8→74, 9→76, 10→77.
+
+## Algorithm rows — canonical input `[0..10]`
+
+| Code Snippet                    | Algorithm       | Output (degrees)                           | Output length | Notes                                                           |
+| ------------------------------- | --------------- | ------------------------------------------ | ------------- | --------------------------------------------------------------- |
+| `note x [0..10]'arp`            | `\up` (default) | `0 1 2 3 4 5 6 7 8 9 10`                   | 11            | Sorted ascending                                                |
+| `note x [0..10]'arp(\up)`       | `\up`           | `0 1 2 3 4 5 6 7 8 9 10`                   | 11            | Explicit; same as bare `'arp`                                   |
+| `note x [0..10]'arp(\down)`     | `\down`         | `10 9 8 7 6 5 4 3 2 1 0`                   | 11            | Sorted descending                                               |
+| `note x [0..10]'arp(\inward)`   | `\inward`       | `0 10 1 9 2 8 3 7 4 6 5`                   | 11            | Pincer outer→inner; odd N ends on single middle                 |
+| `note x [0..10]'arp(\outward)`  | `\outward`      | `5 6 4 7 3 8 2 9 1 10 0`                   | 11            | Reverse of `\inward`                                            |
+| `note x [0..10]'arp(\updown)`   | `\updown`       | `0 1 2 3 4 5 6 7 8 9 10 9 8 7 6 5 4 3 2 1` | 20            | Palindrome; **default length = 2×(N−1)**; no repeated endpoints |
+| `note x [0..10]'arp(\converge)` | `\converge`     | same as `\inward`                          | 11            | Alias for `\inward`                                             |
+| `note x [0..10]'arp(\diverge)`  | `\diverge`      | same as `\outward`                         | 11            | Alias for `\outward`                                            |
+
+## Even-length input — `[0..9]` (N=10)
+
+| Code Snippet                  | Algorithm  | Output (degrees)      | Notes                                             |
+| ----------------------------- | ---------- | --------------------- | ------------------------------------------------- |
+| `note x [0..9]'arp(\inward)`  | `\inward`  | `0 9 1 8 2 7 3 6 4 5` | Even N: ends on the two middle elements as a pair |
+| `note x [0..9]'arp(\outward)` | `\outward` | `5 4 6 3 7 2 8 1 9 0` | Reverse of `\inward`; starts with middle pair     |
+
+## Length override
+
+| Code Snippet                    | Output                              | Notes                               |
+| ------------------------------- | ----------------------------------- | ----------------------------------- |
+| `note x [0..10]'arp(\down 16)`  | `10 9 8 7 6 5 4 3 2 1 0 10 9 8 7 6` | 16 values cycling `\down` traversal |
+| `note x [0..10]'arp(\up 5)`     | `0 1 2 3 4`                         | First 5 values of `\up`             |
+| `note x [0..10]'arp(\updown 5)` | `0 1 2 3 4`                         | First 5 values of updown traversal  |
+
+## Duplicate removal
+
+| Code Snippet                      | Deduped input                        | Output    | Notes                                      |
+| --------------------------------- | ------------------------------------ | --------- | ------------------------------------------ |
+| `note x [5 3 7 3 1]'arp`          | `[5 3 7 1]` (first-occurrence order) | `1 3 5 7` | `\up` sorts numerically; dedup before sort |
+| `note x [5 3 7 3 1]'arp(\inward)` | `[5 3 7 1]` → sorted `[1 3 5 7]`     | `1 7 3 5` | Sort, then inward on deduplicated input    |
+
+## Rests and edge cases
+
+| Code Snippet             | Result                | Notes                                       |
+| ------------------------ | --------------------- | ------------------------------------------- |
+| `note x [0 _ 4 _ 8]'arp` | `[0 4 8]` arpeggiated | Rests filtered before arpeggiation          |
+| `note x [_ _ _]'arp`     | One rest event        | All-rest input → single rest (silent cycle) |
+| `note x [4]'arp`         | `[4]` (one event)     | Single element → no-op                      |
+
+## Composition
+
+| Code Snippet                | Result   | Notes                                                        |
+| --------------------------- | -------- | ------------------------------------------------------------ |
+| `note x [0..3]'arp'stut(2)` | 8 events | `'arp` produces 4-element traversal; `'stut(2)` doubles each |
+
+## Error cases
+
+| Code Snippet                | Failure Type   | Why                                                                               |
+| --------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| `note x [0rand7'arp]`       | Semantic error | `'arp` is list-level — attach to the `[...]` list, not to a scalar element inside |
+| `note x [0..5]'arp'shuf`    | Semantic error | Cannot combine `'arp` with `'shuf` — choose one traversal strategy                |
+| `note x [0..5]'arp'pick`    | Semantic error | Cannot combine `'arp` with `'pick` — choose one traversal strategy                |
+| `note x [0..5]'arp(\bogus)` | Semantic error | Unknown algorithm symbol                                                          |
+| `note x [0..5]'arp(\up 0)`  | Semantic error | Length override must be a positive integer ≥ 1                                    |
+| `note x [0..5]'arp(\up -3)` | Semantic error | Negative length override is not meaningful                                        |

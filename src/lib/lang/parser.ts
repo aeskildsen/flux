@@ -964,15 +964,20 @@ class FluxParser extends CstParser {
 	});
 
 	modifierSuffix = this.RULE('modifierSuffix', () => {
-		// `'modName` or `'modName(generatorExpr)` or `'at(timeExpr)`
+		// `'modName` or `'modName(generatorExpr)` or `'at(timeExpr)` or `'arp(...)` (special args)
 		// 'at is the one modifier whose argument is a timeExpr (integer or
 		// integer/integer fraction) rather than a generatorExpr.  We gate on
 		// LA(2) being the identifier "at" before the tick is consumed so the
 		// parser can branch correctly.
+		// 'arp has its own argument syntax: `(\symbol)` or `(\symbol integer)`.
 		this.OR([
 			{
 				GATE: () => this.LA(2).image === 'at',
 				ALT: () => this.SUBRULE(this.atModifier)
+			},
+			{
+				GATE: () => this.LA(2).image === 'arp',
+				ALT: () => this.SUBRULE(this.arpModifier)
 			},
 			{
 				ALT: () => {
@@ -986,6 +991,35 @@ class FluxParser extends CstParser {
 				}
 			}
 		]);
+	});
+
+	arpModifier = this.RULE('arpModifier', () => {
+		// 'arp                        — bare (default \up algorithm)
+		// 'arp(\symbol)               — explicit algorithm
+		// 'arp(\symbol integer)        — algorithm with length override (positive integer)
+		// 'arp(\symbol -integer)       — negative length: parsed here, semantic error in evaluator
+		//
+		// CST children:
+		//   Tick[0]     — the `'` token
+		//   Identifier[0] — always "arp"
+		//   LParen[0]   — present if args follow
+		//   Symbol[0]   — algorithm symbol (e.g. \up, \down)
+		//   Minus[0]    — present if length is negative (semantic error — caught in evaluator)
+		//   Integer[0]  — optional length override
+		//   RParen[0]   — closing paren
+		this.CONSUME(Tick);
+		this.CONSUME(Identifier); // always "arp"
+		this.OPTION(() => {
+			this.CONSUME(LParen);
+			this.CONSUME(Symbol); // algorithm symbol: \up, \down, etc.
+			this.OPTION2(() => {
+				this.OPTION3(() => {
+					this.CONSUME(Minus); // optional leading minus (caught as semantic error in evaluator)
+				});
+				this.CONSUME(Integer); // optional length override
+			});
+			this.CONSUME(RParen);
+		});
 	});
 
 	atModifier = this.RULE('atModifier', () => {

@@ -48,6 +48,8 @@ Inside `[...]` sequence generators, elements are separated by spaces. Commas are
 [1 2 3]'shuf       // shuffle then traverse, like Pshuf
 [1 2 3]'pick       // uniform random element each time, like Prand
 [1 2?2 3]'pick     // weighted random — like Pwrand with weights 1/2/1
+[0..10]'arp        // arpeggiate ascending (default \up)
+[0..10]'arp(\down) // arpeggiate descending
 ```
 
 `'pick` supports optional per-element weights via the `?` operator. Unweighted elements default to weight 1; when no weights are present, `'pick` is uniform random. When any weights are present, selection is proportional to the weights (normalised to sum to 1).
@@ -57,6 +59,55 @@ Inside `[...]` sequence generators, elements are separated by spaces. Commas are
 - Negative weights (e.g. `?-1`) are a parse error.
 - Generator expressions are not valid as weights — `?` must be followed by a numeric literal.
 - The `?` weight syntax is only meaningful on a list whose own modifiers include `'pick`. Using `?` on a list without `'pick` is not an error, but the weight is ignored and a warning is logged. This rule applies per list level: `[[1 2?3]'pick 5]` is fine, but `[[1 2?3] 5]'pick` ignores the inner `?3` because the inner list has no `'pick`.
+
+### Arpeggiation (`'arp`)
+
+> _See truth table [25 (`'arp`)](DSL-truthtables.md#25-arp-truth-table)._
+
+`'arp` is a **list-level modifier** that collects the cycle's output values, removes duplicates, and traverses them in a melodic pattern. Syntax:
+
+```flux
+[0..10]'arp                    // default \up algorithm — sorted ascending
+[0..10]'arp(\down)             // sorted descending
+[0..10]'arp(\updown)           // palindrome, no repeated endpoints
+[0..10]'arp(\down 16)          // \down traversal cycled to 16 values
+[0 5 2 7 3]'arp(\inward)       // pincer from outer to inner
+```
+
+**Grammar:** `'arp` | `'arp(\symbol)` | `'arp(\symbol integer)`
+
+**Algorithms:**
+
+| Symbol      | Traversal                                                      |
+| ----------- | -------------------------------------------------------------- |
+| `\up`       | Sorted ascending (default)                                     |
+| `\down`     | Sorted descending                                              |
+| `\inward`   | Pincer from both ends toward middle                            |
+| `\outward`  | Starts at middle, expands outward (reverse of `\inward`)       |
+| `\updown`   | Ascending then descending palindrome; natural length = 2×(N−1) |
+| `\converge` | Alias for `\inward`                                            |
+| `\diverge`  | Alias for `\outward`                                           |
+
+**Duplicate removal:** before arpeggiation, numeric values are deduplicated by equality, preserving the order of first occurrence. This applies after all rests are filtered out.
+
+**Rests:** rest elements in the list are filtered out before deduplication and arpeggiation. If all elements are rests, the cycle yields a single rest event.
+
+**Single-element input:** `'arp` is a no-op — yields that single value as the one cycle slot.
+
+**Default output length** equals the natural traversal length for the chosen algorithm. For `\up`, `\down`, `\inward`, `\outward`, `\converge`, `\diverge` the natural length equals the deduped input length N. For `\updown` the natural length is 2×(N−1).
+
+**Length override** `'arp(\symbol n)`: cycles the natural traversal to produce exactly `n` values. `n = 0` or negative is a semantic error.
+
+**Even-length center for `\inward`/`\outward`:** for deduped input of length 2k (even), `\inward` pairs outer→inner: `a0, a(2k-1), a1, a(2k-2), ...` ending at the two middle elements `a(k-1), ak`. `\outward` is the reverse.
+
+**Semantic errors:**
+
+- `'arp` on a scalar element inside a list (e.g. `[0rand7'arp]`) — attach to the list instead: `[0rand7]'arp`
+- `'arp` combined with `'shuf` or `'pick` — choose one traversal strategy
+- Unknown algorithm symbol
+- Length override ≤ 0
+
+**Composition:** `'arp` composes with other list-level modifiers (`'stut`, `'lock`, `'eager`). `'arp` applies first (generates the traversal), then other modifiers operate on the resulting sequence.
 
 ### Range notation
 
