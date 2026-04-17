@@ -1036,3 +1036,45 @@ describe("modifierSuffix — 'arp traversal modifier", () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// @buf with generator expression — per-cycle buffer selection (issue #40)
+// ---------------------------------------------------------------------------
+
+describe('@buf — generator expression argument', () => {
+	it('parses @buf(\\myloop) — static symbol form', () => {
+		const { parseErrors, lexErrors } = parse('@buf(\\myloop) slice drums [0 2 4]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses @buf([\\loopA \\loopB]'pick) — list of symbols with 'pick modifier", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8]");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it('parses @buf([\\loopA \\loopB]) — list of symbols with default (seq) traversal', () => {
+		const { parseErrors, lexErrors } = parse('@buf([\\loopA \\loopB]) slice drums [0 4]');
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses @buf([\\a \\b \\c]'shuf) — list of symbols with 'shuf modifier", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\a \\b \\c]'shuf) slice drums [0 4]");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses @buf([\\loopA \\loopB]'pick) on cloud", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'pick) cloud grain []");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+
+	it("parses @buf([\\loopA \\loopB]'lock) — list with 'lock modifier", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'lock) slice drums [0 4]");
+		expect(lexErrors).toHaveLength(0);
+		expect(parseErrors).toHaveLength(0);
+	});
+});

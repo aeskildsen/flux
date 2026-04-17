@@ -1844,6 +1844,27 @@ type ArpConfig = {
 
 type ContentType = 'note' | 'mono' | 'sample' | 'slice' | 'cloud';
 
+/**
+ * A stateful runner that yields a buffer name string per cycle.
+ * `runner` yields an integer index (0..names.length-1) subject to EagerMode.
+ * `names` is the ordered list of buffer names the index refers to.
+ *
+ * For the static `@buf(\symbol)` form: names = [name], runner always yields 0 ('lock).
+ * For the dynamic `@buf([\a \b]'pick)` form: names = ['a','b'], runner yields a
+ * random index each cycle (or per lock/eager semantics).
+ */
+type BufRunner = {
+	runner: RunnerState; // yields integer index into `names`
+	names: string[]; // buffer name lookup table
+};
+
+/** Sample a BufRunner for the current cycle, returning the buffer name string. */
+function sampleBufRunner(br: BufRunner, cycle: number): string {
+	const idx = Math.round(sampleRunner(br.runner, cycle));
+	const n = br.names.length;
+	return br.names[((idx % n) + n) % n]; // safe modulo for any integer
+}
+
 type CompiledPattern = {
 	name: string; // generator name (mandatory since issue #2)
 	parentName: string | null; // parent name for derived (child:parent) generators; null = plain
@@ -1857,7 +1878,7 @@ type CompiledPattern = {
 	legatoRunner: RunnerState | null; // null = default legato (0.8 for note)
 	offsetRunner: RunnerState | null; // null = no offset
 	contentType: ContentType; // content type keyword
-	bufName: string | null; // buffer name from @buf decorator; null = use default
+	bufRunner: BufRunner | null; // @buf argument compiled to a per-cycle runner; null = use default buffer
 	numSlicesRunner: RunnerState | null; // 'numSlices modifier (slice only); null = not set
 	atOffset: number; // cycle offset from 'at modifier
 	repeat: number | null; // null = loop indefinitely, n = finite play count
@@ -1902,23 +1923,103 @@ function collectPatternModifiers(patternNode: CstNode): CstNode[] {
 }
 
 /**
- * Extract a \symbol argument from a @buf decorator in the given decorator layers.
- * Returns the buffer name (without leading \) if found, or null.
+ * Compile the @buf decorator argument from the given decorator layers into a BufRunner.
+ *
+ * Supports two forms:
+ *   1. Static:  `@buf(\myloop)` — a single \symbol token → constant runner, 'lock semantics.
+ *   2. Dynamic: `@buf([\loopA \loopB]'pick)` — a sequenceGenerator containing \symbol elements
+ *               with list modifiers ('pick, 'shuf, 'lock, 'eager, etc.).
+ *
+ * Returns null if no @buf decorator is present.
+ * Returns an error string if the @buf argument is malformed (e.g. no symbols found).
  */
-function extractBufName(decoratorLayers: CstNode[][]): string | null {
+function compileBufArg(decoratorLayers: CstNode[][]): BufRunner | null | string {
 	for (const layer of decoratorLayers) {
 		for (const dec of layer) {
 			const idToks = (dec.children.Identifier as IToken[]) ?? [];
 			if (idToks[0]?.image !== 'buf') continue;
-			// Found @buf — extract the \symbol argument
+
+			// Found @buf — inspect its decoratorArg children.
 			const args = (dec.children.decoratorArg as CstNode[]) ?? [];
 			for (const arg of args) {
+				// --- Form 1: static \symbol ---
 				const symTok = ((arg.children.Symbol as IToken[]) ?? [])[0];
-				if (symTok) return symTok.image.slice(1); // strip leading \
+				if (symTok) {
+					const name = symTok.image.slice(1); // strip leading \
+					// Static form uses 'lock semantics: always yields index 0.
+					const runner = makeRunner(() => 0, { kind: 'lock' });
+					return { runner, names: [name] };
+				}
+
+				// --- Form 2: sequenceGenerator [\symbol ...]'pick/'shuf/etc. ---
+				const seqGen = ((arg.children.sequenceGenerator as CstNode[]) ?? [])[0];
+				if (seqGen) {
+					return compileBufSequenceGenerator(seqGen);
+				}
 			}
 		}
 	}
 	return null;
+}
+
+/**
+ * Compile a sequenceGenerator CST node that contains \symbol elements into a BufRunner.
+ * The generator represents the @buf argument for per-cycle buffer selection.
+ *
+ * Supported modifiers on the list: 'pick (random), 'shuf (shuffle), 'lock, 'eager(n).
+ * Unsupported generator features inside the list (non-symbol elements) are silently skipped.
+ */
+function compileBufSequenceGenerator(seqGen: CstNode): BufRunner | string {
+	// Extract \symbol names from the sequenceElement children.
+	const elems = (seqGen.children.sequenceElement as CstNode[]) ?? [];
+	const names: string[] = [];
+	for (const elem of elems) {
+		const symTok = ((elem.children.Symbol as IToken[]) ?? [])[0];
+		if (symTok) names.push(symTok.image.slice(1));
+	}
+	if (names.length === 0) {
+		return '@buf sequence generator contains no \\symbol elements';
+	}
+
+	// Extract list-level modifiers from the sequenceGenerator node.
+	const listMods = (seqGen.children.modifierSuffix as CstNode[]) ?? [];
+	const mode = extractEagerMode(listMods) ?? DEFAULT_MODE;
+
+	// Determine traversal strategy from modifiers.
+	let traversal: TraversalMode = 'seq';
+	if (hasModifier(listMods, 'shuf')) traversal = 'shuf';
+	else if (hasModifier(listMods, 'pick')) traversal = 'pick';
+
+	const n = names.length;
+
+	let poll: PollFn;
+	if (traversal === 'pick') {
+		// Uniform random selection: yield a random integer in [0, n).
+		poll = () => Math.floor(Math.random() * n);
+	} else if (traversal === 'shuf') {
+		// Deck-style shuffle: visit all n indices in random order before repeating.
+		// Build a shuffled deck, step through it, reshuffle when exhausted.
+		const deck: number[] = Array.from({ length: n }, (_, i) => i);
+		let deckIdx = n; // start at n so first poll triggers a reshuffle
+		function shuffleDeck(): void {
+			for (let i = deck.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[deck[i], deck[j]] = [deck[j], deck[i]];
+			}
+			deckIdx = 0;
+		}
+		poll = () => {
+			if (deckIdx >= n) shuffleDeck();
+			return deck[deckIdx++];
+		};
+	} else {
+		// Sequential: maintain an incrementing counter.
+		let idx = 0;
+		poll = () => idx++ % n;
+	}
+
+	const runner = makeRunner(poll, mode);
+	return { runner, names };
 }
 
 /**
@@ -2109,8 +2210,10 @@ function compilePattern(
 					: 'note';
 
 	// @buf decorator: valid on slice and cloud; semantic error on sample
-	const bufName = decoratorLayers ? extractBufName(decoratorLayers) : null;
-	if (bufName !== null && contentType === 'sample') {
+	const bufResult = decoratorLayers ? compileBufArg(decoratorLayers) : null;
+	if (typeof bufResult === 'string') return bufResult; // propagate compile error
+	const bufRunner: BufRunner | null = bufResult;
+	if (bufRunner !== null && contentType === 'sample') {
 		return '@buf is not valid on sample — buffer selection in sample is per-event inside the list';
 	}
 
@@ -2180,7 +2283,7 @@ function compilePattern(
 		legatoRunner,
 		offsetRunner,
 		contentType,
-		bufName,
+		bufRunner,
 		numSlicesRunner,
 		atOffset,
 		repeat,
@@ -2666,12 +2769,16 @@ function evaluateCompiledPattern(
 		legatoRunner,
 		offsetRunner,
 		contentType,
-		bufName,
+		bufRunner,
 		numSlicesRunner,
 		atOffset,
 		repeat,
 		paramRunners
 	} = compiled;
+
+	// Sample the @buf runner once per cycle to get the buffer name for this cycle.
+	// All events in the cycle share this one buffer name.
+	const bufName: string | null = bufRunner ? sampleBufRunner(bufRunner, cycle) : null;
 
 	// Sample stutter count once per cycle
 	const stutCount = stutRunner ? Math.max(1, Math.round(sampleRunner(stutRunner, cycle))) : 1;
