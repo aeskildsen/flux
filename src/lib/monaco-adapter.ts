@@ -220,6 +220,31 @@ export function chooseCommentAction(
 }
 
 // ---------------------------------------------------------------------------
+// \symbol completion — buffer name registry integration
+//
+// The buffer registry is a runtime concept (only available in the browser)
+// so we keep a module-level getter that the page can set after boot.
+// On each completion request the getter is called to get the current list.
+// ---------------------------------------------------------------------------
+
+/** A callback that returns the current list of registered \symbol names. */
+type BufferNamesGetter = () => string[];
+
+let _getBufferNames: BufferNamesGetter = () => [];
+
+/**
+ * Set the callback used to supply \symbol completion items.
+ * Call this once after mounting the page, passing a function that reads
+ * from the reactive buffer registry.
+ *
+ * @example
+ *   setBufferNamesGetter(() => bufferRegistry.entries.map(e => e.name));
+ */
+export function setBufferNamesGetter(fn: BufferNamesGetter): void {
+	_getBufferNames = fn;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -344,15 +369,45 @@ export function registerFluxLanguage(monaco: typeof Monaco): void {
 	});
 
 	// ------------------------------------------------------------------
-	// 3. Autocomplete — trigger chars: ' [ ( |
+	// 3. Autocomplete — trigger chars: ' [ ( | \
 	// ------------------------------------------------------------------
 
 	monaco.languages.registerCompletionItemProvider('flux', {
-		triggerCharacters: ["'", '[', '(', '|'],
+		triggerCharacters: ["'", '[', '(', '|', '\\'],
 
 		provideCompletionItems(model, position, context) {
 			const lineContent = model.getLineContent(position.lineNumber);
 			const col = position.column - 1; // 0-based
+
+			// \symbol trigger → buffer name completions
+			// Offer registered buffer names when user types \ or when the cursor
+			// is immediately after a backslash.
+			const beforeCursor = lineContent.slice(0, col);
+			const backslashMatch = beforeCursor.match(/\\([a-zA-Z0-9_]*)$/);
+			if (context.triggerCharacter === '\\' || backslashMatch) {
+				const prefix = backslashMatch ? backslashMatch[1] : '';
+				const prefixLen = prefix.length;
+				const symbolRange = {
+					startLineNumber: position.lineNumber,
+					endLineNumber: position.lineNumber,
+					// Replace from the char after the backslash
+					startColumn: position.column - prefixLen,
+					endColumn: position.column
+				};
+				const names = _getBufferNames();
+				if (names.length === 0) return { suggestions: [] };
+				return {
+					suggestions: names
+						.filter((n) => n.startsWith(prefix))
+						.map((n) => ({
+							label: `\\${n}`,
+							kind: KIND_MAP['value'],
+							insertText: n,
+							detail: 'buffer',
+							range: symbolRange
+						}))
+				};
+			}
 
 			// Compute word range at cursor for accurate replacement
 			const wordMatch = lineContent.slice(0, col).match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
