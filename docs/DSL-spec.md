@@ -336,6 +336,34 @@ note lead [A 0step1x4'spread]
 
 See truth table [24 (`'spread`)](DSL-truthtables.md#24-spread-truth-table) for the complete interaction truth table.
 
+### Sequence shape modifiers (`'rev`, `'mirror`, `'bounce`)
+
+> _See truth table [26 (Sequence shape modifiers)](DSL-truthtables.md#26-sequence-shape-modifiers-truth-table)._
+
+Three modifiers that reshape the event array for a cycle _after_ traversal and sampling — not on the generator structure. They are **list-level modifiers** attached to `[...]`.
+
+```flux
+[1 2 3 4]'rev      // reverses: plays as [4 3 2 1]
+[1 2 3]'mirror     // palindrome (repeated endpoints): [1 2 3 2 1]
+[1 2 3]'bounce     // palindrome (no repeated endpoints): [1 2 3 2]
+```
+
+**Semantics:**
+
+- **`'rev`** — reverses the event array. `[a b c d]'rev` → `[d c b a]`.
+- **`'mirror`** — appends the reverse of the array without its first element: `[a b c]'mirror` → `[a b c b a]`. Both endpoints appear twice — natural length = `2N − 1`.
+- **`'bounce`** — appends the reverse with both endpoints removed: `[a b c]'bounce` → `[a b c b]`. No endpoint repeats — natural length = `2(N − 1)`.
+
+**Applied post-traversal:** shape modifiers operate on the evaluated event array after traversal (`'shuf`, `'pick`, `'arp`). `[1~4]'rev` reverses this cycle's random draws, not the generator. The modifier is re-applied each cycle.
+
+**Cycle duration is fixed.** `'mirror` and `'bounce` produce more events per cycle; each event gets a proportionally shorter time slot, consistent with sublist behaviour.
+
+**Single-element is a no-op.** Applying any shape modifier to a one-element sequence returns `[a]` unchanged, with no error.
+
+**Composition with `'stut`:** shape modifiers apply before `'stut`. `[1 2 3]'mirror'stut(2)` → mirror first (5 elements), then stutter each (10 events).
+
+**Grammar:** bare modifier — no arguments. `'rev`, `'mirror`, and `'bounce` take no arguments.
+
 ---
 
 ## Content types

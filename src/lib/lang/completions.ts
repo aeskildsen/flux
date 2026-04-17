@@ -175,6 +175,30 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 		detail: "'tail(s) — release FX after s seconds of silence",
 		documentation: 'Applies to anonymous insert FX (fx(...)).',
 		kind: 'snippet'
+	},
+	{
+		label: 'rev',
+		insertText: 'rev',
+		detail: "'rev — reverse event array each cycle",
+		documentation:
+			"Reverses the evaluated event array after traversal. [1 2 3 4]'rev → [4 3 2 1]. Single-element is a no-op.",
+		kind: 'keyword'
+	},
+	{
+		label: 'mirror',
+		insertText: 'mirror',
+		detail: "'mirror — palindrome with repeated endpoints",
+		documentation:
+			"Appends the reverse to the event array (both endpoints repeated). [1 2 3]'mirror → [1 2 3 2 1]. Natural length = 2N−1. Single-element is a no-op.",
+		kind: 'keyword'
+	},
+	{
+		label: 'bounce',
+		insertText: 'bounce',
+		detail: "'bounce — palindrome without repeated endpoints",
+		documentation:
+			"Appends the reverse with both endpoints removed (ping-pong). [1 2 3]'bounce → [1 2 3 2]. Natural length = 2(N−1). Single-element is a no-op.",
+		kind: 'keyword'
 	}
 ];
 

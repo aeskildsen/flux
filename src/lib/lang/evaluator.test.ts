@@ -3313,3 +3313,145 @@ describe("'arp — arpeggiation modifier (truth table 25)", () => {
 		expect(ns).toEqual([62, 72, 65, 69]);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 14. Sequence shape modifiers — 'rev, 'mirror, 'bounce (truth table 26)
+//
+// C major degree → MIDI: 0→60, 1→62, 2→64, 3→65, 4→67
+// ---------------------------------------------------------------------------
+
+describe("'rev — reverse event array (truth table 26)", () => {
+	it("[1 2 3 4]'rev reverses to [4 3 2 1]", () => {
+		// degrees 1,2,3,4 → MIDI 62,64,65,67; reversed → 67,65,64,62
+		expect(notes("note x [1 2 3 4]'rev")).toEqual([67, 65, 64, 62]);
+	});
+
+	it("[1 2 3]'rev reverses to [3 2 1]", () => {
+		// degrees 1,2,3 → MIDI 62,64,65; reversed → 65,64,62
+		expect(notes("note x [1 2 3]'rev")).toEqual([65, 64, 62]);
+	});
+
+	it("[5]'rev — single element is a no-op", () => {
+		// degree 5 → MIDI 69
+		expect(notes("note x [5]'rev")).toEqual([69]);
+	});
+
+	it("[1 2 3 4]'rev produces 4 events with even beatOffsets", () => {
+		const evs = eval0("note x [1 2 3 4]'rev");
+		expect(evs).toHaveLength(4);
+		expect(evs[0].beatOffset).toBeCloseTo(0);
+		expect(evs[1].beatOffset).toBeCloseTo(0.25);
+		expect(evs[2].beatOffset).toBeCloseTo(0.5);
+		expect(evs[3].beatOffset).toBeCloseTo(0.75);
+	});
+
+	it("[1 2 3 4]'rev does not change event count or slot durations", () => {
+		const ds = durations("note x [1 2 3 4]'rev");
+		expect(ds).toHaveLength(4);
+		for (const d of ds) expect(d).toBeCloseTo(0.25 * 0.8); // default legato 0.8
+	});
+
+	it("'rev applies after 'shuf — reverses this cycle's shuffled draws", () => {
+		// Can only verify that all 3 notes are present in both shuffled and reversed positions
+		const i = inst("note x [0 2 4]'shuf'rev");
+		for (let c = 0; c < 5; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			expect(r.events).toHaveLength(3);
+			const ns = new Set(r.events.map((e) => pitched(e).note));
+			expect(ns.has(60)).toBe(true);
+			expect(ns.has(64)).toBe(true);
+			expect(ns.has(67)).toBe(true);
+		}
+	});
+});
+
+describe("'mirror — palindrome with repeated endpoints (truth table 26)", () => {
+	it("[1 2 3]'mirror produces [1 2 3 2 1]", () => {
+		// degrees 1,2,3 → MIDI 62,64,65; mirror → 62,64,65,64,62
+		expect(notes("note x [1 2 3]'mirror")).toEqual([62, 64, 65, 64, 62]);
+	});
+
+	it("[1 2]'mirror produces [1 2 1]", () => {
+		// degrees 1,2 → MIDI 62,64; mirror → 62,64,62
+		expect(notes("note x [1 2]'mirror")).toEqual([62, 64, 62]);
+	});
+
+	it("[5]'mirror — single element is a no-op", () => {
+		expect(notes("note x [5]'mirror")).toEqual([69]);
+	});
+
+	it("[1 2 3]'mirror produces 5 events (2N−1 = 5)", () => {
+		expect(eval0("note x [1 2 3]'mirror")).toHaveLength(5);
+	});
+
+	it("[1 2 3]'mirror — each event gets 1/5 cycle slot", () => {
+		const evs = eval0("note x [1 2 3]'mirror");
+		expect(evs).toHaveLength(5);
+		for (const ev of evs) {
+			expect(ev.duration).toBeCloseTo((1 / 5) * 0.8);
+		}
+	});
+
+	it("[1 2 3]'mirror — beat offsets are evenly spaced at 1/5", () => {
+		const evs = eval0("note x [1 2 3]'mirror");
+		for (let i = 0; i < 5; i++) {
+			expect(evs[i].beatOffset).toBeCloseTo(i / 5);
+		}
+	});
+});
+
+describe("'bounce — palindrome without repeated endpoints (truth table 26)", () => {
+	it("[1 2 3]'bounce produces [1 2 3 2]", () => {
+		// degrees 1,2,3 → MIDI 62,64,65; bounce → 62,64,65,64
+		expect(notes("note x [1 2 3]'bounce")).toEqual([62, 64, 65, 64]);
+	});
+
+	it("[1 2]'bounce produces [1 2] — reverse without endpoints is empty", () => {
+		// degrees 1,2 → MIDI 62,64; bounce: reverse=[2,1], drop first+last=[]; append nothing → [1,2]
+		expect(notes("note x [1 2]'bounce")).toEqual([62, 64]);
+	});
+
+	it("[5]'bounce — single element is a no-op", () => {
+		expect(notes("note x [5]'bounce")).toEqual([69]);
+	});
+
+	it("[1 2 3]'bounce produces 4 events (2(N−1) = 4)", () => {
+		expect(eval0("note x [1 2 3]'bounce")).toHaveLength(4);
+	});
+
+	it("[1 2 3]'bounce — each event gets 1/4 cycle slot", () => {
+		const evs = eval0("note x [1 2 3]'bounce");
+		expect(evs).toHaveLength(4);
+		for (const ev of evs) {
+			expect(ev.duration).toBeCloseTo((1 / 4) * 0.8);
+		}
+	});
+
+	it("[1 2 3]'bounce — beat offsets are evenly spaced at 1/4", () => {
+		const evs = eval0("note x [1 2 3]'bounce");
+		for (let i = 0; i < 4; i++) {
+			expect(evs[i].beatOffset).toBeCloseTo(i / 4);
+		}
+	});
+});
+
+describe("shape modifiers × 'stut composition (truth table 26)", () => {
+	it("[1 2 3]'mirror'stut(2) — 10 events (5 mirrored × stut 2)", () => {
+		expect(eval0("note x [1 2 3]'mirror'stut(2)")).toHaveLength(10);
+	});
+
+	it("[1 2 3]'bounce'stut(2) — 8 events (4 bounced × stut 2)", () => {
+		expect(eval0("note x [1 2 3]'bounce'stut(2)")).toHaveLength(8);
+	});
+
+	it("[1 2 3 4]'rev'stut(2) — 8 events (4 reversed × stut 2)", () => {
+		expect(eval0("note x [1 2 3 4]'rev'stut(2)")).toHaveLength(8);
+	});
+
+	it("[1 2 3 4]'rev'stut(2) — degrees are reversed before stuttering", () => {
+		// [1 2 3 4]'rev = [4 3 2 1]; stut(2) → [4 4 3 3 2 2 1 1]
+		// degrees 4,3,2,1 → MIDI 67,65,64,62; stut doubles: [67,67,65,65,64,64,62,62]
+		expect(notes("note x [1 2 3 4]'rev'stut(2)")).toEqual([67, 67, 65, 65, 64, 64, 62, 62]);
+	});
+});
