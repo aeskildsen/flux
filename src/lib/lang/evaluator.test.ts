@@ -3584,4 +3584,20 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 		const i = createInstance("@buf([\\x \\y]'pick) sample drums [\\kick]");
 		expect(i.ok).toBe(false);
 	});
+
+	it("@buf([\\loopA \\loopB]'eager(2)) slice — buffer advances every 2 cycles", () => {
+		// 'eager(2): polled at cycles 0, 2, 4, ... and held in between.
+		// Sequential poll: cycle 0 → idx 0 → loopA; cycle 2 → idx 1 → loopB; cycle 4 → idx 0 → loopA
+		const i = inst("@buf([\\loopA \\loopB]'eager(2)) slice drums [0 4]");
+		const getName = (c: number) => {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			return (r.events[0] as SliceEvent).bufferName;
+		};
+		expect(getName(0)).toBe('loopA'); // first poll: idx 0
+		expect(getName(1)).toBe('loopA'); // held — no poll on odd cycles with period=2
+		expect(getName(2)).toBe('loopB'); // second poll: idx 1
+		expect(getName(3)).toBe('loopB'); // held
+		expect(getName(4)).toBe('loopA'); // third poll: idx 2 % 2 = 0 → loopA
+	});
 });
