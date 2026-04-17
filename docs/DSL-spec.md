@@ -351,7 +351,7 @@ Three modifiers that reshape the event array for a cycle _after_ traversal and s
 **Semantics:**
 
 - **`'rev`** — reverses the event array. `[a b c d]'rev` → `[d c b a]`.
-- **`'mirror`** — appends the full reverse of the array: `[a b c]'mirror` → `[a b c b a]`. Both endpoints appear twice — natural length = `2N − 1`.
+- **`'mirror`** — appends the reverse of the array without its first element: `[a b c]'mirror` → `[a b c b a]`. Both endpoints appear twice — natural length = `2N − 1`.
 - **`'bounce`** — appends the reverse with both endpoints removed: `[a b c]'bounce` → `[a b c b]`. No endpoint repeats — natural length = `2(N − 1)`.
 
 **Applied post-traversal:** shape modifiers operate on the evaluated event array after traversal (`'shuf`, `'pick`, `'arp`). `[1~4]'rev` reverses this cycle's random draws, not the generator. The modifier is re-applied each cycle.
