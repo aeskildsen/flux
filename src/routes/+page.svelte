@@ -9,6 +9,9 @@
 	import SiteHeader from '$lib/SiteHeader.svelte';
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
 	import FxPanel from '$lib/FxPanel.svelte';
+	import SamplePanel from '$lib/SamplePanel.svelte';
+	import { bufferRegistry } from '$lib/bufferRegistry.svelte.js';
+	import { setBufferNamesGetter } from '$lib/monaco-adapter.js';
 	import type { PageData } from './$types';
 	import type { ParamSpec } from './+page';
 
@@ -204,6 +207,49 @@
 		sc?.set(nodeId, { [param]: value });
 	}
 
+	// -------------------------------------------------------------------------
+	// Sample panel — buffer registry integration
+	// -------------------------------------------------------------------------
+
+	// Wire the buffer registry into Monaco \symbol completions.
+	// setBufferNamesGetter is idempotent — safe to call here at module eval time.
+	setBufferNamesGetter(() => bufferRegistry.entries.map((e) => e.name));
+
+	/**
+	 * Called by SamplePanel after a file is decoded.
+	 * Loads the audio data into scsynth and wires up the buffer ID.
+	 */
+	async function handleSampleLoad(bufferId: number, audioBuffer: AudioBuffer) {
+		if (!sc) {
+			appendLog('Engine not booted — buffer registered but not loaded into scsynth', 'error');
+			return;
+		}
+		try {
+			// Extract raw PCM from the AudioBuffer and load into scsynth
+			// bufnum parameter matches the bufferId allocated by the registry
+			const channelData = audioBuffer.getChannelData(0);
+			await sc.loadSample(bufferId, channelData.buffer);
+			appendLog(`Buffer ${bufferId} loaded`, 'info');
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			appendLog(`Failed to load buffer ${bufferId} into scsynth: ${msg}`, 'error');
+			console.error('[handleSampleLoad]', e);
+		}
+	}
+
+	/**
+	 * Called by SamplePanel when a buffer is removed.
+	 * Sends b_free OSC message to scsynth.
+	 */
+	function handleSampleRemove(bufferId: number) {
+		if (!sc) return;
+		try {
+			sc.send('/b_free', bufferId);
+		} catch (e) {
+			console.error('[handleSampleRemove] Failed to free buffer', bufferId, e);
+		}
+	}
+
 	function handleStop() {
 		clearOutgoing();
 		handle?.stop();
@@ -378,6 +424,7 @@
 			onDisable={handleFxDisable}
 			onParamChange={handleFxParamChange}
 		/>
+		<SamplePanel onLoad={handleSampleLoad} onRemove={handleSampleRemove} />
 
 		<div class="feedback-log" bind:this={logEl}>
 			{#each log as entry, i (i)}
