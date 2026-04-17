@@ -459,11 +459,14 @@ mono bass [0 1 2 3]'stut  // each pitch change sent twice
 
 **Channel-count-based SynthDef variant selection:** At event dispatch time, the channel count of the active buffer is looked up from the buffer registry. The SynthDef name is resolved to `samplePlayer_mono` or `samplePlayer_stereo` (and similarly for `slicePlayer`). If no variant exists for the detected channel count, the event is skipped with a logged error. `grainCloud` SynthDefs only exist as `_mono` variants — if a stereo buffer is selected, a warning is logged and the mono variant is used.
 
-**`@buf` decorator:** `@buf(\name)` specifies which buffer a `slice` or `cloud` pattern operates on. Accepts generator expressions for per-cycle buffer selection:
+**`@buf` decorator:** `@buf(\name)` specifies which buffer a `slice` or `cloud` pattern operates on. Accepts a static `\symbol` or any sequence generator for per-cycle buffer selection — the same traversal modifiers (`'pick`, `'shuf`, sequential, `'lock`, `'eager`) apply as on any `[...]` list. The generator is polled once per cycle; all events within the cycle share the same buffer name.
 
 ```flux
-@buf(\myloop) slice drums [0 2 4 8]'numSlices(16)
-@buf([\loopA \loopB]'pick) slice drums [0 4 8 12]
+@buf(\myloop) slice drums [0 2 4 8]'numSlices(16)           // static
+@buf([\loopA \loopB]'pick) slice drums [0 4 8 12]           // random per cycle
+@buf([\a \b \c]'shuf) slice drums [0 4 8 12]                // shuffle deck
+@buf([\loopA \loopB]) slice drums [0 4 8 12]                // sequential cycling
+@buf([\loopA \loopB]'lock) slice drums [0 4 8 12]           // frozen after first pick
 ```
 
 `@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.
