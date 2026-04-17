@@ -174,13 +174,49 @@ describe('createGen() — basic emission', () => {
 		expect(realEvents(events)).toHaveLength(1);
 	});
 
-	it('stops and calls onMessage(error) when evaluator returns ok:false', () => {
+	it('skips the bad cycle (yields a skip stub) and calls onMessage(error) when evaluator returns ok:false', () => {
 		const onMessage = vi.fn();
-		const inst = fakeInst([makeEvent()], { failOnCycle: 0 });
+		// Cycle 0 fails, cycle 1+ succeeds — generator must continue
+		const inst = fakeInst([makeEvent()], { failOnCycle: 0, doneOnCycle: 2 });
 		const gen = createGen(makeDeps(inst, { onMessage }));
 		const events = take(gen, 100);
-		expect(events).toHaveLength(0);
+		// Cycle 0 skipped (1 skip stub), cycle 1 fires a real event
+		expect(realEvents(events)).toHaveLength(1);
 		expect(onMessage).toHaveBeenCalledWith(expect.stringContaining('Pattern error'), 'error');
+	});
+
+	it('yields a single skip stub covering exactly cycleBeatCount beats when a cycle fails', () => {
+		const onMessage = vi.fn();
+		// Cycle 0 fails — must yield exactly one skip stub of duration CB
+		const inst = fakeInst([makeEvent()], { failOnCycle: 0, doneOnCycle: 1 });
+		const gen = createGen(makeDeps(inst, { onMessage }));
+		const events = take(gen, 10);
+		// Cycle 0: one skip stub (whole cycle)
+		// Cycle 1: done → generator finishes
+		expect(events).toHaveLength(1);
+		expect(events[0].skip).toBe(true);
+		expect(events[0].duration).toBeCloseTo(CB);
+	});
+
+	it('continues producing events after a failed cycle', () => {
+		// Cycle 0 fails, cycles 1 and 2 succeed, cycle 3 done
+		const inst = fakeInst([makeEvent({ beatOffset: 0 })], { failOnCycle: 0, doneOnCycle: 3 });
+		const gen = createGen(makeDeps(inst));
+		const events = take(gen, 50);
+		// 2 successful cycles → 2 real events
+		expect(realEvents(events)).toHaveLength(2);
+	});
+
+	it('keeps cursor aligned after a skipped cycle — subsequent events have correct durations', () => {
+		// Cycle 0 fails (skip), cycle 1 has 2 events — total duration should be 2*CB
+		const inst = fakeInst([makeEvent({ beatOffset: 0 }), makeEvent({ beatOffset: 0.5 })], {
+			failOnCycle: 0,
+			doneOnCycle: 2
+		});
+		const gen = createGen(makeDeps(inst));
+		const events = take(gen, 30);
+		const total = events.reduce((s, e) => s + e.duration, 0);
+		expect(total).toBeCloseTo(CB * 2);
 	});
 
 	it('calls onMessage(info) when pattern finishes', () => {
