@@ -3455,3 +3455,149 @@ describe("shape modifiers × 'stut composition (truth table 26)", () => {
 		expect(notes("note x [1 2 3 4]'rev'stut(2)")).toEqual([67, 67, 65, 65, 64, 64, 62, 62]);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 20. @buf with generator expression — per-cycle buffer selection (truth table 20, issue #40)
+// ---------------------------------------------------------------------------
+
+describe('@buf with generator expression — per-cycle buffer selection', () => {
+	// --- Static \symbol form (existing behaviour — must remain working) ---
+
+	it('@buf(\\myloop) sets bufferName on slice events (static, regression)', () => {
+		const evs = eval0('@buf(\\myloop) slice drums [0 2]') as SliceEvent[];
+		expect(evs[0].bufferName).toBe('myloop');
+		expect(evs[1].bufferName).toBe('myloop');
+	});
+
+	it('@buf(\\recording) sets bufferName on cloud event (static, regression)', () => {
+		const evs = eval0('@buf(\\recording) cloud grain []') as CloudEvent[];
+		expect(evs[0].bufferName).toBe('recording');
+	});
+
+	// --- Dynamic generator form — per-cycle buffer selection ---
+
+	it("@buf([\\loopA \\loopB]'pick) parses without error for slice", () => {
+		const i = createInstance("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8 12]");
+		expect(i.ok).toBe(true);
+		if (!i.ok) return;
+		const r = i.evaluate({ cycleNumber: 0 });
+		expect(r.ok).toBe(true);
+	});
+
+	it("@buf([\\loopA \\loopB]'pick) bufferName is one of the two options each cycle", () => {
+		const i = inst("@buf([\\loopA \\loopB]'pick) slice drums [0 4]");
+		const seen = new Set<string>();
+		for (let c = 0; c < 50; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const evs = r.events as SliceEvent[];
+			expect(evs.length).toBeGreaterThan(0);
+			for (const ev of evs) {
+				expect(['loopA', 'loopB']).toContain(ev.bufferName);
+				seen.add(ev.bufferName!);
+			}
+		}
+		// Over 50 cycles both names should appear (probabilistic but very reliable)
+		expect(seen.has('loopA')).toBe(true);
+		expect(seen.has('loopB')).toBe(true);
+	});
+
+	it('all slice events within one cycle share the same bufferName from @buf generator', () => {
+		// All events in a single cycle must use the same buffer name (sampled once per cycle)
+		const i = inst("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8 12]");
+		for (let c = 0; c < 20; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const evs = r.events as SliceEvent[];
+			const names = new Set(evs.map((e) => e.bufferName));
+			expect(names.size).toBe(1);
+		}
+	});
+
+	it("@buf([\\a \\b \\c]'shuf) slice — cycles through shuffled buffer names", () => {
+		const i = createInstance("@buf([\\a \\b \\c]'shuf) slice drums [0 4]");
+		expect(i.ok).toBe(true);
+		if (!i.ok) return;
+		const r = i.evaluate({ cycleNumber: 0 });
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		const evs = r.events as SliceEvent[];
+		expect(['a', 'b', 'c']).toContain(evs[0].bufferName);
+	});
+
+	it('@buf([\\loopA \\loopB]) slice — cycles through buffers in order', () => {
+		// Default traversal: sequential. Cycle 0 → loopA, cycle 1 → loopB, cycle 2 → loopA, ...
+		const i = inst('@buf([\\loopA \\loopB]) slice drums [0 4]');
+		const r0 = i.evaluate({ cycleNumber: 0 });
+		const r1 = i.evaluate({ cycleNumber: 1 });
+		const r2 = i.evaluate({ cycleNumber: 2 });
+		if (!r0.ok || !r1.ok || !r2.ok) throw new Error('eval failed');
+		const name0 = (r0.events[0] as SliceEvent).bufferName;
+		const name1 = (r1.events[0] as SliceEvent).bufferName;
+		const name2 = (r2.events[0] as SliceEvent).bufferName;
+		expect(name0).toBe('loopA');
+		expect(name1).toBe('loopB');
+		expect(name2).toBe('loopA'); // wraps around
+	});
+
+	it("@buf([\\loopA \\loopB]'pick) cloud — bufferName set on cloud event", () => {
+		const i = inst("@buf([\\loopA \\loopB]'pick) cloud grain []");
+		for (let c = 0; c < 20; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const evs = r.events as CloudEvent[];
+			expect(evs).toHaveLength(1);
+			expect(['loopA', 'loopB']).toContain(evs[0].bufferName);
+		}
+	});
+
+	it("@buf([\\loopA \\loopB]'lock) — buffer name is chosen once and frozen", () => {
+		// 'lock freezes the value on first evaluation
+		const i = inst("@buf([\\loopA \\loopB]'lock) slice drums [0 4]");
+		let lockedName: string | undefined;
+		for (let c = 0; c < 10; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const evs = r.events as SliceEvent[];
+			const name = evs[0].bufferName;
+			if (lockedName === undefined) {
+				lockedName = name;
+			} else {
+				expect(name).toBe(lockedName);
+			}
+		}
+	});
+
+	it("@buf(\\myloop) — static form still uses 'lock semantics (same name every cycle)", () => {
+		const i = inst('@buf(\\myloop) slice drums [0 4]');
+		for (let c = 0; c < 5; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const evs = r.events as SliceEvent[];
+			expect(evs[0].bufferName).toBe('myloop');
+		}
+	});
+
+	// --- Error cases ---
+
+	it('@buf on sample is still a semantic error', () => {
+		const i = createInstance("@buf([\\x \\y]'pick) sample drums [\\kick]");
+		expect(i.ok).toBe(false);
+	});
+
+	it("@buf([\\loopA \\loopB]'eager(2)) slice — buffer advances every 2 cycles", () => {
+		// 'eager(2): polled at cycles 0, 2, 4, ... and held in between.
+		// Sequential poll: cycle 0 → idx 0 → loopA; cycle 2 → idx 1 → loopB; cycle 4 → idx 0 → loopA
+		const i = inst("@buf([\\loopA \\loopB]'eager(2)) slice drums [0 4]");
+		const getName = (c: number) => {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			return (r.events[0] as SliceEvent).bufferName;
+		};
+		expect(getName(0)).toBe('loopA'); // first poll: idx 0
+		expect(getName(1)).toBe('loopA'); // held — no poll on odd cycles with period=2
+		expect(getName(2)).toBe('loopB'); // second poll: idx 1
+		expect(getName(3)).toBe('loopB'); // held
+		expect(getName(4)).toBe('loopA'); // third poll: idx 2 % 2 = 0 → loopA
+	});
+});

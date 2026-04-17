@@ -398,11 +398,17 @@ How `sample`, `slice`, and `cloud` interpret their event lists and select SynthD
 
 Pattern-level buffer selection for `slice` and `cloud`.
 
-| Code                                        | Interpretation             | Evaluation                          | Result                                |
-| ------------------------------------------- | -------------------------- | ----------------------------------- | ------------------------------------- |
-| `@buf(\myloop) slice drums [0 2 4]`         | Static buffer.             | `\myloop` attached to all events.   | All slice events use `myloop` buffer. |
-| `@buf([\loopA \loopB]'pick) slice drums []` | Dynamic buffer, per-cycle. | Generator polled at cycle boundary. | Buffer alternates randomly per cycle. |
-| `@buf(\x) cloud grain []`                   | Buffer for cloud.          | `\x` attached to cloud event.       | `grainCloud` uses `x` buffer.         |
+The `@buf` argument may be a static `\symbol` or any sequence generator form — the same traversal modifiers (`'pick`, `'shuf`, sequential, `'lock`, `'eager`) apply as on any `[...]` list. The generator is polled **once per cycle**; all events within the cycle share the same buffer name.
+
+| Code                                            | Interpretation                   | Evaluation                                     | Result                                                         |
+| ----------------------------------------------- | -------------------------------- | ---------------------------------------------- | -------------------------------------------------------------- |
+| `@buf(\myloop) slice drums [0 2 4]`             | Static buffer.                   | `\myloop` attached to all events.              | All slice events use `myloop` buffer.                          |
+| `@buf([\loopA \loopB]'pick) slice drums []`     | Uniform random, per-cycle.       | Generator polled once at cycle boundary.       | Buffer chosen randomly each cycle; all events share same name. |
+| `@buf([\a \b \c]'shuf) slice drums []`          | Deck-shuffle, per-cycle.         | Visits all N buffers before repeating.         | Non-repeating until deck exhausted; then reshuffled.           |
+| `@buf([\loopA \loopB]) slice drums []`          | Sequential (default), per-cycle. | Cycle 0→loopA, cycle 1→loopB, cycle 2→loopA, … | Cycles through buffers in order.                               |
+| `@buf([\loopA \loopB]'lock) slice drums []`     | Frozen buffer.                   | First cycle picks a name; frozen thereafter.   | Same buffer for the entire session.                            |
+| `@buf([\loopA \loopB]'eager(4)) slice drums []` | Slow rotation, per 4 cycles.     | Buffer name changes every 4 cycles.            | Buffer held for 4 cycles, then advances.                       |
+| `@buf(\x) cloud grain []`                       | Buffer for cloud.                | `\x` attached to cloud event.                  | `grainCloud` uses `x` buffer.                                  |
 
 **Error cases**
 

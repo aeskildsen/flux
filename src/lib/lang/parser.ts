@@ -442,7 +442,7 @@ class FluxParser extends CstParser {
 
 	decoratorArg = this.RULE('decoratorArg', () => {
 		// pitchClass (e.g. g#, Ab), bare identifier (e.g. minor, lydian), \symbol (e.g. \myloop),
-		// or numeric generator.
+		// numeric generator, or a sequence generator (for @buf([\loopA \loopB]'pick)).
 		this.OR([
 			// pitchClass: a single-char identifier [a-gA-G] optionally followed by Sharp/Flat
 			{
@@ -454,7 +454,13 @@ class FluxParser extends CstParser {
 			// Scale names and other bare identifiers (e.g. lydian, minor, dorian)
 			{ ALT: () => this.CONSUME(Identifier) },
 			// Numeric generator expressions: @root(3rand7), set tempo(120)
-			{ ALT: () => this.SUBRULE(this.numericGenerator) }
+			{ ALT: () => this.SUBRULE(this.numericGenerator) },
+			// Sequence generator: @buf([\loopA \loopB]'pick) — list of \symbol values with modifiers.
+			// `[` is unambiguous here since none of the other alternatives can start with `[`.
+			{
+				GATE: () => this.LA(1).tokenType === LBracket,
+				ALT: () => this.SUBRULE(this.sequenceGenerator)
+			}
 		]);
 	});
 
