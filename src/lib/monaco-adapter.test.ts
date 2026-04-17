@@ -1,5 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { chooseCommentAction } from './monaco-adapter.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { chooseCommentAction, setBufferNamesGetter } from './monaco-adapter.js';
+
+describe('setBufferNamesGetter', () => {
+	afterEach(() => {
+		// Reset to empty getter after each test
+		setBufferNamesGetter(() => []);
+	});
+
+	it('can be set and does not throw', () => {
+		expect(() => setBufferNamesGetter(() => ['kick', 'snare'])).not.toThrow();
+	});
+
+	it('accepts a getter that returns an empty array', () => {
+		expect(() => setBufferNamesGetter(() => [])).not.toThrow();
+	});
+});
 
 describe('chooseCommentAction', () => {
 	it('returns "line" for a single-line selection', () => {
