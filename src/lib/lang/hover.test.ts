@@ -302,3 +302,47 @@ describe('HoverResult shape', () => {
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 9. Shape modifier hover docs ('rev, 'mirror, 'bounce)
+// ---------------------------------------------------------------------------
+
+describe("getHover — 'rev, 'mirror, 'bounce modifier docs", () => {
+	function modifierToken(name: string): IToken {
+		// Tokenize `[0]'rev` — the modifier identifier is the last token
+		const toks = tokens(`[0]'${name}`);
+		// Last token is the identifier for the modifier name
+		return toks[toks.length - 1];
+	}
+
+	it("'rev — hover shows reverse documentation", () => {
+		const tok = modifierToken('rev');
+		const result = getHover(tok, 'Tick');
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('rev');
+		expect(result!.contents).toContain('reverse');
+	});
+
+	it("'mirror — hover shows palindrome documentation", () => {
+		const tok = modifierToken('mirror');
+		const result = getHover(tok, 'Tick');
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('mirror');
+		expect(result!.contents).toContain('palindrome');
+	});
+
+	it("'bounce — hover shows ping-pong documentation", () => {
+		const tok = modifierToken('bounce');
+		const result = getHover(tok, 'Tick');
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('bounce');
+	});
+
+	it("'rev image-based fallback lookup (no Tick context)", () => {
+		// Without prevTokenName='Tick', should still find rev via image-based fallback
+		const tok = modifierToken('rev');
+		const result = getHover(tok);
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('rev');
+	});
+});

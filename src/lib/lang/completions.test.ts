@@ -318,4 +318,29 @@ describe('CompletionItem shape', () => {
 			expect(s.insertText).toContain('${');
 		}
 	});
+
+	// Shape modifier completions
+	it("returns 'rev completion for trigger '", () => {
+		const items = getCompletions([], 0, "'");
+		const rev = items.find((i) => i.label === 'rev');
+		expect(rev).toBeDefined();
+		expect(rev?.insertText).toBe('rev');
+		expect(rev?.kind).toBe('keyword');
+	});
+
+	it("returns 'mirror completion for trigger '", () => {
+		const items = getCompletions([], 0, "'");
+		const mirror = items.find((i) => i.label === 'mirror');
+		expect(mirror).toBeDefined();
+		expect(mirror?.insertText).toBe('mirror');
+		expect(mirror?.kind).toBe('keyword');
+	});
+
+	it("returns 'bounce completion for trigger '", () => {
+		const items = getCompletions([], 0, "'");
+		const bounce = items.find((i) => i.label === 'bounce');
+		expect(bounce).toBeDefined();
+		expect(bounce?.insertText).toBe('bounce');
+		expect(bounce?.kind).toBe('keyword');
+	});
 });

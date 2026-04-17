@@ -1826,6 +1826,9 @@ function compileSequenceElementToPollFn(elem: CstNode): PollFn | null {
 /** List-level traversal modifier. */
 type TraversalMode = 'seq' | 'shuf' | 'pick';
 
+/** Sequence shape modifier — applied post-traversal, pre-stut. */
+type ShapeMode = 'none' | 'rev' | 'mirror' | 'bounce';
+
 /** Arp algorithm — determines traversal order from deduped input values. */
 type ArpAlgorithm = 'up' | 'down' | 'inward' | 'outward' | 'updown' | 'converge' | 'diverge';
 
@@ -1847,6 +1850,7 @@ type CompiledPattern = {
 	elements: CompiledElement[];
 	listMode: EagerMode; // mode from list-level modifiers (inherited by elements)
 	traversal: TraversalMode;
+	shapeMode: ShapeMode; // post-traversal shape modifier ('rev, 'mirror, 'bounce); 'none = no transform
 	arpConfig: ArpConfig | null; // null = no 'arp modifier
 	stutRunner: RunnerState | null; // null = no stutter
 	maybeRunner: RunnerState | null; // null = no maybe filter
@@ -2087,6 +2091,12 @@ function compilePattern(
 		offsetRunner = extractModifierScalar(allMods, 'offset', 0, 0);
 	}
 
+	// Sequence shape modifiers: 'rev, 'mirror, 'bounce (post-traversal, pre-stut)
+	let shapeMode: ShapeMode = 'none';
+	if (hasModifier(allMods, 'rev')) shapeMode = 'rev';
+	else if (hasModifier(allMods, 'mirror')) shapeMode = 'mirror';
+	else if (hasModifier(allMods, 'bounce')) shapeMode = 'bounce';
+
 	// Content type: detected from content type keyword token on the patternStatement node
 	const contentType: ContentType = ((patternNode.children.Mono as IToken[]) ?? [])[0]
 		? 'mono'
@@ -2163,6 +2173,7 @@ function compilePattern(
 		elements: compiled,
 		listMode,
 		traversal,
+		shapeMode,
 		arpConfig,
 		stutRunner,
 		maybeRunner,
@@ -2433,6 +2444,34 @@ const ZERO_WEIGHT_REST: CompiledElement = {
 	weight: makeRunner(() => 1, { kind: 'lock' })
 };
 
+/**
+ * Apply a sequence shape modifier to an ordered element array.
+ *
+ * - 'rev: reverse the array
+ * - 'mirror: append reverse with first element of reverse removed (palindrome with repeated endpoints)
+ *   [a b c] → [a b c b a]  (natural length = 2N−1)
+ * - 'bounce: append reverse with both endpoints removed (ping-pong, no repeated endpoints)
+ *   [a b c] → [a b c b]   (natural length = 2(N−1))
+ * - 'none: no transform (pass-through)
+ *
+ * Single-element input is always a no-op (returns the array unchanged) for all modes.
+ */
+function applyShapeMode(elements: CompiledElement[], mode: ShapeMode): CompiledElement[] {
+	if (mode === 'none' || elements.length <= 1) return elements;
+	const rev = [...elements].reverse();
+	if (mode === 'rev') {
+		return rev;
+	} else if (mode === 'mirror') {
+		// [a b c] + rev.slice(1) = [a b c] + [b a] = [a b c b a]
+		return [...elements, ...rev.slice(1)];
+	} else {
+		// mode === 'bounce'
+		// [a b c] + rev.slice(1, -1) = [a b c] + [b] = [a b c b]
+		// For 2 elements: rev.slice(1, -1) = [] → no append → [a b]
+		return [...elements, ...rev.slice(1, -1)];
+	}
+}
+
 /** Apply traversal strategy to an element array, returning the ordered sequence. */
 function orderedSubElements(
 	elements: CompiledElement[],
@@ -2664,9 +2703,12 @@ function evaluateCompiledPattern(
 
 	// Determine the ordered sequence of elements (traversal strategy)
 	// If 'arp is present it takes precedence and computes its own ordering.
-	const orderedElements = compiled.arpConfig
+	const traversedElements = compiled.arpConfig
 		? applyArp(elements, compiled.arpConfig, cycle)
 		: orderedSubElements(elements, compiled.traversal, cycle);
+
+	// Apply sequence shape modifier post-traversal: 'rev, 'mirror, 'bounce
+	const orderedElements = applyShapeMode(traversedElements, compiled.shapeMode);
 
 	// Apply 'stut: expand each element into stutCount copies
 	const expandedElements: CompiledElement[] = [];

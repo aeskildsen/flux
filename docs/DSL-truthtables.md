@@ -656,3 +656,42 @@ Default pitch context: C major / C5. Degree → MIDI: 0→60, 1→62, 2→64, 3�
 | `note x [0..5]'arp(\bogus)` | Semantic error | Unknown algorithm symbol                                                          |
 | `note x [0..5]'arp(\up 0)`  | Semantic error | Length override must be a positive integer ≥ 1                                    |
 | `note x [0..5]'arp(\up -3)` | Semantic error | Negative length override is not meaningful                                        |
+
+---
+
+# 26. **Sequence Shape Modifiers Truth Table**
+
+`'rev`, `'mirror`, `'bounce` — transform the event array post-traversal. Applied after `'shuf`/`'pick`/`'arp` and before `'stut`.
+
+## `'rev` — reverse
+
+| Code Snippet           | Interpretation               | Evaluation                       | Result                                    |
+| ---------------------- | ---------------------------- | -------------------------------- | ----------------------------------------- |
+| `note x [1 2 3 4]'rev` | Reverse the 4-element array. | Array reversed: `[4 3 2 1]`.     | 4 events; beatOffsets 0, 0.25, 0.5, 0.75. |
+| `note x [1 2 3]'rev`   | Reverse 3-element array.     | Array reversed: `[3 2 1]`.       | 3 events at degrees 3, 2, 1.              |
+| `note x [5]'rev`       | Single-element — no-op.      | Reverse of length-1 is itself.   | 1 event at degree 5.                      |
+| `note x [1~4]'rev`     | Random draw then reverse.    | Draws evaluated; array reversed. | This cycle's random values, reversed.     |
+
+## `'mirror` — palindrome with repeated endpoints
+
+| Code Snippet            | Interpretation                            | Evaluation                                                          | Result                             |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------------------------- | ---------------------------------- |
+| `note x [1 2 3]'mirror` | Append reverse without its first element. | `[1 2 3]` + `[2 1]` = `[1 2 3 2 1]`. Natural length = `2N − 1` = 5. | 5 events at degrees 1, 2, 3, 2, 1. |
+| `note x [1 2]'mirror`   | 2-element palindrome.                     | `[1 2]` + `[1]` = `[1 2 1]`. Natural length = `2N − 1` = 3.         | 3 events at degrees 1, 2, 1.       |
+| `note x [5]'mirror`     | Single-element — no-op.                   | Reverse without first element is empty; result is `[5]`.            | 1 event at degree 5.               |
+
+## `'bounce` — palindrome without repeated endpoints
+
+| Code Snippet            | Interpretation                              | Evaluation                                                                                               | Result                          |
+| ----------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `note x [1 2 3]'bounce` | Append reverse with both endpoints removed. | `[1 2 3]` + rev-without-first-and-last = `[1 2 3]` + `[2]` = `[1 2 3 2]`. Natural length = `2(N−1)` = 4. | 4 events at degrees 1, 2, 3, 2. |
+| `note x [1 2]'bounce`   | 2-element bounce.                           | Reverse without both endpoints is empty; result = `[1 2]`. Natural length = 2.                           | 2 events at degrees 1, 2.       |
+| `note x [5]'bounce`     | Single-element — no-op.                     | Nothing to append; result is `[5]`.                                                                      | 1 event at degree 5.            |
+
+## Interaction with `'stut`
+
+| Code Snippet                    | Interpretation                           | Evaluation                           | Result     |
+| ------------------------------- | ---------------------------------------- | ------------------------------------ | ---------- |
+| `note x [1 2 3]'mirror'stut(2)` | mirror first (5 elements), then stutter. | `[1 2 3 2 1]` → stut(2) → 10 events. | 10 events. |
+| `note x [1 2 3]'bounce'stut(2)` | bounce first (4 elements), then stutter. | `[1 2 3 2]` → stut(2) → 8 events.    | 8 events.  |
+| `note x [1 2 3 4]'rev'stut(2)`  | rev first (4 elements), then stutter.    | `[4 3 2 1]` → stut(2) → 8 events.    | 8 events.  |
