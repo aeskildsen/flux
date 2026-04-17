@@ -97,17 +97,16 @@
 		isLoading = true;
 		loadError = '';
 
+		// Create a temporary AudioContext for decoding. One context is shared
+		// across all files in this batch and closed when we are done — browsers
+		// impose a hard limit on the number of concurrent AudioContext instances,
+		// so we must close it rather than letting it leak.
+		const ctx: AudioContext = new AudioContext();
 		try {
-			// Use the page's AudioContext if available via the window, otherwise
-			// create a temporary offline one just for decoding metadata.
-			// In practice, the user should have booted the engine before adding
-			// buffers, but we don't enforce that at the panel level.
-			const ctx: AudioContext = new AudioContext();
-
 			for (const file of Array.from(files)) {
 				try {
 					const arrayBuffer = await file.arrayBuffer();
-					const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+					const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
 					// Derive a unique default name from the filename
 					let baseName = deriveNameFromFilename(file.name);
@@ -142,6 +141,10 @@
 			isLoading = false;
 			// Reset the file input so the same file can be re-added
 			input.value = '';
+			// Close the temporary decode context to release browser resources
+			ctx.close().catch(() => {
+				// ignore — close errors are non-fatal
+			});
 		}
 	}
 
