@@ -648,18 +648,42 @@ describe('run() — callback exception handling', () => {
 		expect(onError).toHaveBeenCalledWith(expect.stringContaining('boom'));
 	});
 
-	it('stops the scheduler when the callback throws', () => {
-		vi.spyOn(clock, 'beatToAudioTime').mockImplementation(boundedBeatMock(3));
+	it('continues scheduling subsequent events after the callback throws (non-fatal)', () => {
+		// The callback throws on the first event but the scheduler must continue
+		// and deliver all remaining events in the lookahead window.
+		// Use beat-aware mock: beats 0, 1, 2 all in-window; beat 3+ out-of-window.
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation((beat: number) =>
+			beat < 3 ? fakeCurrentTime : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+		);
 
 		const callback = vi.fn().mockImplementationOnce(() => {
-			throw new Error('stop me');
+			throw new Error('non-fatal error');
 		});
 		const onError = vi.fn();
 
 		run(finiteGen([{ duration: 1 }, { duration: 1 }, { duration: 1 }]), callback, 1, 0, onError);
 
-		// Callback threw on first call — should not be called again
-		expect(callback).toHaveBeenCalledTimes(1);
+		// Callback threw on first call — subsequent events must still be delivered
+		expect(callback).toHaveBeenCalledTimes(3);
+		expect(onError).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not set active=false after a callback exception — timer is still scheduled', () => {
+		// After a callback throws, the scheduler must not stop. Verify by checking
+		// that a new timer was scheduled (the tick loop continues) even after an exception.
+		// We put the only event out-of-window so the loop exits normally (not via exception),
+		// then verify that the exception on a prior tick didn't kill the timer.
+		vi.spyOn(clock, 'beatToAudioTime').mockImplementation(boundedBeatMock(1));
+
+		const callback = vi.fn().mockImplementationOnce(() => {
+			throw new Error('recoverable');
+		});
+		const onError = vi.fn();
+
+		run(finiteGen([{ duration: 1 }, { duration: 1 }]), callback, 1, 0, onError);
+
+		// Callback threw and scheduler continued past it. Timer should be scheduled for next tick.
+		expect(vi.getTimerCount()).toBeGreaterThan(0);
 		expect(onError).toHaveBeenCalledTimes(1);
 	});
 });

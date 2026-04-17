@@ -115,8 +115,7 @@ export function run<T>(
 				const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
 				console.error(errMsg, e);
 				onError?.(errMsg);
-				active = false;
-				return;
+				// Non-fatal: log the error and skip this event, but keep running.
 			}
 			nextBeat += dur;
 			try {

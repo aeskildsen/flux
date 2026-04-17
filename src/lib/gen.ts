@@ -58,7 +58,14 @@ export function* createGen(deps: GenDeps): Generator<GenEvent> {
 		if (!result.ok) {
 			onMessage(`Pattern error in cycle ${cycleIdx}: ${result.error}`, 'error');
 			console.error('[gen] evaluate() failed:', result.error);
-			return;
+			// Skip this cycle: yield a silent stub covering the full cycle boundary
+			// so the scheduler cursor stays aligned, then continue to the next cycle.
+			const nextCycleBoundary = startBeat + (cycleIdx + 1) * cycleBeatCount;
+			const skipDuration = nextCycleBoundary - schedulerBeat;
+			yield { skip: true, duration: skipDuration };
+			schedulerBeat = nextCycleBoundary;
+			cycleIdx++;
+			continue;
 		}
 		if (result.done) {
 			onMessage('Pattern finished', 'info');
