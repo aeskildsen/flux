@@ -480,6 +480,39 @@ const MODIFIER_DOCS: Record<string, string> = {
 		'```flux',
 		'note [0 2 4 7] | fx("lpf")\'cutoff(1200)\'tail(4)',
 		'```'
+	].join('\n'),
+
+	rev: [
+		"**`'rev`** — reverse the event array each cycle.",
+		'',
+		"Operates on the evaluated event array _after_ traversal (`'shuf`, `'pick`, `'arp`). Single-element sequences are unchanged.",
+		'',
+		'```flux',
+		"[1 2 3 4]'rev     // plays as [4 3 2 1]",
+		"[1~4]'rev         // this cycle's random draws, reversed",
+		'```'
+	].join('\n'),
+
+	mirror: [
+		"**`'mirror`** — palindrome with repeated endpoints.",
+		'',
+		'Appends the reverse of the event array (excluding only the first element of the reverse, so both original endpoints appear twice). Natural length = 2N − 1. Single-element is a no-op.',
+		'',
+		'```flux',
+		"[1 2 3]'mirror    // [1 2 3 2 1] — 5 events",
+		"[0..3]'mirror     // [0 1 2 3 2 1 0] — 7 events",
+		'```'
+	].join('\n'),
+
+	bounce: [
+		"**`'bounce`** — ping-pong palindrome without repeated endpoints.",
+		'',
+		'Appends the reverse with both endpoints removed. Natural length = 2(N − 1). Single-element is a no-op.',
+		'',
+		'```flux',
+		"[1 2 3]'bounce    // [1 2 3 2] — 4 events",
+		"[0..3]'bounce     // [0 1 2 3 2 1] — 6 events",
+		'```'
 	].join('\n')
 };
 
