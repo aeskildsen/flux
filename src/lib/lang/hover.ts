@@ -7,11 +7,40 @@
 
 import type { IToken } from 'chevrotain';
 import type { SynthDefMetadata } from './completions.js';
+import { getDocMarkdown } from './docs-index.js';
 
 export interface HoverResult {
 	/** Markdown string to display in the hover popup. */
 	contents: string;
 }
+
+// ---------------------------------------------------------------------------
+// Runtime docs lookup helpers
+//
+// Any hover content we can source from docs/*.md at build time wins over the
+// in-file tables below. The tables remain the authoritative fallback for
+// token-types that have no matching heading (literals, punctuation, etc.).
+// ---------------------------------------------------------------------------
+
+/** Token type name → doc-index key. */
+const TOKEN_TYPE_DOC_KEY: Record<string, string> = {
+	Note: 'note',
+	Mono: 'mono',
+	Sample: 'sample',
+	Slice: 'slice',
+	Cloud: 'cloud',
+	Utf8Kw: 'utf8',
+	Rand: 'rand',
+	Gau: 'gau',
+	Exp: 'exp',
+	Bro: 'bro',
+	Step: 'step',
+	Mul: 'mul',
+	Lin: 'lin',
+	Geo: 'geo',
+	Tilde: '~',
+	Set: 'set'
+};
 
 // ---------------------------------------------------------------------------
 // Documentation tables
@@ -226,7 +255,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'',
 		'Attaches a modifier to the immediately preceding token.',
 		'',
-		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `arp`'
+		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `arp`, `rev`, `mirror`, `bounce`'
 	].join('\n'),
 
 	At: [
@@ -541,7 +570,19 @@ const DECORATOR_DOCS: Record<string, string> = {
 	octave: '**`octave`** — octave number (piano convention). Default: 5.',
 	cent: '**`cent`** — pitch deviation in cents (100 per semitone step). Default: 0.',
 	key: '**`key(root scale [octave])`** — compound pitch context: sets root + scale + optional octave together.',
-	tempo: '**`tempo`** — global tempo in BPM.'
+	tempo: '**`tempo`** — global tempo in BPM.',
+	buf: [
+		'**`@buf(\\\\name)`** — buffer selection for `slice` and `cloud`.',
+		'',
+		'Specifies which buffer a `slice` or `cloud` pattern operates on. Accepts a `\\\\symbol` or any sequence generator for per-cycle buffer selection.',
+		'',
+		'```flux',
+		'@buf(\\\\myloop) slice drums [0 2 4 8]',
+		"@buf([\\\\loopA \\\\loopB]'pick) slice drums [0 4 8 12]",
+		'```',
+		'',
+		'`@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.'
+	].join('\n')
 };
 
 // ---------------------------------------------------------------------------
@@ -560,7 +601,13 @@ function getParamHover(
 	activeSynthDef: string | undefined,
 	synthdefMetadata: SynthDefMetadata
 ): HoverResult | null {
-	type SpecEntry = { default: number; min: number; max: number; unit: string; curve: number };
+	type SpecEntry = {
+		default?: number;
+		min?: number;
+		max?: number;
+		unit?: string;
+		curve?: number | string;
+	};
 	let spec: SpecEntry | undefined;
 	let defName: string | undefined;
 
@@ -585,9 +632,9 @@ function getParamHover(
 		'',
 		`| Property | Value |`,
 		`| -------- | ----- |`,
-		`| Default  | ${spec.default} |`,
-		`| Min      | ${spec.min} |`,
-		`| Max      | ${spec.max} |`,
+		spec.default !== undefined ? `| Default  | ${spec.default} |` : null,
+		spec.min !== undefined ? `| Min      | ${spec.min} |` : null,
+		spec.max !== undefined ? `| Max      | ${spec.max} |` : null,
 		spec.unit ? `| Unit     | ${spec.unit} |` : null
 	]
 		.filter(Boolean)
@@ -627,31 +674,49 @@ export function getHover(
 		return getParamHover(paramName, activeSynthDef, synthdefMetadata);
 	}
 
-	// Non-identifier tokens: direct lookup by type name
+	// Non-identifier tokens: runtime docs → hardcoded tables fallback.
 	if (typeName !== 'Identifier') {
+		const docKey = TOKEN_TYPE_DOC_KEY[typeName];
+		if (docKey) {
+			const md = getDocMarkdown(docKey);
+			if (md) return { contents: md };
+		}
 		const doc = TOKEN_TYPE_DOCS[typeName];
 		return doc ? { contents: doc } : null;
 	}
 
-	// Identifier — resolve by context first, then fall back to image-based lookup
+	// Identifier — resolve by context first, preferring runtime docs then
+	// falling back to the image-based tables.
 	const image = token.image;
 
 	if (prevTokenName === 'Tick') {
+		const md = getDocMarkdown(`'${image}`);
+		if (md) return { contents: md };
 		const doc = MODIFIER_DOCS[image];
 		if (doc) return { contents: doc };
 	}
 
 	if (prevTokenName === 'At' || prevTokenName === 'Set') {
+		const md = getDocMarkdown(`@${image}`);
+		if (md) return { contents: md };
 		const doc = DECORATOR_DOCS[image];
 		if (doc) return { contents: doc };
 	}
 
-	// Image-based fallbacks (works when the preceding token is out of hover range)
+	// Image-based fallbacks (works when the preceding token is out of hover range).
+	// Try runtime-docs for both modifier and decorator flavours of the bare
+	// identifier before touching the hardcoded tables.
+	const modMd = getDocMarkdown(`'${image}`);
+	if (modMd) return { contents: modMd };
+
 	const modDoc = MODIFIER_DOCS[image];
 	if (modDoc) return { contents: modDoc };
 
 	const scaleDoc = SCALE_DOCS[image];
 	if (scaleDoc) return { contents: scaleDoc };
+
+	const decMd = getDocMarkdown(`@${image}`);
+	if (decMd) return { contents: decMd };
 
 	const decDoc = DECORATOR_DOCS[image];
 	if (decDoc) return { contents: decDoc };

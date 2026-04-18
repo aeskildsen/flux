@@ -11,7 +11,8 @@
 	import FxPanel from '$lib/FxPanel.svelte';
 	import SamplePanel from '$lib/SamplePanel.svelte';
 	import { bufferRegistry } from '$lib/bufferRegistry.svelte.js';
-	import { setBufferNamesGetter } from '$lib/monaco-adapter.js';
+	import { setBufferNamesGetter, setSynthDefMetadata } from '$lib/monaco-adapter.js';
+	import type { SynthDefMetadata } from '$lib/lang/completions.js';
 	import type { PageData } from './$types';
 	import type { ParamSpec } from './+page';
 
@@ -214,6 +215,9 @@
 	// Wire the buffer registry into Monaco \symbol completions.
 	// setBufferNamesGetter is idempotent — safe to call here at module eval time.
 	setBufferNamesGetter(() => bufferRegistry.entries.map((e) => e.name));
+
+	// Wire synthdef metadata into Monaco completions for content-aware synthdef suggestions.
+	setSynthDefMetadata(data.synthdefs as SynthDefMetadata);
 
 	/**
 	 * Called by SamplePanel after a file is decoded.

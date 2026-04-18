@@ -80,16 +80,17 @@ Metadata is embedded in the `.scd` file as a SuperCollider `Event` (dictionary l
 
 All fields are SC symbols or values as they appear in the `.scd` source.
 
-| Field             | SC type    | Required                | Description                                                       |
-| ----------------- | ---------- | ----------------------- | ----------------------------------------------------------------- |
-| `credit`          | String     | yes                     | Author name                                                       |
-| `type`            | Symbol     | yes                     | `\instrument` or `\fx`                                            |
-| `fx_role`         | Symbol     | yes (if `\fx`)          | `\insert` or `\master`                                            |
-| `description`     | String     | yes                     | Prose description of the sound or character                       |
-| `specs`           | Dictionary | yes                     | Keyed by control name Symbol; values are `ControlSpec` (see §3.2) |
-| `defaultBuffer`   | String     | yes (if declares `buf`) | Buffer name in the runtime registry loaded automatically at boot  |
-| `buffer_channels` | Integer    | yes (if declares `buf`) | Expected channel count of the associated buffer                   |
-| `url`             | String     | no                      | Link to documentation or demo                                     |
+| Field             | SC type      | Required                | Description                                                                         |
+| ----------------- | ------------ | ----------------------- | ----------------------------------------------------------------------------------- |
+| `credit`          | String       | yes                     | Author name                                                                         |
+| `type`            | Symbol       | yes                     | `\instrument` or `\fx`                                                              |
+| `fx_role`         | Symbol       | yes (if `\fx`)          | `\insert` or `\master`                                                              |
+| `contentTypes`    | Array\[Sym\] | no (see §3.3)           | Content-type keywords this SynthDef can back (e.g. `[\note, \mono]` or `[\sample]`) |
+| `description`     | String       | yes                     | Prose description of the sound or character                                         |
+| `specs`           | Dictionary   | yes                     | Keyed by control name Symbol; values are `ControlSpec` (see §3.2)                   |
+| `defaultBuffer`   | String       | yes (if declares `buf`) | Buffer name in the runtime registry loaded automatically at boot                    |
+| `buffer_channels` | Integer      | yes (if declares `buf`) | Expected channel count of the associated buffer                                     |
+| `url`             | String       | no                      | Link to documentation or demo                                                       |
 
 > `name` and `source` are not authored in the `.scd` file — they are injected by the compile script from the `SynthDef` name and filename respectively.
 
@@ -121,6 +122,30 @@ specs: Dictionary.newFrom([
 | _any number_    | `CurveWarp`       | Envelope-style curve; positive = convex, negative = concave (e.g. `4`, `-4`) |
 
 The compile script serialises each `ControlSpec` to a JSON object with the keys `min`, `max`, `default`, `curve`, `unit`. The `curve` field holds the SC symbol name (e.g. `"lin"`, `"exp"`, `"amp"`, `"db"`, `"sin"`, `"cos"`) or a number for `CurveWarp` instances. Named warps are kept as strings because each represents a distinct mapping function (`\exp` is a true exponential, `\amp` is x², `\db` maps through decibels) — there is no lossless reduction to a single number.
+
+### 3.3 `contentTypes` — DSL content-keyword eligibility
+
+`contentTypes` is an **optional** array of content-type symbols advertising which DSL keywords this SynthDef can serve as a default or selectable alternative for. It powers context-aware autocomplete in the editor: `note(\…)` suggests only defs whose `contentTypes` includes `\note`, and so on.
+
+| Content keyword | Meaning when listed                                                                |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `\note`         | Polyphonic pitched instrument — new node per event                                 |
+| `\mono`         | Monophonic pitched instrument — single persistent node (usually pair with `\note`) |
+| `\sample`       | One-shot buffer player; event list contains `\symbol` buffer names                 |
+| `\slice`        | Beat-slice player; consumes `sliceIndex` + `numSlices`                             |
+| `\cloud`        | Granular cloud synth; persistent node                                              |
+
+**When to omit:** FX SynthDefs (`type: \fx`) are not driven by content keywords — they are invoked via `| fx(\…)`, `send_fx`, or `master_fx`. Omit `contentTypes` for FX defs. An empty array `[]` is semantically misleading (it would claim the def has zero valid content contexts), so omission is the idiomatic choice.
+
+**Example:**
+
+```sclang
+metadata: (
+    type: \instrument,
+    contentTypes: [\note, \mono],    // pitched — valid for both
+    ...
+)
+```
 
 ---
 
