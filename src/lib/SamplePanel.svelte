@@ -181,7 +181,7 @@
 </script>
 
 <details>
-	<summary><ChevronRight class="chevron" size={12} />samples ({count})</summary>
+	<summary><ChevronRight class="chevron" size={12} />samples</summary>
 
 	<div class="panel-body">
 		{#if entries.length === 0}
