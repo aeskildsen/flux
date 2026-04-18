@@ -8,11 +8,12 @@
  * CompletionItem format.
  *
  * Completion is largely static table lookups driven by trigger characters:
- *   '    → offer modifier names: lock, eager, stut, legato, at, n, tail, offset, …
+ *   '    → offer modifier names (alphabetic order)
  *   "    → offer SynthDef parameter names from metadata.json (prefix-filtered)
- *   [    → offer generators, scale degrees, literals
- *   (    → context-sensitive: synthdef names after note/mono/sample/slice/cloud/fx("…"), arg values after modifiers
+ *   [    → offer nothing by default; offer buffer names in sample/slice/cloud context
+ *   (    → context-sensitive: instrument synthdefs after note/mono, set-params after set
  *   |    → offer fx("…") patterns
+ *   @    → offer decorator names: key, scale, root, octave, cent, buf
  */
 
 import type { IToken } from 'chevrotain';
@@ -34,114 +35,8 @@ export interface CompletionItem {
 // Static completion tables
 // ---------------------------------------------------------------------------
 
+/** Modifier completions in alphabetic order by base name. */
 const MODIFIER_COMPLETIONS: CompletionItem[] = [
-	{
-		label: 'lock',
-		insertText: 'lock',
-		detail: "'lock — freeze value forever",
-		documentation:
-			'Generator is evaluated once at the first cycle and never redrawn. Inner lock overrides outer eager.',
-		kind: 'keyword'
-	},
-	{
-		label: 'eager',
-		insertText: 'eager',
-		detail: "'eager — redraw once per cycle (default)",
-		documentation: "Bare 'eager = 'eager(1).",
-		kind: 'keyword'
-	},
-	{
-		label: 'eager(n)',
-		insertText: 'eager(${1:4})',
-		isSnippet: true,
-		detail: "'eager(n) — redraw every n cycles",
-		documentation: 'n must be a positive integer ≥ 1.',
-		kind: 'snippet'
-	},
-	{
-		label: 'stut',
-		insertText: 'stut',
-		detail: "'stut — repeat each event twice",
-		documentation: "Default count = 2. Use 'stut(n) for a custom count.",
-		kind: 'keyword'
-	},
-	{
-		label: 'stut(n)',
-		insertText: 'stut(${1:2})',
-		isSnippet: true,
-		detail: "'stut(n) — repeat each event n times",
-		documentation: 'n must be a positive integer ≥ 1. Can be a generator.',
-		kind: 'snippet'
-	},
-	{
-		label: 'maybe',
-		insertText: 'maybe',
-		detail: "'maybe — pass each event with 50% probability",
-		documentation: "Bare 'maybe = 'maybe(0.5).",
-		kind: 'keyword'
-	},
-	{
-		label: 'maybe(p)',
-		insertText: 'maybe(${1:0.5})',
-		isSnippet: true,
-		detail: "'maybe(p) — pass each event with probability p",
-		documentation: 'p in [0.0, 1.0].',
-		kind: 'snippet'
-	},
-	{
-		label: 'legato(x)',
-		insertText: 'legato(${1:0.8})',
-		isSnippet: true,
-		detail: "'legato(x) — gate duration as fraction of event slot",
-		documentation: '1.0 = no gap. >1.0 = overlap (pad effect). Can be a generator.',
-		kind: 'snippet'
-	},
-	{
-		label: 'offset(ms)',
-		insertText: 'offset(${1:20})',
-		isSnippet: true,
-		detail: "'offset(ms) — timing offset in milliseconds",
-		documentation: 'Positive = late, negative = early.',
-		kind: 'snippet'
-	},
-	{
-		label: 'at(n)',
-		insertText: 'at(${1:1/4})',
-		isSnippet: true,
-		detail: "'at(n) — phase offset in cycles",
-		documentation: 'Offset from next cycle start. Fractions allowed. Applies to all content types.',
-		kind: 'snippet'
-	},
-	{
-		label: 'n',
-		insertText: 'n',
-		detail: "'n — play once",
-		documentation: "Bare 'n plays the pattern once.",
-		kind: 'keyword'
-	},
-	{
-		label: 'n(count)',
-		insertText: 'n(${1:4})',
-		isSnippet: true,
-		detail: "'n(count) — play n times",
-		documentation: 'count must be a positive integer ≥ 1.',
-		kind: 'snippet'
-	},
-	{
-		label: 'shuf',
-		insertText: 'shuf',
-		detail: "'shuf — shuffle list then traverse",
-		documentation: 'Re-shuffles at cycle boundary. Like Pshuf.',
-		kind: 'keyword'
-	},
-	{
-		label: 'pick',
-		insertText: 'pick',
-		detail: "'pick — random element each time (optionally weighted)",
-		documentation:
-			'Uniform random by default. Use `?n` on elements to assign non-negative weights; unweighted elements default to 1. Like Prand / Pwrand.',
-		kind: 'keyword'
-	},
 	{
 		label: 'arp',
 		insertText: 'arp',
@@ -169,20 +64,66 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 		kind: 'snippet'
 	},
 	{
-		label: 'tail(s)',
-		insertText: 'tail(${1:4})',
+		label: 'at(n)',
+		insertText: 'at(${1:1/4})',
 		isSnippet: true,
-		detail: "'tail(s) — release FX after s seconds of silence",
-		documentation: 'Applies to anonymous insert FX (fx(...)).',
+		detail: "'at(n) — phase offset in cycles",
+		documentation: 'Offset from next cycle start. Fractions allowed. Applies to all content types.',
 		kind: 'snippet'
 	},
 	{
-		label: 'rev',
-		insertText: 'rev',
-		detail: "'rev — reverse event array each cycle",
+		label: 'bounce',
+		insertText: 'bounce',
+		detail: "'bounce — palindrome without repeated endpoints",
 		documentation:
-			"Reverses the evaluated event array after traversal. [1 2 3 4]'rev → [4 3 2 1]. Single-element is a no-op.",
+			"Appends the reverse with both endpoints removed (ping-pong). [1 2 3]'bounce → [1 2 3 2]. Natural length = 2(N−1). Single-element is a no-op.",
 		kind: 'keyword'
+	},
+	{
+		label: 'eager',
+		insertText: 'eager',
+		detail: "'eager — redraw once per cycle (default)",
+		documentation: "Bare 'eager = 'eager(1).",
+		kind: 'keyword'
+	},
+	{
+		label: 'eager(n)',
+		insertText: 'eager(${1:4})',
+		isSnippet: true,
+		detail: "'eager(n) — redraw every n cycles",
+		documentation: 'n must be a positive integer ≥ 1.',
+		kind: 'snippet'
+	},
+	{
+		label: 'legato(x)',
+		insertText: 'legato(${1:0.8})',
+		isSnippet: true,
+		detail: "'legato(x) — gate duration as fraction of event slot",
+		documentation: '1.0 = no gap. >1.0 = overlap (pad effect). Can be a generator.',
+		kind: 'snippet'
+	},
+	{
+		label: 'lock',
+		insertText: 'lock',
+		detail: "'lock — freeze value forever",
+		documentation:
+			'Generator is evaluated once at the first cycle and never redrawn. Inner lock overrides outer eager.',
+		kind: 'keyword'
+	},
+	{
+		label: 'maybe',
+		insertText: 'maybe',
+		detail: "'maybe — pass each event with 50% probability",
+		documentation: "Bare 'maybe = 'maybe(0.5).",
+		kind: 'keyword'
+	},
+	{
+		label: 'maybe(p)',
+		insertText: 'maybe(${1:0.5})',
+		isSnippet: true,
+		detail: "'maybe(p) — pass each event with probability p",
+		documentation: 'p in [0.0, 1.0].',
+		kind: 'snippet'
 	},
 	{
 		label: 'mirror',
@@ -193,12 +134,73 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 		kind: 'keyword'
 	},
 	{
-		label: 'bounce',
-		insertText: 'bounce',
-		detail: "'bounce — palindrome without repeated endpoints",
-		documentation:
-			"Appends the reverse with both endpoints removed (ping-pong). [1 2 3]'bounce → [1 2 3 2]. Natural length = 2(N−1). Single-element is a no-op.",
+		label: 'n',
+		insertText: 'n',
+		detail: "'n — play once",
+		documentation: "Bare 'n plays the pattern once.",
 		kind: 'keyword'
+	},
+	{
+		label: 'n(count)',
+		insertText: 'n(${1:4})',
+		isSnippet: true,
+		detail: "'n(count) — play n times",
+		documentation: 'count must be a positive integer ≥ 1.',
+		kind: 'snippet'
+	},
+	{
+		label: 'offset(ms)',
+		insertText: 'offset(${1:20})',
+		isSnippet: true,
+		detail: "'offset(ms) — timing offset in milliseconds",
+		documentation: 'Positive = late, negative = early.',
+		kind: 'snippet'
+	},
+	{
+		label: 'pick',
+		insertText: 'pick',
+		detail: "'pick — random element each time (optionally weighted)",
+		documentation:
+			'Uniform random by default. Use `?n` on elements to assign non-negative weights; unweighted elements default to 1. Like Prand / Pwrand.',
+		kind: 'keyword'
+	},
+	{
+		label: 'rev',
+		insertText: 'rev',
+		detail: "'rev — reverse event array each cycle",
+		documentation:
+			"Reverses the evaluated event array after traversal. [1 2 3 4]'rev → [4 3 2 1]. Single-element is a no-op.",
+		kind: 'keyword'
+	},
+	{
+		label: 'shuf',
+		insertText: 'shuf',
+		detail: "'shuf — shuffle list then traverse",
+		documentation: 'Re-shuffles at cycle boundary. Like Pshuf.',
+		kind: 'keyword'
+	},
+	{
+		label: 'stut',
+		insertText: 'stut',
+		detail: "'stut — repeat each event twice",
+		documentation: "Default count = 2. Use 'stut(n) for a custom count.",
+		kind: 'keyword'
+	},
+	{
+		label: 'stut(n)',
+		insertText: 'stut(${1:2})',
+		isSnippet: true,
+		detail: "'stut(n) — repeat each event n times",
+		documentation: 'n must be a positive integer ≥ 1. Can be a generator.',
+		kind: 'snippet'
+	},
+	{
+		label: 'tail(s)',
+		insertText: 'tail(${1:4})',
+		isSnippet: true,
+		detail: "'tail(s) — release FX after s seconds of silence",
+		documentation: 'Applies to anonymous insert FX (fx(...)).',
+		kind: 'snippet'
 	}
 ];
 
@@ -215,60 +217,6 @@ const GENERATOR_BODY_COMPLETIONS: CompletionItem[] = [
 		detail: 'utf8{word} — UTF-8 bytes of a word as a melodic sequence',
 		documentation:
 			'Converts a bare identifier to its UTF-8 byte values and yields them cyclically. Each character becomes one event. Inspired by "coffee".ascii in SuperCollider.',
-		kind: 'snippet'
-	}
-];
-
-const SEQUENCE_BODY_COMPLETIONS: CompletionItem[] = [
-	{
-		label: '0 2 4 7',
-		insertText: '0 2 4 7]',
-		detail: 'Major chord degrees',
-		kind: 'value'
-	},
-	{
-		label: 'utf8{word}',
-		insertText: 'utf8{${1:coffee}}',
-		isSnippet: true,
-		detail: 'utf8{word} — UTF-8 bytes of a word as a cycling scalar',
-		documentation:
-			'Cycles through the UTF-8 byte values of the identifier, one byte per list slot per cycle.',
-		kind: 'snippet'
-	},
-	{
-		label: '0 2 4',
-		insertText: '0 2 4]',
-		detail: 'Triad',
-		kind: 'value'
-	},
-	{
-		label: '0 1 2 3',
-		insertText: '0 1 2 3]',
-		detail: 'Four steps',
-		kind: 'value'
-	},
-	{
-		label: '0 2 4 5 7 9 11',
-		insertText: '0 2 4 5 7 9 11]',
-		detail: 'Full major scale',
-		kind: 'value'
-	},
-	{
-		label: '0rand7',
-		insertText: '0rand7]',
-		detail: 'Random degree (integer)',
-		kind: 'snippet'
-	},
-	{
-		label: '0rand7 4rand6',
-		insertText: '0rand7 4rand6]',
-		detail: 'Two random degrees',
-		kind: 'snippet'
-	},
-	{
-		label: '[2 3] sublists',
-		insertText: '0 1 [2 3] 4]',
-		detail: 'Sublist for rhythmic subdivision',
 		kind: 'snippet'
 	}
 ];
@@ -301,20 +249,6 @@ const PIPE_COMPLETIONS: CompletionItem[] = [
 		detail: 'Insert delay',
 		kind: 'value'
 	}
-];
-
-/** Synthdef / FX names offered inside note("..."), mono("..."), fx("..."), etc. */
-const FX_NAME_COMPLETIONS: CompletionItem[] = [
-	{ label: 'lpf', insertText: 'lpf', detail: 'Low-pass filter', kind: 'value' },
-	{ label: 'hpf', insertText: 'hpf', detail: 'High-pass filter', kind: 'value' },
-	{ label: 'reverb', insertText: 'reverb', detail: 'Reverb', kind: 'value' },
-	{ label: 'delay', insertText: 'delay', detail: 'Delay', kind: 'value' },
-	{ label: 'distortion', insertText: 'distortion', detail: 'Distortion', kind: 'value' },
-	{ label: 'compressor', insertText: 'compressor', detail: 'Compressor', kind: 'value' },
-	{ label: 'limiter', insertText: 'limiter', detail: 'Limiter', kind: 'value' },
-	{ label: 'chorus', insertText: 'chorus', detail: 'Chorus', kind: 'value' },
-	{ label: 'flanger', insertText: 'flanger', detail: 'Flanger', kind: 'value' },
-	{ label: 'bitcrusher', insertText: 'bitcrusher', detail: 'Bitcrusher', kind: 'value' }
 ];
 
 /** Completions inside set(...). */
@@ -363,18 +297,123 @@ const SET_PARAM_COMPLETIONS: CompletionItem[] = [
 	}
 ];
 
+/**
+ * Decorator completions offered after '@'. Includes key, scale, root, octave, cent, buf.
+ * Does NOT include 'set' (that is a top-level keyword, not a decorator).
+ */
+const DECORATOR_COMPLETIONS: CompletionItem[] = [
+	{
+		label: 'key',
+		insertText: 'key(${1:g#} ${2:minor})',
+		isSnippet: true,
+		detail: '@key(root scale) — compound pitch context',
+		documentation:
+			'Sets root, scale, and optionally octave together. Most common way to establish key.\n\n```flux\n@key(g# minor)      // root = G#, scale = minor\n@key(c major)       // root = C, scale = major\n```',
+		kind: 'snippet'
+	},
+	{
+		label: 'scale',
+		insertText: 'scale(${1:minor})',
+		isSnippet: true,
+		detail: '@scale(name) — scale only',
+		documentation:
+			'Scale preset. Common scales: major, minor, dorian, phrygian, lydian, mixolydian, locrian, pentatonic_major, pentatonic_minor, chromatic, whole_tone.',
+		kind: 'snippet'
+	},
+	{
+		label: 'root',
+		insertText: 'root(${1:7})',
+		isSnippet: true,
+		detail: '@root(n) — root note (semitones from C)',
+		documentation:
+			'Root note as semitones from C (0–11). Accepts an integer or a stochastic generator.',
+		kind: 'snippet'
+	},
+	{
+		label: 'octave',
+		insertText: 'octave(${1:5})',
+		isSnippet: true,
+		detail: '@octave(n) — octave number',
+		documentation: 'Octave number (piano convention). Default: 5.',
+		kind: 'snippet'
+	},
+	{
+		label: 'cent',
+		insertText: 'cent(${1:10})',
+		isSnippet: true,
+		detail: '@cent(n) — fine pitch deviation in cents',
+		documentation: 'Deviates pitch by n cents (100 cents = 1 semitone). Accepts a generator.',
+		kind: 'snippet'
+	},
+	{
+		label: 'buf',
+		insertText: 'buf(\\${1:myloop})',
+		isSnippet: true,
+		detail: '@buf(\\name) — buffer selection for slice/cloud',
+		documentation:
+			"Specifies which buffer a slice or cloud pattern operates on. Accepts a symbol or sequence generator for per-cycle selection.\n\n```flux\n@buf(\\myloop) slice drums [0 4 8 12]\n@buf([\\loopA \\loopB]'pick) slice drums [0 4]\n```",
+		kind: 'snippet'
+	}
+];
+
+/** Content type keywords offered at the beginning of a line. */
+const CONTENT_TYPE_COMPLETIONS: CompletionItem[] = [
+	{
+		label: 'note',
+		insertText: 'note ',
+		detail: 'note name [...] — polyphonic pitched events',
+		documentation: 'Spawns a new synth instance for each event. Loops indefinitely by default.',
+		kind: 'keyword'
+	},
+	{
+		label: 'mono',
+		insertText: 'mono ',
+		detail: 'mono name [...] — monophonic pitched events',
+		documentation:
+			'Single persistent synth node; events send set messages instead of spawning new instances.',
+		kind: 'keyword'
+	},
+	{
+		label: 'sample',
+		insertText: 'sample ',
+		detail: 'sample name [\\sym ...] — buffer playback by name',
+		documentation: 'Each event is a \\symbol naming a loaded buffer.',
+		kind: 'keyword'
+	},
+	{
+		label: 'slice',
+		insertText: 'slice ',
+		detail: 'slice name [0 4 8 ...] — beat-sliced buffer playback',
+		documentation:
+			"Each event is an integer slice index. Use @buf(\\name) to select the buffer and 'numSlices(n) to set the grid.",
+		kind: 'keyword'
+	},
+	{
+		label: 'cloud',
+		insertText: 'cloud ',
+		detail: 'cloud name [] — granular synthesis',
+		documentation:
+			'Persistent granular synth node. The event list is typically empty; parameters controlled via "param notation.',
+		kind: 'keyword'
+	}
+];
+
 // ---------------------------------------------------------------------------
 // SynthDef metadata types (exported for use by callers / Monaco adapter)
 // ---------------------------------------------------------------------------
 
 export type SynthDefSpecEntry = {
-	default: number;
-	min: number;
-	max: number;
-	unit: string;
-	curve: number;
+	default?: number;
+	min?: number;
+	max?: number;
+	unit?: string;
+	curve?: number | string;
 };
-export type SynthDefEntry = { specs: Record<string, SynthDefSpecEntry> };
+export type SynthDefEntry = {
+	specs: Record<string, SynthDefSpecEntry>;
+	type?: string;
+	description?: string;
+};
 export type SynthDefMetadata = Record<string, SynthDefEntry>;
 
 // ---------------------------------------------------------------------------
@@ -416,14 +455,48 @@ function getParamCompletions(
 
 	return entries
 		.filter(([name]) => name.startsWith(prefix))
-		.map(([name, spec]) => ({
+		.map(([name, spec]) => {
+			const def = spec.default ?? 0;
+			const minVal = spec.min ?? 0;
+			const maxVal = spec.max ?? 1;
+			return {
+				label: name,
+				insertText: `${name}(\${1:${def}})`,
+				isSnippet: true,
+				detail: `"${name} — ${spec.unit ? `${spec.unit}, ` : ''}${minVal}–${maxVal}, default ${def}`,
+				documentation: `SynthDef parameter. Range: ${minVal}–${maxVal}. Default: ${def}.${spec.unit ? ` Unit: ${spec.unit}.` : ''}`,
+				kind: 'property' as CompletionItemKind
+			};
+		});
+}
+
+/**
+ * Build completion items for instrument SynthDefs — offered after note( and mono(.
+ * Only includes entries with type === 'instrument'.
+ */
+function getInstrumentSynthDefCompletions(synthdefMetadata: SynthDefMetadata): CompletionItem[] {
+	return Object.entries(synthdefMetadata)
+		.filter(([, entry]) => entry.type === 'instrument')
+		.map(([name, entry]) => ({
 			label: name,
-			insertText: `${name}(\${1:${spec.default}})`,
-			isSnippet: true,
-			detail: `"${name} — ${spec.unit ? `${spec.unit}, ` : ''}${spec.min}–${spec.max}, default ${spec.default}`,
-			documentation: `SynthDef parameter. Range: ${spec.min}–${spec.max}. Default: ${spec.default}.${spec.unit ? ` Unit: ${spec.unit}.` : ''}`,
-			kind: 'property' as CompletionItemKind
+			insertText: `\\${name}`,
+			detail: entry.description ? entry.description.slice(0, 80) : `SynthDef: ${name}`,
+			documentation: entry.description,
+			kind: 'value' as CompletionItemKind
 		}));
+}
+
+/**
+ * Build completion items for buffer names — offered after [ in sample/slice/cloud context.
+ * Each buffer name gets a \\ prefix in both label and insertText.
+ */
+function getBufferNameCompletions(bufferNames: string[]): CompletionItem[] {
+	return bufferNames.map((name) => ({
+		label: `\\${name}`,
+		insertText: `\\${name}`,
+		detail: 'buffer',
+		kind: 'value' as CompletionItemKind
+	}));
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +516,23 @@ function lastTokenBefore(tokens: IToken[], cursorOffset: number): IToken | undef
 	return undefined;
 }
 
+/**
+ * Determine if the current line context is a sample/slice/cloud pattern.
+ * Returns the token type name of the content type keyword found, or undefined.
+ */
+function findContentTypeKeyword(tokens: IToken[]): string | undefined {
+	for (const t of tokens) {
+		const name = t.tokenType.name;
+		if (['Note', 'Mono', 'Sample', 'Slice', 'Cloud'].includes(name)) {
+			return name;
+		}
+	}
+	return undefined;
+}
+
+/** Content types that use buffer symbols in their sequence lists. */
+const BUFFER_CONTENT_TYPES = new Set(['Sample', 'Slice', 'Cloud']);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -458,18 +548,20 @@ function lastTokenBefore(tokens: IToken[], cursorOffset: number): IToken | undef
  *   `"param` completions. If undefined, all known param names are offered.
  * @param synthdefMetadata - Runtime SynthDef metadata (loaded via fetch from
  *   /compiled_synthdefs/metadata.json). If not provided, param completions are empty.
+ * @param bufferNames - Current list of registered buffer names for \symbol completions.
  */
 export function getCompletions(
 	tokens: IToken[],
 	cursorOffset: number,
 	triggerChar?: string,
 	activeSynthDef?: string,
-	synthdefMetadata: SynthDefMetadata = {}
+	synthdefMetadata: SynthDefMetadata = {},
+	bufferNames: string[] = []
 ): CompletionItem[] {
 	const prev = lastTokenBefore(tokens, cursorOffset);
 	const prevType = prev?.tokenType.name;
 
-	// ' trigger → modifier names
+	// ' trigger → modifier names (alphabetic)
 	if (triggerChar === "'") {
 		return MODIFIER_COMPLETIONS;
 	}
@@ -484,19 +576,31 @@ export function getCompletions(
 		return PIPE_COMPLETIONS;
 	}
 
-	// [ trigger → sequence body suggestions
+	// @ trigger → decorator names (key, scale, root, octave, cent, buf)
+	if (triggerChar === '@') {
+		return DECORATOR_COMPLETIONS;
+	}
+
+	// [ trigger → context-sensitive
 	if (triggerChar === '[') {
-		return SEQUENCE_BODY_COMPLETIONS;
+		// In sample/slice/cloud context: show buffer names
+		const contentType = findContentTypeKeyword(tokens);
+		if (contentType && BUFFER_CONTENT_TYPES.has(contentType)) {
+			return getBufferNameCompletions(bufferNames);
+		}
+		// Otherwise: show nothing (per design: no placeholder suggestions)
+		return [];
 	}
 
 	// ( trigger → context-sensitive argument suggestions
 	if (triggerChar === '(') {
 		if (prevType === 'Set') return SET_PARAM_COMPLETIONS;
-		if (
-			prevType &&
-			['Note', 'Mono', 'Sample', 'Slice', 'Cloud', 'Fx', 'SendFx', 'MasterFx'].includes(prevType)
-		) {
-			return FX_NAME_COMPLETIONS;
+		if (prevType === 'Note' || prevType === 'Mono') {
+			return getInstrumentSynthDefCompletions(synthdefMetadata);
+		}
+		// sample/slice/cloud: no instrument synthdefs apply; return empty
+		if (prevType === 'Sample' || prevType === 'Slice' || prevType === 'Cloud') {
+			return [];
 		}
 		return [];
 	}
@@ -505,10 +609,25 @@ export function getCompletions(
 	if (prevType === 'Tick') return MODIFIER_COMPLETIONS;
 	if (prevType === 'ParamSigil') return getParamCompletions(synthdefMetadata, activeSynthDef);
 	if (prevType === 'Pipe') return PIPE_COMPLETIONS;
-	if (prevType === 'LBracket') return SEQUENCE_BODY_COMPLETIONS;
+	if (prevType === 'At') return DECORATOR_COMPLETIONS;
+
+	// LBracket: show buffer names in sample/slice/cloud context, nothing otherwise
+	if (prevType === 'LBracket') {
+		const contentType = findContentTypeKeyword(tokens);
+		if (contentType && BUFFER_CONTENT_TYPES.has(contentType)) {
+			return getBufferNameCompletions(bufferNames);
+		}
+		return [];
+	}
+
 	// After a generator name (Identifier token) — offer top-level body generators
 	// e.g. "note lead |cursor|" → suggest utf8{word} and other body forms
 	if (prevType === 'Identifier') return GENERATOR_BODY_COMPLETIONS;
+
+	// No tokens / empty line — beginning of line: suggest content type keywords
+	if (tokens.length === 0 || prev === undefined) {
+		return CONTENT_TYPE_COMPLETIONS;
+	}
 
 	return [];
 }

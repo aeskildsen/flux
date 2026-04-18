@@ -560,7 +560,13 @@ function getParamHover(
 	activeSynthDef: string | undefined,
 	synthdefMetadata: SynthDefMetadata
 ): HoverResult | null {
-	type SpecEntry = { default: number; min: number; max: number; unit: string; curve: number };
+	type SpecEntry = {
+		default?: number;
+		min?: number;
+		max?: number;
+		unit?: string;
+		curve?: number | string;
+	};
 	let spec: SpecEntry | undefined;
 	let defName: string | undefined;
 
@@ -585,9 +591,9 @@ function getParamHover(
 		'',
 		`| Property | Value |`,
 		`| -------- | ----- |`,
-		`| Default  | ${spec.default} |`,
-		`| Min      | ${spec.min} |`,
-		`| Max      | ${spec.max} |`,
+		spec.default !== undefined ? `| Default  | ${spec.default} |` : null,
+		spec.min !== undefined ? `| Min      | ${spec.min} |` : null,
+		spec.max !== undefined ? `| Max      | ${spec.max} |` : null,
 		spec.unit ? `| Unit     | ${spec.unit} |` : null
 	]
 		.filter(Boolean)

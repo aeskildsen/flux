@@ -21,7 +21,22 @@ const TEST_METADATA: SynthDefMetadata = {
 			amp: { default: 0.1, min: 0, max: 1, unit: 'amp', curve: 4 },
 			pan: { default: 0, min: -1, max: 1, unit: '', curve: 2 },
 			rel: { default: 0.2, min: 0.001, max: 4, unit: 'seconds', curve: 4 }
-		}
+		},
+		type: 'instrument'
+	},
+	fm: {
+		specs: {
+			amp: { default: 0.2, min: 0, max: 1, unit: 'amp', curve: 4 },
+			freq: { default: 440, min: 20, max: 20000, unit: 'Hz', curve: 4 },
+			pan: { default: 0, min: -1, max: 1, unit: '', curve: 2 }
+		},
+		type: 'instrument'
+	},
+	sliceplayer: {
+		specs: {
+			amp: { default: 0.5, min: 0, max: 1, unit: 'amp', curve: 4 }
+		},
+		type: 'fx'
 	}
 };
 
@@ -81,6 +96,20 @@ describe("getCompletions — trigger: '", () => {
 		const tokens = tokenize("note [0]'");
 		const items = getCompletions(tokens, endCursor("note [0]'"), "'");
 		expect(items.some((i: CompletionItem) => i.label === 'maybe(p)')).toBe(true);
+	});
+
+	it('modifier completions are in alphabetic order', () => {
+		const items = getCompletions([], 0, "'");
+		// Extract unique base labels (e.g. 'arp' from 'arp', 'arp(algorithm)', etc.)
+		const labels = items.map((i) => i.label);
+		// Check that sorted equals original for the first word of each label
+		const baseLabels = labels.map((l) => l.split('(')[0]);
+		const sorted = [...baseLabels].sort();
+		// Allow grouping by name (same base label adjacent)
+		// Just verify the labels start with ascending letters
+		const firstChars = baseLabels.filter((v, i, a) => a.indexOf(v) === i);
+		const sortedFirstChars = [...firstChars].sort();
+		expect(firstChars).toEqual(sortedFirstChars);
 	});
 });
 
@@ -163,28 +192,80 @@ describe('getCompletions — trigger: |', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Trigger character: [
+// 3. Trigger character: [ — shows NOTHING (per design decision)
 // ---------------------------------------------------------------------------
 
-describe('getCompletions — trigger: [', () => {
-	it('returns sequence body completions for trigger char "["', () => {
+describe('getCompletions — trigger: [ (default: no suggestions)', () => {
+	it('returns empty array for trigger char "[" with no context', () => {
 		const items = getCompletions([], 0, '[');
-		expect(items.length).toBeGreaterThan(0);
+		expect(items).toHaveLength(0);
 	});
 
-	it('sequence body completions include a rand generator snippet', () => {
-		const items = getCompletions([], 0, '[');
-		expect(items.some((i: CompletionItem) => i.insertText.includes('rand'))).toBe(true);
+	it('returns empty array for trigger char "[" after note context (pitch patterns only)', () => {
+		const src = 'note lead [';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '[');
+		expect(items).toHaveLength(0);
 	});
 
-	it('sequence body completions include utf8{word} snippet', () => {
-		const items = getCompletions([], 0, '[');
-		expect(items.some((i: CompletionItem) => i.label.includes('utf8'))).toBe(true);
+	it('returns empty array when prev token is LBracket (explicit invocation)', () => {
+		const src = 'note [';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, endCursor(src), undefined);
+		expect(items).toHaveLength(0);
 	});
 });
 
 // ---------------------------------------------------------------------------
-// 3b. Top-level generator body completions (after generator name)
+// 3b. Trigger: [ in sample/slice/cloud context → show buffer names
+// ---------------------------------------------------------------------------
+
+describe('getCompletions — trigger: [ in sample/slice/cloud context', () => {
+	it('returns buffer names for trigger "[" after sample context', () => {
+		const src = 'sample drums [';
+		const tokens = tokenize(src);
+		const bufferNames = ['kick', 'snare', 'hat'];
+		const items = getCompletions(tokens, triggerCursor(src), '[', undefined, {}, bufferNames);
+		expect(items.length).toBe(3);
+		expect(items.every((i) => i.insertText.startsWith('\\'))).toBe(true);
+	});
+
+	it('returns buffer names for trigger "[" after slice context', () => {
+		const src = 'slice drums [';
+		const tokens = tokenize(src);
+		const bufferNames = ['amen', 'break'];
+		const items = getCompletions(tokens, triggerCursor(src), '[', undefined, {}, bufferNames);
+		expect(items.length).toBe(2);
+		expect(items.some((i) => i.label === '\\amen')).toBe(true);
+	});
+
+	it('returns buffer names for trigger "[" after cloud context', () => {
+		const src = 'cloud grain [';
+		const tokens = tokenize(src);
+		const bufferNames = ['myloop'];
+		const items = getCompletions(tokens, triggerCursor(src), '[', undefined, {}, bufferNames);
+		expect(items.length).toBe(1);
+		expect(items[0].label).toBe('\\myloop');
+	});
+
+	it('returns empty array for trigger "[" in sample context when no buffers registered', () => {
+		const src = 'sample drums [';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '[', undefined, {}, []);
+		expect(items).toHaveLength(0);
+	});
+
+	it('buffer name completion items have \\ prefix in label and insertText', () => {
+		const src = 'sample drums [';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '[', undefined, {}, ['kick']);
+		expect(items[0].label).toBe('\\kick');
+		expect(items[0].insertText).toBe('\\kick');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 3c. Top-level generator body completions (after generator name)
 // ---------------------------------------------------------------------------
 
 describe('getCompletions — top-level body (after generator name)', () => {
@@ -198,7 +279,60 @@ describe('getCompletions — top-level body (after generator name)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Trigger character: ( — context-sensitive
+// 4. Trigger character: @ — decorator completions
+// ---------------------------------------------------------------------------
+
+describe('getCompletions — trigger: @', () => {
+	it('returns decorator completions for trigger char "@"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.length).toBeGreaterThan(0);
+	});
+
+	it('decorator completions include "key"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'key')).toBe(true);
+	});
+
+	it('decorator completions include "scale"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'scale')).toBe(true);
+	});
+
+	it('decorator completions include "root"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'root')).toBe(true);
+	});
+
+	it('decorator completions include "octave"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'octave')).toBe(true);
+	});
+
+	it('decorator completions include "cent"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'cent')).toBe(true);
+	});
+
+	it('decorator completions include "buf"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'buf')).toBe(true);
+	});
+
+	it('decorator completions do NOT include "set"', () => {
+		const items = getCompletions([], 0, '@');
+		expect(items.some((i) => i.label === 'set')).toBe(false);
+	});
+
+	it('decorator completions have snippet insertText with argument placeholder', () => {
+		const items = getCompletions([], 0, '@');
+		const keyItem = items.find((i) => i.label === 'key');
+		expect(keyItem?.isSnippet).toBe(true);
+		expect(keyItem?.insertText).toContain('${');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 5. Trigger character: ( — context-sensitive
 // ---------------------------------------------------------------------------
 
 describe('getCompletions — trigger: ( after Set', () => {
@@ -232,31 +366,112 @@ describe('getCompletions — trigger: ( after Set', () => {
 	});
 });
 
-describe('getCompletions — trigger: ( after Note', () => {
-	it('returns FX name completions after "note("', () => {
-		// Cursor is AT the '(' — lastTokenBefore sees 'Note'
+describe('getCompletions — trigger: ( after Note/Mono — instrument synthdefs', () => {
+	it('returns instrument synthdef completions after "note("', () => {
 		const src = 'note(';
 		const tokens = tokenize(src);
-		const items = getCompletions(tokens, triggerCursor(src), '(');
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
 		expect(items.length).toBeGreaterThan(0);
 	});
 
-	it('FX name completions include "lpf"', () => {
+	it('instrument synthdef completions include "kick" (type=instrument)', () => {
+		const src = 'note(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		expect(items.some((i) => i.label === 'kick')).toBe(true);
+	});
+
+	it('instrument synthdef completions include "fm" (type=instrument)', () => {
+		const src = 'note(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		expect(items.some((i) => i.label === 'fm')).toBe(true);
+	});
+
+	it('instrument synthdef completions do NOT include fx-type synthdefs', () => {
+		const src = 'note(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		// sliceplayer has type=fx in TEST_METADATA — should not appear
+		expect(items.some((i) => i.label === 'sliceplayer')).toBe(false);
+	});
+
+	it('instrument synthdef completions use \\symbol insertText format', () => {
+		const src = 'note(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		const kick = items.find((i) => i.label === 'kick');
+		expect(kick?.insertText).toBe('\\kick');
+	});
+
+	it('returns same instrument synthdefs for "mono("', () => {
+		const src = 'mono(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		expect(items.some((i) => i.label === 'kick')).toBe(true);
+		expect(items.some((i) => i.label === 'fm')).toBe(true);
+	});
+
+	it('returns empty array for note( when metadata is empty', () => {
 		const src = 'note(';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, triggerCursor(src), '(');
-		expect(items.some((i: CompletionItem) => i.label === 'lpf')).toBe(true);
+		expect(items).toHaveLength(0);
+	});
+});
+
+describe('getCompletions — trigger: ( after Sample/Slice/Cloud', () => {
+	it('returns empty array after "sample(" (no instrument synthdefs for sample)', () => {
+		const src = 'sample(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		// sample only uses samplePlayer which is not in instrument metadata
+		expect(items).toHaveLength(0);
+	});
+
+	it('returns empty array after "slice("', () => {
+		const src = 'slice(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		expect(items).toHaveLength(0);
+	});
+
+	it('returns empty array after "cloud("', () => {
+		const src = 'cloud(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		expect(items).toHaveLength(0);
 	});
 
 	it('returns empty array for ( after an unrecognised preceding token', () => {
-		// Bare ( with no meaningful preceding token
 		const items = getCompletions([], 0, '(');
 		expect(items).toHaveLength(0);
 	});
 });
 
 // ---------------------------------------------------------------------------
-// 5. Explicit invocation (no trigger char) — inferred from preceding token
+// 6. Beginning-of-line: Ctrl+Space → content keywords
+// ---------------------------------------------------------------------------
+
+describe('getCompletions — beginning of line (Ctrl+Space)', () => {
+	it('returns content keywords for empty line (no trigger, no tokens)', () => {
+		const items = getCompletions([], 0, undefined);
+		expect(items.some((i) => i.label === 'note')).toBe(true);
+		expect(items.some((i) => i.label === 'mono')).toBe(true);
+		expect(items.some((i) => i.label === 'sample')).toBe(true);
+		expect(items.some((i) => i.label === 'slice')).toBe(true);
+		expect(items.some((i) => i.label === 'cloud')).toBe(true);
+	});
+
+	it('content keyword completions have kind=keyword', () => {
+		const items = getCompletions([], 0, undefined);
+		const note = items.find((i) => i.label === 'note');
+		expect(note?.kind).toBe('keyword');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 7. Explicit invocation (no trigger char) — inferred from preceding token
 // ---------------------------------------------------------------------------
 
 describe('getCompletions — explicit invocation (no triggerChar)', () => {
@@ -275,11 +490,11 @@ describe('getCompletions — explicit invocation (no triggerChar)', () => {
 		expect(items.some((i: CompletionItem) => i.label.includes('lpf'))).toBe(true);
 	});
 
-	it('returns sequence body completions when cursor is after LBracket', () => {
+	it('returns empty array when cursor is after LBracket (no placeholder suggestions)', () => {
 		const src = 'note [';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, endCursor(src), undefined);
-		expect(items.length).toBeGreaterThan(0);
+		expect(items).toHaveLength(0);
 	});
 
 	it('returns empty array when cursor is not after a recognised trigger token', () => {
@@ -290,14 +505,14 @@ describe('getCompletions — explicit invocation (no triggerChar)', () => {
 		expect(items).toHaveLength(0);
 	});
 
-	it('returns empty array for an empty token list with no trigger', () => {
+	it('returns content keywords for empty token list (beginning of line)', () => {
 		const items = getCompletions([], 0, undefined);
-		expect(items).toHaveLength(0);
+		expect(items.some((i) => i.label === 'note')).toBe(true);
 	});
 });
 
 // ---------------------------------------------------------------------------
-// 6. CompletionItem shape
+// 8. CompletionItem shape
 // ---------------------------------------------------------------------------
 
 describe('CompletionItem shape', () => {

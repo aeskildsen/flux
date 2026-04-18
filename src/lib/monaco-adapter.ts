@@ -23,7 +23,11 @@
 
 import type * as Monaco from 'monaco-editor';
 import { FluxLexer } from '$lib/lang/lexer.js';
-import { getCompletions, type CompletionItemKind } from '$lib/lang/completions.js';
+import {
+	getCompletions,
+	type CompletionItemKind,
+	type SynthDefMetadata
+} from '$lib/lang/completions.js';
 import { getHover } from '$lib/lang/hover.js';
 
 // ---------------------------------------------------------------------------
@@ -245,6 +249,26 @@ export function setBufferNamesGetter(fn: BufferNamesGetter): void {
 }
 
 // ---------------------------------------------------------------------------
+// SynthDef metadata integration
+//
+// Synthdef metadata is loaded at page boot from /compiled_synthdefs/metadata.json.
+// The page calls setSynthDefMetadata once after loading.
+// ---------------------------------------------------------------------------
+
+let _synthDefMetadata: SynthDefMetadata = {};
+
+/**
+ * Set the SynthDef metadata used for content-aware completions.
+ * Call this once after loading metadata.json on page load.
+ *
+ * @example
+ *   setSynthDefMetadata(data.synthdefs as SynthDefMetadata);
+ */
+export function setSynthDefMetadata(metadata: SynthDefMetadata): void {
+	_synthDefMetadata = metadata;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -373,7 +397,7 @@ export function registerFluxLanguage(monaco: typeof Monaco): void {
 	// ------------------------------------------------------------------
 
 	monaco.languages.registerCompletionItemProvider('flux', {
-		triggerCharacters: ["'", '[', '(', '|', '\\'],
+		triggerCharacters: ["'", '[', '(', '|', '\\', '@'],
 
 		provideCompletionItems(model, position, context) {
 			const lineContent = model.getLineContent(position.lineNumber);
@@ -420,7 +444,14 @@ export function registerFluxLanguage(monaco: typeof Monaco): void {
 			};
 
 			const { tokens } = FluxLexer.tokenize(lineContent);
-			const items = getCompletions(tokens, col, context.triggerCharacter);
+			const items = getCompletions(
+				tokens,
+				col,
+				context.triggerCharacter,
+				undefined, // activeSynthDef: TODO wire from editor state
+				_synthDefMetadata,
+				_getBufferNames()
+			);
 
 			return {
 				suggestions: items.map((item) => ({
