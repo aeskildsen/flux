@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { asset } from '$app/paths';
+	import { onDestroy } from 'svelte';
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
@@ -21,8 +22,16 @@
 
 	const sc = $derived(getServer());
 
-	// Editor content — starts empty; updated when user picks an example.
-	let editorValue = $state('');
+	const EDITOR_STORAGE_KEY = 'flux:editor-content';
+
+	// Editor content — persisted to localStorage so navigation doesn't lose it.
+	let editorValue = $state(
+		typeof localStorage !== 'undefined' ? (localStorage.getItem(EDITOR_STORAGE_KEY) ?? '') : ''
+	);
+
+	$effect(() => {
+		localStorage.setItem(EDITOR_STORAGE_KEY, editorValue);
+	});
 
 	let handle = $state<SchedulerHandle | null>(null);
 
@@ -355,6 +364,10 @@
 		handle?.stop();
 		handle = null;
 	}
+
+	onDestroy(() => {
+		handleStop();
+	});
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (e.ctrlKey && e.key === 'b') {
