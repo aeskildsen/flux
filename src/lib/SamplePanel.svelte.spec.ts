@@ -13,64 +13,57 @@ describe('SamplePanel', () => {
 	// Initial render
 	// -------------------------------------------------------------------------
 
-	it('renders the summary with count 0 when registry is empty', async () => {
+	it('renders the samples summary', async () => {
 		render(SamplePanel, {});
-		await expect.element(page.getByText('samples (0)')).toBeInTheDocument();
+		await expect.element(page.getByText('samples')).toBeInTheDocument();
 	});
 
 	it('shows empty-state message when no buffers are registered', async () => {
 		render(SamplePanel, {});
 		// Open the details first
-		await page.getByText('samples (0)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText(/No buffers loaded/)).toBeInTheDocument();
-	});
-
-	it('renders count matching registered buffers', async () => {
-		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
-		registerBuffer({ name: 'snare', origin: 'snare.wav', channels: 1, duration: 0.4 });
-		render(SamplePanel, {});
-		await expect.element(page.getByText('samples (2)')).toBeInTheDocument();
 	});
 
 	it('shows buffer name with backslash sigil', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('kick', { exact: true })).toBeInTheDocument();
 	});
 
 	it('shows origin filename in the meta row', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('kick.wav')).toBeInTheDocument();
 	});
 
 	it('shows "mono" for 1-channel buffers', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('mono')).toBeInTheDocument();
 	});
 
 	it('shows "stereo" for 2-channel buffers', async () => {
 		registerBuffer({ name: 'amen', origin: 'amen.wav', channels: 2, duration: 4.0 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('stereo')).toBeInTheDocument();
 	});
 
 	it('formats duration under 1 second as milliseconds', async () => {
 		registerBuffer({ name: 'clap', origin: 'clap.wav', channels: 1, duration: 0.25 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('250ms')).toBeInTheDocument();
 	});
 
 	it('formats duration of 1s+ in seconds', async () => {
 		registerBuffer({ name: 'amen', origin: 'amen.wav', channels: 2, duration: 4.32 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('4.32s')).toBeInTheDocument();
 	});
 
@@ -83,7 +76,7 @@ describe('SamplePanel', () => {
 			isBuiltIn: true
 		});
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('built-in')).toBeInTheDocument();
 	});
 
@@ -94,7 +87,7 @@ describe('SamplePanel', () => {
 	it('renders a remove button for non-built-in entries', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByRole('button', { name: /Remove kick/i })).toBeInTheDocument();
 	});
 
@@ -107,7 +100,7 @@ describe('SamplePanel', () => {
 			isBuiltIn: true
 		});
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		const removeBtn = page.getByRole('button', { name: /Remove default/i });
 		await expect.element(removeBtn).not.toBeInTheDocument();
 	});
@@ -115,16 +108,16 @@ describe('SamplePanel', () => {
 	it('removes a buffer from the list when remove button is clicked', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Remove kick/i }).click();
-		await expect.element(page.getByText('samples (0)')).toBeInTheDocument();
+		await expect.element(page.getByText(/No buffers loaded/)).toBeInTheDocument();
 	});
 
 	it('calls onRemove callback when remove button is clicked', async () => {
 		const removed: number[] = [];
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
-		render(SamplePanel, { onRemove: (id) => removed.push(id) });
-		await page.getByText('samples (1)').click();
+		render(SamplePanel, { onRemove: (id: number) => removed.push(id) });
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Remove kick/i }).click();
 		expect(removed).toHaveLength(1);
 	});
@@ -136,7 +129,7 @@ describe('SamplePanel', () => {
 	it('clicking the name button enters rename mode', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Rename kick/i }).click();
 		await expect.element(page.getByRole('textbox', { name: /Buffer name/i })).toBeInTheDocument();
 	});
@@ -144,7 +137,7 @@ describe('SamplePanel', () => {
 	it('rename input is pre-filled with current name', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Rename kick/i }).click();
 		const input = page.getByRole('textbox', { name: /Buffer name/i });
 		await expect.element(input).toHaveValue('kick');
@@ -153,7 +146,7 @@ describe('SamplePanel', () => {
 	it('pressing Enter commits a valid rename', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Rename kick/i }).click();
 		const input = page.getByRole('textbox', { name: /Buffer name/i });
 		await input.clear();
@@ -165,7 +158,7 @@ describe('SamplePanel', () => {
 	it('pressing Escape cancels rename', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Rename kick/i }).click();
 		await userEvent.keyboard('{Escape}');
 		// Rename input should be gone; name should still be kick
@@ -176,7 +169,7 @@ describe('SamplePanel', () => {
 	it('shows an error for an invalid name and does not commit', async () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
-		await page.getByText('samples (1)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Rename kick/i }).click();
 		const input = page.getByRole('textbox', { name: /Buffer name/i });
 		await input.clear();
@@ -191,7 +184,7 @@ describe('SamplePanel', () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		registerBuffer({ name: 'snare', origin: 'snare.wav', channels: 1, duration: 0.4 });
 		render(SamplePanel, {});
-		await page.getByText('samples (2)').click();
+		await page.getByText('samples').click();
 		await page.getByRole('button', { name: /Rename kick/i }).click();
 		const input = page.getByRole('textbox', { name: /Buffer name/i });
 		await input.clear();
@@ -206,7 +199,7 @@ describe('SamplePanel', () => {
 
 	it('renders the add samples button', async () => {
 		render(SamplePanel, {});
-		await page.getByText('samples (0)').click();
+		await page.getByText('samples').click();
 		await expect.element(page.getByText('+ add samples')).toBeInTheDocument();
 	});
 });

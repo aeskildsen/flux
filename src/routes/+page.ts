@@ -1,6 +1,6 @@
 import { asset } from '$app/paths';
 import type { PageLoad } from './$types';
-import type { ExampleEntry } from '$lib/ExamplesMenu.svelte';
+import type { ExampleEntry } from '$lib/examples.js';
 
 export type ParamSpec = {
 	min?: number;

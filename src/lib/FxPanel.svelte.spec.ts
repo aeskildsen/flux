@@ -51,21 +51,21 @@ describe('FxPanel', () => {
 	it('renders a slot for each entry', async () => {
 		render(FxPanel, makeProps());
 		// Open the details element so content is visible
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		await expect.element(page.getByText('EQ')).toBeInTheDocument();
 		await expect.element(page.getByText('Reverb')).toBeInTheDocument();
 	});
 
 	it('renders param sliders for each spec', async () => {
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		await expect.element(page.getByText('lo_db')).toBeInTheDocument();
 		await expect.element(page.getByText('hi_db')).toBeInTheDocument();
 	});
 
 	it('renders without crashing when specs is empty', async () => {
 		render(FxPanel, makeProps({ slots: [{ synthdef: 'master_eq', label: 'EQ', specs: {} }] }));
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		await expect.element(page.getByText('EQ')).toBeInTheDocument();
 	});
 
@@ -74,7 +74,7 @@ describe('FxPanel', () => {
 	it('calls onDisable when an enabled slot is toggled off', async () => {
 		const props = makeProps();
 		render(FxPanel, props);
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		// EQ starts enabled — first checkbox belongs to EQ
 		const checkboxes = page.getByRole('checkbox');
 		await checkboxes.first().click();
@@ -90,13 +90,13 @@ describe('FxPanel', () => {
 		);
 		const props = makeProps();
 		render(FxPanel, props);
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		const checkboxes = page.getByRole('checkbox');
 		await checkboxes.first().click();
 		expect(props.onEnable).toHaveBeenCalled();
 		expect(props.onDisable).not.toHaveBeenCalled();
 		// First arg is the synthdef being enabled
-		expect(vi.mocked(props.onEnable).mock.calls[0][0]).toBe('master_eq');
+		expect(props.onEnable).toHaveBeenCalledWith('master_eq', expect.anything(), expect.anything());
 	});
 
 	it('does not flip the checkbox when onEnable returns false (pre-boot guard)', async () => {
@@ -106,7 +106,7 @@ describe('FxPanel', () => {
 		);
 		const props = makeProps({ onEnable: vi.fn(() => false) });
 		render(FxPanel, props);
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		const checkbox = page.getByRole('checkbox').first();
 		// Slot starts disabled
 		await expect.element(checkbox).not.toBeChecked();
@@ -124,9 +124,12 @@ describe('FxPanel', () => {
 		);
 		const props = makeProps();
 		render(FxPanel, props);
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		await page.getByRole('checkbox').first().click();
-		const allEnabledStates = vi.mocked(props.onEnable).mock.calls[0][1] as Record<string, boolean>;
+		type OnEnableArgs = [string, Record<string, boolean>, Record<string, Record<string, number>>];
+		const allEnabledStates = (
+			vi.mocked(props.onEnable).mock.calls as unknown as OnEnableArgs[]
+		)[0][1];
 		expect(allEnabledStates['master_eq']).toBe(true);
 		// Reverb was already enabled
 		expect(allEnabledStates['master_reverb']).toBe(true);
@@ -137,7 +140,7 @@ describe('FxPanel', () => {
 	it('calls onParamChange when the slot is enabled', async () => {
 		const props = makeProps();
 		render(FxPanel, props);
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		setSliderValue(page.getByRole('slider').first(), 3);
 		expect(props.onParamChange).toHaveBeenCalled();
 	});
@@ -149,7 +152,7 @@ describe('FxPanel', () => {
 		);
 		const props = makeProps();
 		render(FxPanel, props);
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		setSliderValue(page.getByRole('slider').first(), 3);
 		expect(props.onParamChange).not.toHaveBeenCalled();
 	});
@@ -158,7 +161,7 @@ describe('FxPanel', () => {
 
 	it('uses spec defaults when localStorage is empty', async () => {
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		// lo_db default is 0 — slider value should be "0"
 		const slider = page.getByRole('slider').first();
 		await expect.element(slider).toHaveValue('0');
@@ -173,7 +176,7 @@ describe('FxPanel', () => {
 			})
 		);
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		const sliders = page.getByRole('slider');
 		await expect.element(sliders.nth(0)).toHaveValue('0');
 		await expect.element(sliders.nth(1)).toHaveValue('-12');
@@ -182,7 +185,7 @@ describe('FxPanel', () => {
 	it('falls back to spec defaults when localStorage contains non-object JSON', async () => {
 		localStorage.setItem('flux:master-fx', '"corrupted"');
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		const slider = page.getByRole('slider').first();
 		await expect.element(slider).toHaveValue('0');
 	});
@@ -193,7 +196,7 @@ describe('FxPanel', () => {
 			JSON.stringify({ master_eq: { enabled: true, params: { lo_db: 'bad', hi_db: 0 } } })
 		);
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		const sliders = page.getByRole('slider');
 		// lo_db "bad" is discarded — falls back to spec default 0
 		await expect.element(sliders.nth(0)).toHaveValue('0');
@@ -205,7 +208,7 @@ describe('FxPanel', () => {
 
 	it('persists param changes to localStorage', async () => {
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		setSliderValue(page.getByRole('slider').first(), 6);
 		const saved = JSON.parse(localStorage.getItem('flux:master-fx') ?? '{}');
 		expect(saved['master_eq'].params['lo_db']).toBe(6);
@@ -213,7 +216,7 @@ describe('FxPanel', () => {
 
 	it('persists enabled state changes to localStorage', async () => {
 		render(FxPanel, makeProps());
-		await page.getByText('master bus FX').click();
+		await page.getByText('master FX').click();
 		await page.getByRole('checkbox').first().click();
 		const saved = JSON.parse(localStorage.getItem('flux:master-fx') ?? '{}');
 		expect(saved['master_eq'].enabled).toBe(false);

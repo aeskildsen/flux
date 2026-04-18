@@ -1,10 +1,5 @@
 <script lang="ts">
-	export type ExampleEntry = {
-		id: string;
-		label: string;
-		description: string;
-		file: string;
-	};
+	import type { ExampleEntry } from '$lib/examples.js';
 
 	interface Props {
 		examples: ExampleEntry[];
