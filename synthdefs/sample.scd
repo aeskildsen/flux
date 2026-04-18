@@ -1,7 +1,7 @@
 // Stereo one-shot sample player.
 // Plays a stereo buffer with optional drive/distortion, pan, pitch shift, and filters.
 // The envelope duration is derived from the buffer length and playback rate.
-SynthDef(\samplePlayer_stereo, {
+x = SynthDef(\samplePlayer_stereo, {
 	arg amp = 0.1, out = 0, pan = 0,
 	buf, cent = 0, rate = 1,
 	drive = 0, lpf = 20000, hpf = 20;
@@ -40,11 +40,11 @@ metadata: (
 	defaultBuffer: "kick",
 	buffer_channels: 2,
 	url: ""
-)).add;
+));
 
 // Mono one-shot sample player.
 // Plays a mono buffer with optional drive/distortion, pan, pitch shift, and filters.
-SynthDef(\samplePlayer_mono, {
+y = SynthDef(\samplePlayer_mono, {
 	arg amp = 0.1, out = 0, pan = 0,
 	buf, cent = 0, rate = 1,
 	drive = 0, lpf = 20000, hpf = 20;
@@ -83,9 +83,6 @@ metadata: (
 	defaultBuffer: "kick",
 	buffer_channels: 1,
 	url: ""
-)).add;
+));
 
-~synthdefs = [
-	SynthDescLib.at(\samplePlayer_stereo),
-	SynthDescLib.at(\samplePlayer_mono)
-];
+~synthdefs = [x, y];
