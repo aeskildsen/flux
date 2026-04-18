@@ -16,7 +16,7 @@ The fundamental generator. By default it yields its elements in order, cycling b
 [0 [2 3] 4]      // sublist: 2 and 3 share the time of one slot
 ```
 
-Elements are separated by **spaces** — commas are not valid separators.
+Elements are separated by **spaces** — commas are not valid separators, except inside range expressions (see below).
 
 ### Rests `_`
 

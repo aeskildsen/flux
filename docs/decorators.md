@@ -64,11 +64,11 @@ Accepts an integer 0–11 or a stochastic generator.
 
 ---
 
-### `@oct` / `@octave` — octave
+### `@octave` — octave
 
 ```flux
-@oct(4)     // octave 4 (one below default 5)
-@oct(6)     // octave 6
+@octave(4)     // octave 4 (one below default 5)
+@octave(6)     // octave 6
 ```
 
 ---

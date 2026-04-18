@@ -36,7 +36,7 @@
 			href: resolve('/docs/decorators'),
 			label: 'Decorators',
 			description:
-				'@key, @scale, @root, @oct, @cent, @buf — pitch context and buffer selection for scoped blocks.'
+				'@key, @scale, @root, @octave, @cent, @buf — pitch context and buffer selection for scoped blocks.'
 		},
 		{
 			href: resolve('/docs/synthdefs'),

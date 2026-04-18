@@ -62,7 +62,7 @@ Insert FX are pattern-scoped and attached with the `|` pipe operator:
 ```flux
 note lead [0 2 4 7] | fx(\lpf)'cutoff(800)
 note lead [0 2 4 7] | fx(\delay)'time(3/8)'feedback(0.4)
-note lead [0 2 4 7] | fx(\lpf)'cutoff(800) 50%   // 50% wet, 30% dry
+note lead [0 2 4 7] | fx(\lpf)'cutoff(800) 50%   // 50% wet, 50% dry
 ```
 
 The pipe operator implicitly routes the pattern's audio output into the FX node.

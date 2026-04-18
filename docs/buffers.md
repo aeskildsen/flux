@@ -30,7 +30,7 @@ Each element in the list is a `\symbol` naming a buffer. The runtime looks up th
 
 ```flux
 sample drums [\kick \hat \snare \hat]
-sample drums [\kick \hat]'pick      // random pick each time
+sample drums [\kick \hat]'pick      // random pick each cycle
 sample drums [\kick \snare]'shuf    // deck-shuffle
 ```
 
