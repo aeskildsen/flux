@@ -422,21 +422,21 @@ The `@buf` argument may be a static `\symbol` or any sequence generator form —
 
 Direct SynthDef argument access. Valid wherever modifiers are valid.
 
-| Code                                    | Interpretation              | Evaluation                           | Result                       |
-| --------------------------------------- | --------------------------- | ------------------------------------ | ---------------------------- |
-| `note [0 2 4]"amp(0.5)`                 | Set `amp` to literal.       | Value passed straight to synth node. | Amplitude fixed at 0.5.      |
-| `note [0 2 4]"amp(0.5)"pan(-0.3)`       | Chained params.             | Each param applied independently.    | Both amp and pan set.        |
-| `note [0 2 4]"amp(0.3rand0.8)`          | Stochastic value, eager(1). | Value drawn once per cycle.          | Amplitude varies per cycle.  |
-| `note [0 2 4]"amp(0.3rand0.8'eager(4))` | Redraw every 4 cycles.      | Value held 4 cycles then redrawn.    | Slowly varying amplitude.    |
-| `note [0 2 4]"amp(0.3rand0.8'lock)`     | Frozen value.               | Drawn once at first eval, frozen.    | Same amplitude forever.      |
-| `note [0 2 4] \| fx(\lpf)"cutoff(800)`  | Param on FX node.           | cutoff passed to FX synth node.      | Filter cutoff set to 800 Hz. |
+| Code                                        | Interpretation              | Evaluation                           | Result                       |
+| ------------------------------------------- | --------------------------- | ------------------------------------ | ---------------------------- |
+| `note lead [0 2 4]"amp(0.5)`                | Set `amp` to literal.       | Value passed straight to synth node. | Amplitude fixed at 0.5.      |
+| `note lead [0 2 4]"amp(0.5)"pan(-0.3)`      | Chained params.             | Each param applied independently.    | Both amp and pan set.        |
+| `note pad [0 2 4]"amp(0.3rand0.8)`          | Stochastic value, eager(1). | Value drawn once per cycle.          | Amplitude varies per cycle.  |
+| `note pad [0 2 4]"amp(0.3rand0.8'eager(4))` | Redraw every 4 cycles.      | Value held 4 cycles then redrawn.    | Slowly varying amplitude.    |
+| `note pad [0 2 4]"amp(0.3rand0.8'lock)`     | Frozen value.               | Drawn once at first eval, frozen.    | Same amplitude forever.      |
+| `note bass [0 2 4] \| fx(\lpf)"cutoff(800)` | Param on FX node.           | cutoff passed to FX synth node.      | Filter cutoff set to 800 Hz. |
 
 **Error cases**
 
-| Code                 | Failure Type | Why                                                     |
-| -------------------- | ------------ | ------------------------------------------------------- |
-| `"amp` alone         | Parse error  | Param token has no preceding expression to attach to.   |
-| `note [0]" amp(0.5)` | Lex error    | Whitespace between `"` and identifier is not permitted. |
+| Code                      | Failure Type | Why                                                     |
+| ------------------------- | ------------ | ------------------------------------------------------- |
+| `"amp` alone              | Parse error  | Param token has no preceding expression to attach to.   |
+| `note lead [0]" amp(0.5)` | Lex error    | Whitespace between `"` and identifier is not permitted. |
 
 ---
 

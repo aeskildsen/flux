@@ -944,7 +944,7 @@ Placement **after a non-generator token is a syntax error**. In particular, a mo
 | Code                 | Failure                                                                 |
 | -------------------- | ----------------------------------------------------------------------- |
 | `note'legato(0.8)`   | Syntax error — `note` alone is a content-type keyword, not a generator. |
-| `note"amp(0.5)`      | Syntax error — `"param` requires a preceding generator expression.      |
+| `note lead"amp(0.5)` | Syntax error — `"param` requires a preceding generator expression.      |
 | `'stut(2)`           | Syntax error — no preceding token to attach to (see truth table 1).     |
 | `note [0] +'stut(2)` | Syntax error — the transposition operator is not a generator.           |
 
@@ -1003,17 +1003,17 @@ Continuation lines are currently modifier-only; `"param` does not have a continu
 The token form is `"` immediately followed by an identifier, with no whitespace — analogous to `\symbol`. The `"identifier` is a single token.
 
 ```flux
-note [0 2 4]"amp(0.5)            // set amp to 0.5
-note [0 2 4]"amp(0.5)"pan(-0.3)  // chained: set amp and pan
-note [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)  // on FX node
+note lead [0 2 4]"amp(0.5)            // set amp to 0.5
+note lead [0 2 4]"amp(0.5)"pan(-0.3)  // chained: set amp and pan
+note bass [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)  // on FX node
 ```
 
 The value argument accepts the same expressions as modifiers — literals, generators, stochastic expressions:
 
 ```flux
-note [0 2 4]"amp(0.3rand0.8)              // stochastic amp, eager(1) by default
-note [0 2 4]"amp(0.3rand0.8'eager(4))     // redraw every 4 cycles
-note [0 2 4]"amp(0.3rand0.8'lock)         // freeze at first drawn value
+note pad [0 2 4]"amp(0.3rand0.8)              // stochastic amp, eager(1) by default
+note pad [0 2 4]"amp(0.3rand0.8'eager(4))     // redraw every 4 cycles
+note pad [0 2 4]"amp(0.3rand0.8'lock)         // freeze at first drawn value
 ```
 
 **SynthDef parameter names** come from the SynthDef's `specs` object in `static/compiled_synthdefs/metadata.json`. Each key is a parameter name (e.g. `amp`, `pan`, `rel`); the value carries `{ default, min, max, unit, curve }`. The active SynthDef is determined by the `\symbol` argument on the content type keyword (`note(\kick)` → look up `kick`). Parameter names are lowercase identifiers.
