@@ -1,0 +1,20 @@
+[
+  {
+    "id": "note",
+    "label": "note — FM melody",
+    "description": "Polyphonic FM synth with stochastic bounce and stutter",
+    "file": "note.flux"
+  },
+  {
+    "id": "mono",
+    "label": "mono — gliding bass",
+    "description": "Monophonic bass line with persistent synth node",
+    "file": "mono.flux"
+  },
+  {
+    "id": "sample",
+    "label": "sample — drum kit",
+    "description": "One-shot buffer playback with the built-in kick",
+    "file": "sample.flux"
+  }
+]

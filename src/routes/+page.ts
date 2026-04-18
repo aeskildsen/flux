@@ -1,5 +1,6 @@
 import { asset } from '$app/paths';
 import type { PageLoad } from './$types';
+import type { ExampleEntry } from '$lib/ExamplesMenu.svelte';
 
 export type ParamSpec = {
 	min?: number;
@@ -22,14 +23,32 @@ type SynthDefMeta = {
 };
 
 export const load: PageLoad = async ({ fetch }) => {
+	const [synthdefs, examples] = await Promise.all([fetchSynthdefs(fetch), fetchExamples(fetch)]);
+	return { synthdefs, examples };
+};
+
+async function fetchSynthdefs(
+	fetch: typeof globalThis.fetch
+): Promise<Record<string, SynthDefMeta>> {
 	try {
 		const res = await fetch(asset('/compiled_synthdefs/metadata.json'));
 		if (res.ok) {
-			const synthdefs: Record<string, SynthDefMeta> = await res.json();
-			return { synthdefs };
+			return (await res.json()) as Record<string, SynthDefMeta>;
 		}
 	} catch {
 		// metadata not available (e.g. not yet compiled) — return empty
 	}
-	return { synthdefs: {} as Record<string, SynthDefMeta> };
-};
+	return {} as Record<string, SynthDefMeta>;
+}
+
+async function fetchExamples(fetch: typeof globalThis.fetch): Promise<ExampleEntry[]> {
+	try {
+		const res = await fetch(asset('/examples/index.json'));
+		if (res.ok) {
+			return (await res.json()) as ExampleEntry[];
+		}
+	} catch {
+		// examples not available — return empty list
+	}
+	return [];
+}
