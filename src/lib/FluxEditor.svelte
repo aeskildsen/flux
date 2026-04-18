@@ -12,7 +12,16 @@
 	let { value = $bindable(''), onEvaluate }: Props = $props();
 
 	let container: HTMLDivElement;
-	let editor: Monaco.editor.IStandaloneCodeEditor | undefined;
+	let editor = $state<Monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
+
+	// Sync external value changes into the Monaco model (e.g. loading an example).
+	// The model content change listener below updates `value` when the user types,
+	// so we guard against infinite loops by comparing first.
+	$effect(() => {
+		if (editor && editor.getValue() !== value) {
+			editor.setValue(value);
+		}
+	});
 
 	onMount(() => {
 		let mounted = true;
