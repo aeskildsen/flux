@@ -7,6 +7,7 @@
 	 * language: <details>/<summary> pattern, tokens.css variables throughout.
 	 */
 
+	import { ChevronRight } from 'lucide-svelte';
 	import {
 		bufferRegistry,
 		registerBuffer,
@@ -180,7 +181,7 @@
 </script>
 
 <details>
-	<summary>samples ({count})</summary>
+	<summary><ChevronRight class="chevron" size={12} />samples ({count})</summary>
 
 	<div class="panel-body">
 		{#if entries.length === 0}
@@ -285,14 +286,15 @@
 		list-style: none;
 	}
 
-	summary::before {
-		content: '▶ ';
-		font-size: 0.6em;
+	summary :global(.chevron) {
+		display: inline-block;
 		vertical-align: middle;
+		margin-right: var(--space-1);
+		transition: transform 0.18s ease-in-out;
 	}
 
-	details[open] summary::before {
-		content: '▼ ';
+	details[open] summary :global(.chevron) {
+		transform: rotate(90deg);
 	}
 
 	/* -------------------------------------------------------------------------

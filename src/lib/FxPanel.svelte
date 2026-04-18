@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Master bus FX panel — UI-only, not DSL-accessible.
 	// The DSL uses | fx(\name) for insert FX; the master chain is configured here.
+	import { ChevronRight } from 'lucide-svelte';
 
 	type ParamSpec = {
 		min?: number;
@@ -121,7 +122,7 @@
 </script>
 
 <details>
-	<summary>master bus FX</summary>
+	<summary><ChevronRight class="chevron" size={12} />master bus FX</summary>
 
 	<div class="chain">
 		{#each slots as slot, i (slot.synthdef)}
@@ -178,14 +179,15 @@
 		list-style: none;
 	}
 
-	summary::before {
-		content: '▶ ';
-		font-size: 0.6em;
+	summary :global(.chevron) {
+		display: inline-block;
 		vertical-align: middle;
+		margin-right: var(--space-1);
+		transition: transform 0.18s ease-in-out;
 	}
 
-	details[open] summary::before {
-		content: '▼ ';
+	details[open] summary :global(.chevron) {
+		transform: rotate(90deg);
 	}
 
 	.chain {

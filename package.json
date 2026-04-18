@@ -59,6 +59,7 @@
 		"@fontsource/inter": "^5.2.8",
 		"@fontsource/jetbrains-mono": "^5.2.8",
 		"chevrotain": "^12.0.0",
+		"lucide-svelte": "^1.0.1",
 		"monaco-editor": "^0.55.1"
 	}
 }
