@@ -10,7 +10,8 @@
 	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
 	import FxPanel from '$lib/FxPanel.svelte';
 	import SamplePanel from '$lib/SamplePanel.svelte';
-	import { bufferRegistry } from '$lib/bufferRegistry.svelte.js';
+	import ExamplesMenu from '$lib/ExamplesMenu.svelte';
+	import { bufferRegistry, registerBuffer } from '$lib/bufferRegistry.svelte.js';
 	import { setBufferNamesGetter, setSynthDefMetadata } from '$lib/monaco-adapter.js';
 	import type { SynthDefMetadata } from '$lib/lang/completions.js';
 	import type { PageData } from './$types';
@@ -19,6 +20,9 @@
 	const { data }: { data: PageData } = $props();
 
 	const sc = $derived(getServer());
+
+	// Editor content — starts empty; updated when user picks an example.
+	let editorValue = $state('');
 
 	let handle = $state<SchedulerHandle | null>(null);
 
@@ -74,17 +78,22 @@
 			const sonicCtx = getInstance()?.audioContext;
 			if (sonicCtx) clock.setContext(sonicCtx);
 
-			// Load compiled synthdefs — metadata already available via page load
-			try {
-				await Promise.all(
-					Object.keys(data.synthdefs).map((name) =>
-						sc!.loadSynthDef(asset(`/compiled_synthdefs/${name}.scsyndef`))
-					)
-				);
-			} catch (e) {
-				console.warn('Could not load local compiled synthdefs:', e);
-				appendLog('Some synths could not be loaded — see browser console for details', 'error');
-			}
+			// Load compiled synthdefs — metadata already available via page load.
+			// Each synthdef is loaded individually so a missing .scsyndef file (e.g.
+			// not yet compiled) does not block the other defs from loading.
+			await Promise.allSettled(
+				Object.keys(data.synthdefs).map(async (name) => {
+					try {
+						await sc!.loadSynthDef(asset(`/compiled_synthdefs/${name}.scsyndef`));
+					} catch (e) {
+						console.warn(`Could not load synthdef "${name}":`, e);
+						appendLog(`SynthDef "${name}" could not be loaded — see console for details`, 'error');
+					}
+				})
+			);
+
+			// Load built-in sample buffers (kick drum, etc.) into scsynth.
+			await loadBuiltInBuffers();
 
 			// Instantiate master bus FX in chain order on the master group.
 			// ReplaceOut reads from + replaces the output bus, so order matters.
@@ -254,6 +263,93 @@
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// Built-in buffer loading
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Load built-in sample buffers at boot time.
+	 * Registers each buffer in the registry (isBuiltIn=true) and sends the raw
+	 * WAV bytes to scsynth via loadSample. Built-in buffers cannot be removed by
+	 * the user; they satisfy `defaultBuffer` references in SynthDef metadata.
+	 */
+	async function loadBuiltInBuffers() {
+		if (!sc) return;
+
+		const BUILT_IN_SAMPLES = [
+			{
+				name: 'kick',
+				path: asset('/samples/kick-soneproject-bd1_electro-drums_cc0.wav')
+			}
+		];
+
+		for (const sample of BUILT_IN_SAMPLES) {
+			// Skip if already registered (idempotent across hot-reloads).
+			if (bufferRegistry.hasName(sample.name)) continue;
+
+			try {
+				const res = await fetch(sample.path);
+				if (!res.ok) {
+					appendLog(`Built-in buffer "${sample.name}" not found at ${sample.path}`, 'error');
+					continue;
+				}
+				const arrayBuffer = await res.arrayBuffer();
+
+				// Decode to get channel count and duration for the registry entry.
+				const ctx = new AudioContext();
+				let channels: 1 | 2 = 1;
+				let duration = 0;
+				try {
+					const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+					channels = decoded.numberOfChannels >= 2 ? 2 : 1;
+					duration = decoded.duration;
+				} finally {
+					ctx.close().catch(() => {});
+				}
+
+				const bufferId = registerBuffer({
+					name: sample.name,
+					origin: sample.path.split('/').pop() ?? sample.path,
+					channels,
+					duration,
+					isBuiltIn: true
+				});
+
+				// Load the raw WAV bytes into scsynth — supercollider decodes WAV natively.
+				await sc.loadSample(bufferId, arrayBuffer);
+				appendLog(`Built-in buffer "${sample.name}" loaded (id ${bufferId})`, 'info');
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				appendLog(`Failed to load built-in buffer "${sample.name}": ${msg}`, 'error');
+				console.error('[loadBuiltInBuffers]', e);
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Example loading
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Called by ExamplesMenu when the user selects an example.
+	 * Fetches the example .flux file and replaces the editor content.
+	 */
+	async function handleExampleSelect(id: string) {
+		const entry = data.examples.find((e) => e.id === id);
+		if (!entry) return;
+		try {
+			const res = await fetch(asset(`/examples/${entry.file}`));
+			if (!res.ok) {
+				appendLog(`Could not load example "${entry.label}"`, 'error');
+				return;
+			}
+			editorValue = await res.text();
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			appendLog(`Failed to fetch example: ${msg}`, 'error');
+		}
+	}
+
 	function handleStop() {
 		clearOutgoing();
 		handle?.stop();
@@ -342,12 +438,27 @@
 						scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
 					}
 				} else if (ev.contentType === 'sample') {
-					// Buffer playback: trigger samplePlayer (or custom synthdef) with buffer params
-					// Channel-count SynthDef variant resolution happens here when buffer registry is wired.
-					// For now, use the synthdef name as-is and pass bufferName as a param.
-					const oscParams: Record<string, number> = { ...(ev.params ?? {}) };
-					console.info('[flux] sample event — bufferName:', ev.bufferName, 'synthdef:', synthdef);
-					const nodeId = scProxy.synthAt(adjustedTime, synthdef, 'source', oscParams);
+					// Buffer playback: look up the buffer by \symbol name, resolve the
+					// channel-count SynthDef variant, and pass the bufnum to scsynth.
+					const bufEntry = bufferRegistry.getByName(ev.bufferName);
+					if (!bufEntry) {
+						appendLog(
+							`sample: buffer "\\${ev.bufferName}" not loaded — load it in the Samples panel`,
+							'error'
+						);
+						return;
+					}
+					// Resolve channel-count variant unless the user provided a specific synthdef.
+					let sampleSynthdef = synthdef;
+					if (!ev.synthdef) {
+						const variant = bufEntry.channels === 2 ? 'samplePlayer_stereo' : 'samplePlayer_mono';
+						sampleSynthdef = variant;
+					}
+					const oscParams: Record<string, number> = {
+						...(ev.params ?? {}),
+						buf: bufEntry.bufferId
+					};
+					const nodeId = scProxy.synthAt(adjustedTime, sampleSynthdef, 'source', oscParams);
 					scProxy.setAt(adjustedTime + gateDurationSeconds, nodeId, { gate: 0 });
 				} else if (ev.contentType === 'slice') {
 					// Beat-sliced buffer playback
@@ -401,7 +512,12 @@
 	<SiteHeader />
 
 	<div class="editor-area">
-		<FluxEditor onEvaluate={handleEvaluate} />
+		<div class="editor-toolbar">
+			{#if data.examples.length > 0}
+				<ExamplesMenu examples={data.examples} onSelect={handleExampleSelect} />
+			{/if}
+		</div>
+		<FluxEditor bind:value={editorValue} onEvaluate={handleEvaluate} />
 		<p class="hint">
 			Ctrl+B to boot &nbsp;&middot;&nbsp; Ctrl+Enter to evaluate &nbsp;&middot;&nbsp; Ctrl+. to stop
 		</p>

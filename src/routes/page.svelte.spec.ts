@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
-const emptyData = { synthdefs: {} };
+const emptyData = { synthdefs: {}, examples: [] };
 const loadedData = {
 	synthdefs: {
 		kick: {
@@ -13,7 +13,15 @@ const loadedData = {
 			type: 'instrument',
 			url: 'https://example.com'
 		}
-	}
+	},
+	examples: []
+};
+const withExamples = {
+	synthdefs: {},
+	examples: [
+		{ id: 'note', label: 'note — FM melody', description: 'FM synth', file: 'note.flux' },
+		{ id: 'mono', label: 'mono — gliding bass', description: 'Mono bass', file: 'mono.flux' }
+	]
 };
 
 describe('/+page.svelte', () => {
@@ -56,5 +64,15 @@ describe('/+page.svelte', () => {
 	it('shows synthdefs count from loaded metadata before boot', async () => {
 		render(Page, { props: { data: loadedData } });
 		await expect.element(page.getByText('synthdefs (1)')).toBeInTheDocument();
+	});
+
+	it('hides "examples" button when no examples are provided', async () => {
+		render(Page, { props: { data: emptyData } });
+		await expect.element(page.getByRole('button', { name: /examples/i })).not.toBeInTheDocument();
+	});
+
+	it('shows "examples" button when examples are provided', async () => {
+		render(Page, { props: { data: withExamples } });
+		await expect.element(page.getByRole('button', { name: /examples/i })).toBeInTheDocument();
 	});
 });
