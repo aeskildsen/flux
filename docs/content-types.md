@@ -87,7 +87,7 @@ Default SynthDef: `grainCloud`. Like `mono`, `cloud` maintains a single node per
 
 ## Timing
 
-One DSL **cycle** is one bar (4 beats). Each element in the list gets an equal time slice: `[0 2 4]` gives each note ⅓ of a cycle.
+A **cycle** is the DSL's repeating unit of time — the pattern's list is distributed across it, and the cycle loops. Its wall-clock duration depends on the global tempo/time signature and is not fixed to any specific beat count. Each element in the list gets an equal time slice: `[0 2 4]` gives each note ⅓ of a cycle.
 
 Sublists subdivide their parent slot:
 

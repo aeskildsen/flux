@@ -13,9 +13,9 @@ note lead [0 2 4]"amp(0.5)
 ## Syntax
 
 ```flux
-note [0 2 4]"amp(0.5)            // set amp to 0.5
-note [0 2 4]"amp(0.5)"pan(-0.3)  // chain multiple params
-note [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)   // on an FX node
+note lead [0 2 4]"amp(0.5)            // set amp to 0.5
+note lead [0 2 4]"amp(0.5)"pan(-0.3)  // chain multiple params
+note bass [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)   // on an FX node
 ```
 
 `"param` attaches to the immediately preceding generator expression, just like modifiers. The quote character `"` must not have whitespace before the identifier name.
@@ -27,9 +27,9 @@ note [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)   // on an FX node
 The value argument accepts the same expressions as modifiers — literals, generators, and stochastic expressions:
 
 ```flux
-note [0 2 4]"amp(0.3rand0.8)              // random each cycle (eager(1) by default)
-note [0 2 4]"amp(0.3rand0.8'eager(4))     // new value every 4 cycles
-note [0 2 4]"amp(0.3rand0.8'lock)         // frozen at first drawn value
+note pad [0 2 4]"amp(0.3rand0.8)              // random each cycle (eager(1) by default)
+note pad [0 2 4]"amp(0.3rand0.8'eager(4))     // new value every 4 cycles
+note pad [0 2 4]"amp(0.3rand0.8'lock)         // frozen at first drawn value
 ```
 
 ---
