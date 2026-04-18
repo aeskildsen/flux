@@ -35,8 +35,8 @@ describe('ExamplesMenu', () => {
 
 	it('the menu is not visible initially', async () => {
 		render(ExamplesMenu, { examples: EXAMPLES, onSelect: vi.fn() });
-		// Menu list should not be visible before clicking
-		await expect.element(page.getByRole('menu')).not.toBeVisible();
+		// Menu list should not be in the DOM before clicking
+		await expect.element(page.getByRole('menu')).not.toBeInTheDocument();
 	});
 
 	it('opens menu on button click', async () => {
@@ -65,6 +65,6 @@ describe('ExamplesMenu', () => {
 		render(ExamplesMenu, { examples: EXAMPLES, onSelect: vi.fn() });
 		await page.getByRole('button', { name: /examples/i }).click();
 		await page.getByText('note — FM melody').click();
-		await expect.element(page.getByRole('menu')).not.toBeVisible();
+		await expect.element(page.getByRole('menu')).not.toBeInTheDocument();
 	});
 });

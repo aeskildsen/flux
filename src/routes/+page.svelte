@@ -226,22 +226,22 @@
 	setBufferNamesGetter(() => bufferRegistry.entries.map((e) => e.name));
 
 	// Wire synthdef metadata into Monaco completions for content-aware synthdef suggestions.
-	setSynthDefMetadata(data.synthdefs as SynthDefMetadata);
+	// Tracked via $effect so updates to the load-function data propagate into Monaco.
+	$effect(() => {
+		setSynthDefMetadata(data.synthdefs as SynthDefMetadata);
+	});
 
 	/**
 	 * Called by SamplePanel after a file is decoded.
 	 * Loads the audio data into scsynth and wires up the buffer ID.
 	 */
-	async function handleSampleLoad(bufferId: number, audioBuffer: AudioBuffer) {
+	async function handleSampleLoad(bufferId: number, wavBytes: ArrayBuffer) {
 		if (!sc) {
 			appendLog('Engine not booted — buffer registered but not loaded into scsynth', 'error');
 			return;
 		}
 		try {
-			// Extract raw PCM from the AudioBuffer and load into scsynth
-			// bufnum parameter matches the bufferId allocated by the registry
-			const channelData = audioBuffer.getChannelData(0);
-			await sc.loadSample(bufferId, channelData.buffer);
+			await sc.loadSample(bufferId, wavBytes);
 			appendLog(`Buffer ${bufferId} loaded`, 'info');
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);

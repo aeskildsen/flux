@@ -23,7 +23,7 @@
 		 * allocated by the registry and the decoded AudioBuffer.
 		 * The page component should call sc.loadSample(bufferId, ...) here.
 		 */
-		onLoad?: (bufferId: number, audioBuffer: AudioBuffer) => void;
+		onLoad?: (bufferId: number, wavBytes: ArrayBuffer) => void;
 		/**
 		 * Called when a buffer is removed, with the buffer ID.
 		 * The page component should call sc.free or b_free OSC message here.
@@ -106,6 +106,9 @@
 			for (const file of Array.from(files)) {
 				try {
 					const arrayBuffer = await file.arrayBuffer();
+					// decodeAudioData detaches its input, so clone the raw bytes first —
+					// we need them intact to pass to scsynth, which decodes WAV natively.
+					const wavBytes = arrayBuffer.slice(0);
 					const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
 					// Derive a unique default name from the filename
@@ -125,7 +128,7 @@
 						duration: audioBuffer.duration
 					});
 
-					onLoad?.(bufferId, audioBuffer);
+					onLoad?.(bufferId, wavBytes);
 
 					// Focus the rename field immediately for the new entry
 					renamingId = bufferId;
@@ -200,6 +203,10 @@
 									aria-label="Buffer name"
 									spellcheck={false}
 									autocomplete="off"
+									{@attach (el: HTMLInputElement) => {
+										el.focus();
+										el.select();
+									}}
 								/>
 							</div>
 							{#if renameError}
@@ -362,7 +369,7 @@
 
 	.name-btn:hover:not(:disabled) {
 		background: none;
-		color: hsl(var(--hue-cyan) 80% 70%);
+		color: var(--color-sample-hover);
 	}
 
 	.sigil {
@@ -383,7 +390,7 @@
 		background: none;
 		border: none;
 		border-radius: var(--radius-sm);
-		font-size: 14px;
+		font-size: var(--text-base);
 		line-height: 1;
 		color: var(--text-muted);
 		cursor: pointer;

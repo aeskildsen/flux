@@ -91,6 +91,7 @@
 	--color-note: hsl(var(--hue-violet) 70% 62%);
 	--color-mono: hsl(var(--hue-indigo) 65% 65%);
 	--color-sample: hsl(var(--hue-cyan) 70% 55%);
+	--color-sample-hover: hsl(var(--hue-cyan) 80% 70%);
 	--color-cloud: hsl(var(--hue-teal) 65% 52%);
 
 	/* Dimmed variants — for inactive/muted layers */

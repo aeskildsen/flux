@@ -27,6 +27,14 @@ export const TICK_INTERVAL_MS = 25;
 /** How far ahead of AudioContext.currentTime to schedule OSC bundles (seconds). */
 export const LOOKAHEAD_SECONDS = 0.1;
 
+/**
+ * Safety cap on consecutive zero-duration events emitted by a single generator.
+ * Zero-duration events are legitimate (coincident events from multiple patterns
+ * share a beat position — see gen.ts / genEventStrides), but an unbounded run
+ * indicates a broken generator and would freeze the tick loop.
+ */
+export const MAX_COINCIDENT_EVENTS = 10000;
+
 export interface SchedulerHandle {
 	stop(): void;
 	/** Stop after all events strictly before `beat` have been scheduled. */
@@ -84,6 +92,8 @@ export function run<T>(
 			return;
 		}
 
+		let coincidentCount = 0;
+
 		while (beatTime <= horizon) {
 			if (nextBeat >= stopBeat) {
 				active = false;
@@ -95,12 +105,24 @@ export function run<T>(
 				return;
 			}
 			const dur = durationOf(value, interval);
-			if (!isFinite(dur) || dur <= 0) {
+			if (!isFinite(dur) || dur < 0) {
 				active = false;
-				const msg = `Scheduler: zero or negative duration at beat ${nextBeat}`;
+				const msg = `Scheduler: negative or non-finite duration at beat ${nextBeat}`;
 				console.error(msg, value);
 				onError?.(msg);
 				return;
+			}
+			if (dur === 0) {
+				coincidentCount++;
+				if (coincidentCount > MAX_COINCIDENT_EVENTS) {
+					active = false;
+					const msg = `Scheduler: ${MAX_COINCIDENT_EVENTS}+ consecutive zero-duration events at beat ${nextBeat} — aborting to prevent runaway`;
+					console.error(msg);
+					onError?.(msg);
+					return;
+				}
+			} else {
+				coincidentCount = 0;
 			}
 			// clock.beatToAudioTime returns an absolute AudioContext.currentTime value anchored
 			// to when clock.start() was called (same timeline as ctx.currentTime).
