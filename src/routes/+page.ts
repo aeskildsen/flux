@@ -17,6 +17,8 @@ type SynthDefMeta = {
 	fx_role?: string;
 	url: string;
 	specs?: Record<string, ParamSpec>;
+	/** Which DSL content keywords this SynthDef can back. See docs/SynthDef-spec.md §3.3. */
+	contentTypes?: ('note' | 'mono' | 'sample' | 'slice' | 'cloud')[];
 };
 
 export const load: PageLoad = async ({ fetch }) => {

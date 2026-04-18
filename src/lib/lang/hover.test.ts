@@ -158,6 +158,30 @@ describe('getHover — identifier after Tick (modifier context)', () => {
 		const result = getHover(shufTok!, 'Tick');
 		expect(result).not.toBeNull();
 	});
+
+	it("Tick token hover mentions 'rev' modifier in common modifiers list", () => {
+		// The Tick token itself should mention rev, mirror, bounce in its documentation
+		const toks = tokens("note [0]'");
+		const tickTok = toks.find((t) => t.tokenType.name === 'Tick');
+		expect(tickTok).toBeDefined();
+		const result = getHover(tickTok!);
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('rev');
+	});
+
+	it("Tick token hover mentions 'mirror' modifier", () => {
+		const toks = tokens("note [0]'");
+		const tickTok = toks.find((t) => t.tokenType.name === 'Tick');
+		const result = getHover(tickTok!);
+		expect(result!.contents).toContain('mirror');
+	});
+
+	it("Tick token hover mentions 'bounce' modifier", () => {
+		const toks = tokens("note [0]'");
+		const tickTok = toks.find((t) => t.tokenType.name === 'Tick');
+		const result = getHover(tickTok!);
+		expect(result!.contents).toContain('bounce');
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -198,6 +222,22 @@ describe('getHover — identifier after @ or set (decorator context)', () => {
 		const result = getHover(keyTok!, 'Set');
 		expect(result).not.toBeNull();
 		expect(result!.contents).toContain('key');
+	});
+
+	it('returns decorator docs for "buf" after @', () => {
+		const toks = tokens('@buf');
+		const bufTok = toks.find((t) => t.image === 'buf');
+		expect(bufTok).toBeDefined();
+		const result = getHover(bufTok!, 'At');
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('buf');
+	});
+
+	it('buf hover content describes buffer selection for slice/cloud', () => {
+		const toks = tokens('@buf');
+		const bufTok = toks.find((t) => t.image === 'buf');
+		const result = getHover(bufTok!, 'At') as HoverResult;
+		expect(result.contents).toContain('slice');
 	});
 });
 
@@ -304,7 +344,120 @@ describe('HoverResult shape', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Shape modifier hover docs ('rev, 'mirror, 'bounce)
+// 9. Runtime-docs-sourced hover content
+//
+// These tests lock in the contract that hover tooltips prefer the
+// build-time-imported docs/*.md content over the hardcoded tables in
+// hover.ts. Each token below exercises a different doc file.
+// ---------------------------------------------------------------------------
+
+describe('getHover — runtime docs integration', () => {
+	it("hovers 'stut (modifiers.md) via runtime docs", () => {
+		const toks = tokens("note [0]'stut");
+		const stutTok = toks.find((t) => t.image === 'stut')!;
+		const result = getHover(stutTok, 'Tick') as HoverResult;
+		expect(result).not.toBeNull();
+		// The doc section heading "### `'stut(n)` — stutter" is rendered as
+		// **`'stut(n)` — stutter** at the top of the hover markdown.
+		expect(result.contents).toContain("'stut");
+		expect(result.contents.toLowerCase()).toMatch(/repeat|stutter/);
+	});
+
+	it("hovers 'numSlices (modifiers.md) via runtime docs", () => {
+		const toks = tokens("slice drums [0]'numSlices(16)");
+		const nsTok = toks.find((t) => t.image === 'numSlices')!;
+		const result = getHover(nsTok, 'Tick') as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents).toContain('numSlices');
+	});
+
+	it('hovers @key (decorators.md) via runtime docs', () => {
+		const toks = tokens('@key');
+		const keyTok = toks.find((t) => t.image === 'key')!;
+		const result = getHover(keyTok, 'At') as HoverResult;
+		expect(result).not.toBeNull();
+		// Doc body mentions root/scale composition.
+		expect(result.contents.toLowerCase()).toMatch(/root|scale/);
+	});
+
+	it('hovers @buf (decorators.md) via runtime docs', () => {
+		const toks = tokens('@buf');
+		const bufTok = toks.find((t) => t.image === 'buf')!;
+		const result = getHover(bufTok, 'At') as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents.toLowerCase()).toContain('slice');
+	});
+
+	it('hovers Rand token via generators.md runtime docs', () => {
+		const toks = tokens('0rand4');
+		const randTok = toks.find((t) => t.tokenType.name === 'Rand')!;
+		const result = getHover(randTok) as HoverResult;
+		expect(result).not.toBeNull();
+		// generators.md describes rand as Pwhite-like uniform integer.
+		expect(result.contents.toLowerCase()).toMatch(/uniform|random|pwhite/);
+	});
+
+	it('hovers Utf8Kw via generators.md runtime docs', () => {
+		const toks = tokens('utf8{coffee}');
+		const u = toks.find((t) => t.tokenType.name === 'Utf8Kw')!;
+		const result = getHover(u) as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents).toContain('utf8');
+	});
+
+	it('hovers note keyword via content-types.md runtime docs', () => {
+		const toks = tokens('note lead [0]');
+		const noteTok = toks.find((t) => t.tokenType.name === 'Note')!;
+		const result = getHover(noteTok) as HoverResult;
+		expect(result).not.toBeNull();
+		// content-types.md: "## `note` — polyphonic pitched events"
+		expect(result.contents.toLowerCase()).toMatch(/polyphonic|pitched/);
+	});
+
+	it('hovers mono keyword via content-types.md runtime docs', () => {
+		const toks = tokens('mono bass [0]');
+		const monoTok = toks.find((t) => t.tokenType.name === 'Mono')!;
+		const result = getHover(monoTok) as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents.toLowerCase()).toMatch(/monophonic|persistent/);
+	});
+
+	it('hovers sample keyword via runtime docs (content-types or buffers)', () => {
+		const toks = tokens('sample drums [0]');
+		const sampleTok = toks.find((t) => t.tokenType.name === 'Sample')!;
+		const result = getHover(sampleTok) as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents.toLowerCase()).toContain('buffer');
+	});
+
+	it('hovers slice keyword via runtime docs', () => {
+		const toks = tokens('slice drums [0]');
+		const sliceTok = toks.find((t) => t.tokenType.name === 'Slice')!;
+		const result = getHover(sliceTok) as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents.toLowerCase()).toMatch(/slice|buffer/);
+	});
+
+	it('hovers cloud keyword via content-types.md runtime docs', () => {
+		const toks = tokens('cloud grain []');
+		const cloudTok = toks.find((t) => t.tokenType.name === 'Cloud')!;
+		const result = getHover(cloudTok) as HoverResult;
+		expect(result).not.toBeNull();
+		expect(result.contents.toLowerCase()).toMatch(/granular|cloud/);
+	});
+
+	it('hovers set keyword via decorators.md runtime docs', () => {
+		const toks = tokens('set scale(minor)');
+		const setTok = toks.find((t) => t.tokenType.name === 'Set')!;
+		const result = getHover(setTok) as HoverResult;
+		expect(result).not.toBeNull();
+		// decorators.md: "## `set` — global session state"
+		expect(result.contents.toLowerCase()).toMatch(/global|session|set/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 10. Shape modifier hover docs ('rev, 'mirror, 'bounce)
 // ---------------------------------------------------------------------------
 
 describe("getHover — 'rev, 'mirror, 'bounce modifier docs", () => {

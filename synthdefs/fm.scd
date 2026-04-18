@@ -71,6 +71,7 @@ x = SynthDef(\fm, {
 metadata: (
 	credit: "Anders Eskildsen",
 	type: \instrument,
+	contentTypes: [\note, \mono],
 	specs: Dictionary.newFrom([
 		\freq, ControlSpec(20, 20000, \exp, 0, 440, "Hz"),
 		\amp, ControlSpec(0, 1, \amp, 0, 0.2, "amp"),
