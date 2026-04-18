@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { ChevronRight } from 'lucide-svelte';
+
 	type ParamSpec = {
 		min?: number;
 		max?: number;
@@ -31,7 +33,7 @@
 </script>
 
 <details>
-	<summary>synthdefs ({count})</summary>
+	<summary><ChevronRight class="chevron" size={12} />synthdefs ({count})</summary>
 
 	{#each entries as [name, meta]}
 		<div class="card">
@@ -91,14 +93,15 @@
 		list-style: none;
 	}
 
-	summary::before {
-		content: '▶ ';
-		font-size: 0.6em;
+	summary :global(.chevron) {
+		display: inline-block;
 		vertical-align: middle;
+		margin-right: var(--space-1);
+		transition: transform 0.18s ease-in-out;
 	}
 
-	details[open] summary::before {
-		content: '▼ ';
+	details[open] summary :global(.chevron) {
+		transform: rotate(90deg);
 	}
 
 	.card {
