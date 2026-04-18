@@ -499,7 +499,7 @@
 			},
 			CYCLE_BEATS,
 			nextCycleBeat,
-			(msg) => appendLog(`Scheduler error: ${msg}`, 'error')
+			(msg) => appendLog(msg, 'error')
 		);
 
 		appendLog('playing loop', 'info');

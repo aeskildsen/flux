@@ -168,7 +168,7 @@ note lead [_ 2 4]      // rest on the 1st slot
 
 1exp7    // Pexprand(min = 1, max = 7)
 
-0bro10m2 // Pbrown(min = 0, max = 10, max_step = 2), aka. Perlin noise
+0bro10m2 // Pbrown(min = 0, max = 10, max_step = 2)
 ```
 
 ### Deterministic generators
