@@ -7,11 +7,40 @@
 
 import type { IToken } from 'chevrotain';
 import type { SynthDefMetadata } from './completions.js';
+import { getDocMarkdown } from './docs-index.js';
 
 export interface HoverResult {
 	/** Markdown string to display in the hover popup. */
 	contents: string;
 }
+
+// ---------------------------------------------------------------------------
+// Runtime docs lookup helpers
+//
+// Any hover content we can source from docs/*.md at build time wins over the
+// in-file tables below. The tables remain the authoritative fallback for
+// token-types that have no matching heading (literals, punctuation, etc.).
+// ---------------------------------------------------------------------------
+
+/** Token type name → doc-index key. */
+const TOKEN_TYPE_DOC_KEY: Record<string, string> = {
+	Note: 'note',
+	Mono: 'mono',
+	Sample: 'sample',
+	Slice: 'slice',
+	Cloud: 'cloud',
+	Utf8Kw: 'utf8',
+	Rand: 'rand',
+	Gau: 'gau',
+	Exp: 'exp',
+	Bro: 'bro',
+	Step: 'step',
+	Mul: 'mul',
+	Lin: 'lin',
+	Geo: 'geo',
+	Tilde: '~',
+	Set: 'set'
+};
 
 // ---------------------------------------------------------------------------
 // Documentation tables
@@ -645,31 +674,49 @@ export function getHover(
 		return getParamHover(paramName, activeSynthDef, synthdefMetadata);
 	}
 
-	// Non-identifier tokens: direct lookup by type name
+	// Non-identifier tokens: runtime docs → hardcoded tables fallback.
 	if (typeName !== 'Identifier') {
+		const docKey = TOKEN_TYPE_DOC_KEY[typeName];
+		if (docKey) {
+			const md = getDocMarkdown(docKey);
+			if (md) return { contents: md };
+		}
 		const doc = TOKEN_TYPE_DOCS[typeName];
 		return doc ? { contents: doc } : null;
 	}
 
-	// Identifier — resolve by context first, then fall back to image-based lookup
+	// Identifier — resolve by context first, preferring runtime docs then
+	// falling back to the image-based tables.
 	const image = token.image;
 
 	if (prevTokenName === 'Tick') {
+		const md = getDocMarkdown(`'${image}`);
+		if (md) return { contents: md };
 		const doc = MODIFIER_DOCS[image];
 		if (doc) return { contents: doc };
 	}
 
 	if (prevTokenName === 'At' || prevTokenName === 'Set') {
+		const md = getDocMarkdown(`@${image}`);
+		if (md) return { contents: md };
 		const doc = DECORATOR_DOCS[image];
 		if (doc) return { contents: doc };
 	}
 
-	// Image-based fallbacks (works when the preceding token is out of hover range)
+	// Image-based fallbacks (works when the preceding token is out of hover range).
+	// Try runtime-docs for both modifier and decorator flavours of the bare
+	// identifier before touching the hardcoded tables.
+	const modMd = getDocMarkdown(`'${image}`);
+	if (modMd) return { contents: modMd };
+
 	const modDoc = MODIFIER_DOCS[image];
 	if (modDoc) return { contents: modDoc };
 
 	const scaleDoc = SCALE_DOCS[image];
 	if (scaleDoc) return { contents: scaleDoc };
+
+	const decMd = getDocMarkdown(`@${image}`);
+	if (decMd) return { contents: decMd };
 
 	const decDoc = DECORATOR_DOCS[image];
 	if (decDoc) return { contents: decDoc };

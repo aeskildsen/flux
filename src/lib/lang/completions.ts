@@ -149,6 +149,15 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 		kind: 'snippet'
 	},
 	{
+		label: 'numSlices(n)',
+		insertText: 'numSlices(${1:16})',
+		isSnippet: true,
+		detail: "'numSlices(n) — slice grid size (slice content type only)",
+		documentation:
+			"Tells the slice SynthDef how many slices the buffer is divided into. n must be a positive integer ≥ 1. Example: @buf(\\amen) slice drums [0 4 8 12]'numSlices(16)",
+		kind: 'snippet'
+	},
+	{
 		label: 'offset(ms)',
 		insertText: 'offset(${1:20})',
 		isSnippet: true,
@@ -409,10 +418,24 @@ export type SynthDefSpecEntry = {
 	unit?: string;
 	curve?: number | string;
 };
+
+/**
+ * Flux DSL content-type keywords. Advertised by `contentTypes` so the
+ * editor can suggest only SynthDefs that are valid for a given keyword —
+ * e.g. `note(\…)` only lists defs with `\note` in their `contentTypes`.
+ */
+export type FluxContentType = 'note' | 'mono' | 'sample' | 'slice' | 'cloud';
+
 export type SynthDefEntry = {
 	specs: Record<string, SynthDefSpecEntry>;
 	type?: string;
 	description?: string;
+	/**
+	 * Which DSL content keywords this SynthDef can back. FX synthdefs omit
+	 * this field (they are invoked via `| fx(\…)`, not content keywords).
+	 * See docs/SynthDef-spec.md §3.3.
+	 */
+	contentTypes?: FluxContentType[];
 };
 export type SynthDefMetadata = Record<string, SynthDefEntry>;
 
@@ -471,12 +494,26 @@ function getParamCompletions(
 }
 
 /**
- * Build completion items for instrument SynthDefs — offered after note( and mono(.
- * Only includes entries with type === 'instrument'.
+ * Build completion items for SynthDefs valid in a given content-type context.
+ *
+ * A SynthDef advertises the content keywords it supports via its
+ * `contentTypes` metadata field (see docs/SynthDef-spec.md §3.3). This
+ * function filters the registry to entries whose `contentTypes` includes
+ * the requested keyword.
+ *
+ * Entries with no `contentTypes` field are excluded — the mechanism is
+ * opt-in so misconfigured (or legacy FX) defs don't leak into instrument
+ * suggestions.
+ *
+ * @param synthdefMetadata - The loaded SynthDef metadata.
+ * @param contentType - 'note', 'mono', 'sample', 'slice', or 'cloud'.
  */
-function getInstrumentSynthDefCompletions(synthdefMetadata: SynthDefMetadata): CompletionItem[] {
+function getSynthDefCompletionsForContentType(
+	synthdefMetadata: SynthDefMetadata,
+	contentType: FluxContentType
+): CompletionItem[] {
 	return Object.entries(synthdefMetadata)
-		.filter(([, entry]) => entry.type === 'instrument')
+		.filter(([, entry]) => entry.contentTypes?.includes(contentType))
 		.map(([name, entry]) => ({
 			label: name,
 			insertText: `\\${name}`,
@@ -533,6 +570,52 @@ function findContentTypeKeyword(tokens: IToken[]): string | undefined {
 /** Content types that use buffer symbols in their sequence lists. */
 const BUFFER_CONTENT_TYPES = new Set(['Sample', 'Slice', 'Cloud']);
 
+/**
+ * Token-type names for content-keyword tokens that may introduce a SynthDef
+ * selection via `keyword(\name)`.
+ */
+const CONTENT_TYPE_TOKENS = new Set(['Note', 'Mono', 'Sample', 'Slice', 'Cloud']);
+
+/**
+ * Walk tokens backward from the cursor and return the nearest active SynthDef
+ * name introduced by `note(\NAME)`, `mono(\NAME)`, `sample(\NAME)`,
+ * `slice(\NAME)`, or `cloud(\NAME)`.
+ *
+ * Matching shape, reading right-to-left from the cursor's preceding token:
+ *
+ *   ... contentKeyword LParen Symbol(\name) RParen [...]
+ *                                                   ^ cursor anywhere after
+ *
+ * Returns the Symbol's image with the leading `\` stripped (e.g. `fm`). If
+ * no such selection exists on the line, returns undefined so the caller
+ * falls back to "all params from all synthdefs".
+ *
+ * Exported for testability.
+ */
+export function findActiveSynthDef(tokens: IToken[], cursorOffset: number): string | undefined {
+	// Build an index array of tokens that end before the cursor, in order.
+	// We scan right-to-left to find the nearest `keyword ( \name ) …` triple.
+	const eligible: IToken[] = [];
+	for (const t of tokens) {
+		const end = t.endOffset !== undefined ? t.endOffset : t.startOffset + t.image.length - 1;
+		if (end < cursorOffset) eligible.push(t);
+	}
+
+	// Walk right-to-left looking for: Symbol preceded by LParen preceded by a
+	// content keyword token.
+	for (let i = eligible.length - 1; i >= 2; i--) {
+		const tok = eligible[i];
+		if (tok.tokenType.name !== 'Symbol') continue;
+		const prev = eligible[i - 1];
+		const prevPrev = eligible[i - 2];
+		if (prev.tokenType.name !== 'LParen') continue;
+		if (!CONTENT_TYPE_TOKENS.has(prevPrev.tokenType.name)) continue;
+		// Strip the leading `\` from the symbol image
+		return tok.image.startsWith('\\') ? tok.image.slice(1) : tok.image;
+	}
+	return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -566,9 +649,13 @@ export function getCompletions(
 		return MODIFIER_COMPLETIONS;
 	}
 
-	// " trigger → SynthDef param names (prefix-filtered as user types)
+	// " trigger → SynthDef param names (prefix-filtered as user types).
+	// If the caller did not supply an explicit activeSynthDef, infer one by
+	// walking tokens backward for the nearest `note(\name)` / `mono(\name)` /
+	// etc. selection on the current line.
 	if (triggerChar === '"') {
-		return getParamCompletions(synthdefMetadata, activeSynthDef);
+		const effective = activeSynthDef ?? findActiveSynthDef(tokens, cursorOffset);
+		return getParamCompletions(synthdefMetadata, effective);
 	}
 
 	// | trigger → fx patterns
@@ -592,22 +679,32 @@ export function getCompletions(
 		return [];
 	}
 
-	// ( trigger → context-sensitive argument suggestions
+	// ( trigger → context-sensitive argument suggestions.
+	//
+	// Each content-type keyword filters the SynthDef registry by its
+	// `contentTypes` metadata: `note(` only shows defs eligible for `\note`,
+	// `sample(` only `\sample`, etc. Today only `fm` and `kick` advertise
+	// `[\note, \mono]` — sample/slice/cloud return [] in practice until a
+	// matching SynthDef ships, but the mechanism is in place.
 	if (triggerChar === '(') {
 		if (prevType === 'Set') return SET_PARAM_COMPLETIONS;
-		if (prevType === 'Note' || prevType === 'Mono') {
-			return getInstrumentSynthDefCompletions(synthdefMetadata);
-		}
-		// sample/slice/cloud: no instrument synthdefs apply; return empty
-		if (prevType === 'Sample' || prevType === 'Slice' || prevType === 'Cloud') {
-			return [];
-		}
+		if (prevType === 'Note') return getSynthDefCompletionsForContentType(synthdefMetadata, 'note');
+		if (prevType === 'Mono') return getSynthDefCompletionsForContentType(synthdefMetadata, 'mono');
+		if (prevType === 'Sample')
+			return getSynthDefCompletionsForContentType(synthdefMetadata, 'sample');
+		if (prevType === 'Slice')
+			return getSynthDefCompletionsForContentType(synthdefMetadata, 'slice');
+		if (prevType === 'Cloud')
+			return getSynthDefCompletionsForContentType(synthdefMetadata, 'cloud');
 		return [];
 	}
 
 	// Explicit invocation — infer from context
 	if (prevType === 'Tick') return MODIFIER_COMPLETIONS;
-	if (prevType === 'ParamSigil') return getParamCompletions(synthdefMetadata, activeSynthDef);
+	if (prevType === 'ParamSigil') {
+		const effective = activeSynthDef ?? findActiveSynthDef(tokens, cursorOffset);
+		return getParamCompletions(synthdefMetadata, effective);
+	}
 	if (prevType === 'Pipe') return PIPE_COMPLETIONS;
 	if (prevType === 'At') return DECORATOR_COMPLETIONS;
 

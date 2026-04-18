@@ -444,11 +444,16 @@ export function registerFluxLanguage(monaco: typeof Monaco): void {
 			};
 
 			const { tokens } = FluxLexer.tokenize(lineContent);
+			// activeSynthDef is inferred from the token stream inside
+			// getCompletions() via findActiveSynthDef() — we pass undefined
+			// so the default walk-backward heuristic runs. To force a
+			// specific def, pass its name here (none of the current editor
+			// surfaces need this yet).
 			const items = getCompletions(
 				tokens,
 				col,
 				context.triggerCharacter,
-				undefined, // activeSynthDef: TODO wire from editor state
+				undefined,
 				_synthDefMetadata,
 				_getBufferNames()
 			);

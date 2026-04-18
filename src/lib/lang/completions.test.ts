@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { FluxLexer } from './lexer.js';
-import { getCompletions } from './completions.js';
+import { getCompletions, findActiveSynthDef } from './completions.js';
 import type { CompletionItem, SynthDefMetadata } from './completions.js';
 
 // Inline fixture matching static/compiled_synthdefs/metadata.json shape
@@ -22,7 +22,8 @@ const TEST_METADATA: SynthDefMetadata = {
 			pan: { default: 0, min: -1, max: 1, unit: '', curve: 2 },
 			rel: { default: 0.2, min: 0.001, max: 4, unit: 'seconds', curve: 4 }
 		},
-		type: 'instrument'
+		type: 'instrument',
+		contentTypes: ['note', 'mono']
 	},
 	fm: {
 		specs: {
@@ -30,13 +31,23 @@ const TEST_METADATA: SynthDefMetadata = {
 			freq: { default: 440, min: 20, max: 20000, unit: 'Hz', curve: 4 },
 			pan: { default: 0, min: -1, max: 1, unit: '', curve: 2 }
 		},
-		type: 'instrument'
+		type: 'instrument',
+		contentTypes: ['note', 'mono']
 	},
 	sliceplayer: {
 		specs: {
 			amp: { default: 0.5, min: 0, max: 1, unit: 'amp', curve: 4 }
 		},
 		type: 'fx'
+		// No contentTypes — fx defs are invoked via | fx(\…), not content keywords.
+	},
+	// A hypothetical sample-only instrument used to verify content-type filtering.
+	chopper: {
+		specs: {
+			amp: { default: 0.5, min: 0, max: 1, unit: 'amp', curve: 4 }
+		},
+		type: 'instrument',
+		contentTypes: ['sample']
 	}
 };
 
@@ -98,6 +109,16 @@ describe("getCompletions — trigger: '", () => {
 		expect(items.some((i: CompletionItem) => i.label === 'maybe(p)')).toBe(true);
 	});
 
+	it("modifier completions include 'numSlices(n)'", () => {
+		const tokens = tokenize("slice drums [0]'");
+		const items = getCompletions(tokens, endCursor("slice drums [0]'"), "'");
+		const numSlices = items.find((i: CompletionItem) => i.label === 'numSlices(n)');
+		expect(numSlices).toBeDefined();
+		expect(numSlices?.isSnippet).toBe(true);
+		expect(numSlices?.insertText).toContain('${');
+		expect(numSlices?.kind).toBe('snippet');
+	});
+
 	it('modifier completions are in alphabetic order', () => {
 		const items = getCompletions([], 0, "'");
 		// Extract unique base labels (e.g. 'arp' from 'arp', 'arp(algorithm)', etc.)
@@ -110,6 +131,48 @@ describe("getCompletions — trigger: '", () => {
 		const firstChars = baseLabels.filter((v, i, a) => a.indexOf(v) === i);
 		const sortedFirstChars = [...firstChars].sort();
 		expect(firstChars).toEqual(sortedFirstChars);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 1aa. findActiveSynthDef — token-walk helper
+// ---------------------------------------------------------------------------
+
+describe('findActiveSynthDef', () => {
+	it('returns the synthdef name from note(\\fm)', () => {
+		const src = 'note(\\fm) lead [0 1 2]"';
+		const tokens = tokenize(src);
+		expect(findActiveSynthDef(tokens, src.length)).toBe('fm');
+	});
+
+	it('returns the synthdef name from mono(\\kick)', () => {
+		const src = 'mono(\\kick) bass [0]"';
+		const tokens = tokenize(src);
+		expect(findActiveSynthDef(tokens, src.length)).toBe('kick');
+	});
+
+	it('returns the synthdef name from sample(\\oneshot)', () => {
+		const src = 'sample(\\oneshot) drums [\\kick]"';
+		const tokens = tokenize(src);
+		expect(findActiveSynthDef(tokens, src.length)).toBe('oneshot');
+	});
+
+	it('returns undefined when no content-type selection is present', () => {
+		const src = 'note lead [0 1 2]"';
+		const tokens = tokenize(src);
+		expect(findActiveSynthDef(tokens, src.length)).toBeUndefined();
+	});
+
+	it('returns undefined for an empty line', () => {
+		expect(findActiveSynthDef([], 0)).toBeUndefined();
+	});
+
+	it('picks the nearest selection when multiple could apply', () => {
+		// Unlikely real-world input, but verifies we walk right-to-left.
+		const src = 'note(\\fm) a | note(\\kick) b"';
+		const tokens = tokenize(src);
+		// The nearest walking backward from the end is kick.
+		expect(findActiveSynthDef(tokens, src.length)).toBe('kick');
 	});
 });
 
@@ -164,6 +227,44 @@ describe('getCompletions — trigger: "', () => {
 	it('returns empty array when no metadata provided', () => {
 		const items = getCompletions([], 0, '"');
 		expect(items).toHaveLength(0);
+	});
+
+	it('infers activeSynthDef from note(\\fm) — only fm params are offered', () => {
+		const src = 'note(\\fm) lead [0 1]"';
+		const tokens = tokenize(src);
+		// Caller passes activeSynthDef=undefined — inference must kick in.
+		const items = getCompletions(tokens, src.length, '"', undefined, TEST_METADATA);
+		// fm has freq; kick does not. If filtering works, freq appears.
+		expect(items.some((i) => i.label === 'freq')).toBe(true);
+		// kick has `rel`; fm does not. rel must NOT appear.
+		expect(items.some((i) => i.label === 'rel')).toBe(false);
+	});
+
+	it('infers activeSynthDef from mono(\\kick) — only kick params are offered', () => {
+		const src = 'mono(\\kick) bass [0]"';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, src.length, '"', undefined, TEST_METADATA);
+		expect(items.some((i) => i.label === 'rel')).toBe(true);
+		expect(items.some((i) => i.label === 'freq')).toBe(false);
+	});
+
+	it('explicit activeSynthDef argument wins over inferred value', () => {
+		// Line mentions note(\fm) but caller insists on kick.
+		const src = 'note(\\fm) lead [0]"';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, src.length, '"', 'kick', TEST_METADATA);
+		// kick's specs: amp, pan, rel. fm-only params like freq must not appear.
+		expect(items.some((i) => i.label === 'rel')).toBe(true);
+		expect(items.some((i) => i.label === 'freq')).toBe(false);
+	});
+
+	it('falls back to all synthdefs when line has no content-type selection', () => {
+		const src = 'note lead [0]"';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, src.length, '"', undefined, TEST_METADATA);
+		// Union mode — freq (from fm) and rel (from kick) both present.
+		expect(items.some((i) => i.label === 'freq')).toBe(true);
+		expect(items.some((i) => i.label === 'rel')).toBe(true);
 	});
 });
 
@@ -421,22 +522,25 @@ describe('getCompletions — trigger: ( after Note/Mono — instrument synthdefs
 });
 
 describe('getCompletions — trigger: ( after Sample/Slice/Cloud', () => {
-	it('returns empty array after "sample(" (no instrument synthdefs for sample)', () => {
+	it('returns synthdefs whose contentTypes includes "sample" after "sample("', () => {
 		const src = 'sample(';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
-		// sample only uses samplePlayer which is not in instrument metadata
-		expect(items).toHaveLength(0);
+		// TEST_METADATA fixture declares `chopper` with contentTypes:['sample'].
+		expect(items.some((i) => i.label === 'chopper')).toBe(true);
+		// note/mono-only defs must not appear.
+		expect(items.some((i) => i.label === 'kick')).toBe(false);
+		expect(items.some((i) => i.label === 'fm')).toBe(false);
 	});
 
-	it('returns empty array after "slice("', () => {
+	it('returns empty array after "slice(" (no slice-eligible synthdefs in fixture)', () => {
 		const src = 'slice(';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
 		expect(items).toHaveLength(0);
 	});
 
-	it('returns empty array after "cloud("', () => {
+	it('returns empty array after "cloud(" (no cloud-eligible synthdefs in fixture)', () => {
 		const src = 'cloud(';
 		const tokens = tokenize(src);
 		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
@@ -446,6 +550,49 @@ describe('getCompletions — trigger: ( after Sample/Slice/Cloud', () => {
 	it('returns empty array for ( after an unrecognised preceding token', () => {
 		const items = getCompletions([], 0, '(');
 		expect(items).toHaveLength(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 5b. contentTypes filtering — note/mono only show eligible defs
+// ---------------------------------------------------------------------------
+
+describe('getCompletions — contentTypes filtering', () => {
+	it('note( does NOT include sample-only defs', () => {
+		const src = 'note(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		// `chopper` in the fixture has contentTypes:['sample'] — must not appear.
+		expect(items.some((i) => i.label === 'chopper')).toBe(false);
+	});
+
+	it('mono( does NOT include sample-only defs', () => {
+		const src = 'mono(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		expect(items.some((i) => i.label === 'chopper')).toBe(false);
+	});
+
+	it('note( excludes instrument defs without contentTypes', () => {
+		// A def with type:'instrument' but no contentTypes must not leak through.
+		const metaNoContentTypes: SynthDefMetadata = {
+			legacy: {
+				specs: { amp: { default: 0.1, min: 0, max: 1 } },
+				type: 'instrument'
+			}
+		};
+		const src = 'note(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, metaNoContentTypes);
+		expect(items).toHaveLength(0);
+	});
+
+	it('sample( excludes fx defs', () => {
+		const src = 'sample(';
+		const tokens = tokenize(src);
+		const items = getCompletions(tokens, triggerCursor(src), '(', undefined, TEST_METADATA);
+		// sliceplayer in fixture is type:'fx' with no contentTypes.
+		expect(items.some((i) => i.label === 'sliceplayer')).toBe(false);
 	});
 });
 
