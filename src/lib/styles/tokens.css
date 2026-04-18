@@ -191,7 +191,8 @@
 	--weight-semibold: 600;
 
 	/* Mono-specific — slightly tighter */
-	--font-mono-size: 13px;
+	--font-mono-size: 16px;
+	--font-mono-size-sm: 14px;
 	--font-mono-leading: 1.4;
 }
 

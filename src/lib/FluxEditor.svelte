@@ -44,9 +44,9 @@
 				theme: 'flux-dark',
 				// Typography
 				fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-				fontSize: 13,
+				fontSize: 16,
 				fontLigatures: true,
-				lineHeight: 22,
+				lineHeight: 24,
 				letterSpacing: 0.3,
 				// Canvas padding
 				padding: { top: 12, bottom: 32 },
