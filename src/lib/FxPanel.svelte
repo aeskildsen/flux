@@ -122,7 +122,7 @@
 </script>
 
 <details>
-	<summary><ChevronRight class="chevron" size={12} />master bus FX</summary>
+	<summary><ChevronRight class="chevron" size={12} />master FX</summary>
 
 	<div class="chain">
 		{#each slots as slot, i (slot.synthdef)}
