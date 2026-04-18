@@ -8,7 +8,6 @@
 	import { createGen } from '$lib/gen';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
-	import SynthDefPanel from '$lib/SynthDefPanel.svelte';
 	import FxPanel from '$lib/FxPanel.svelte';
 	import SamplePanel from '$lib/SamplePanel.svelte';
 	import ExamplesMenu from '$lib/ExamplesMenu.svelte';
@@ -550,7 +549,6 @@
 			{serverState.status}
 		</div>
 
-		<SynthDefPanel synthdefs={data.synthdefs} />
 		<FxPanel
 			slots={fxSlots}
 			onEnable={handleFxEnable}
