@@ -158,6 +158,30 @@ describe('getHover — identifier after Tick (modifier context)', () => {
 		const result = getHover(shufTok!, 'Tick');
 		expect(result).not.toBeNull();
 	});
+
+	it("Tick token hover mentions 'rev' modifier in common modifiers list", () => {
+		// The Tick token itself should mention rev, mirror, bounce in its documentation
+		const toks = tokens("note [0]'");
+		const tickTok = toks.find((t) => t.tokenType.name === 'Tick');
+		expect(tickTok).toBeDefined();
+		const result = getHover(tickTok!);
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('rev');
+	});
+
+	it("Tick token hover mentions 'mirror' modifier", () => {
+		const toks = tokens("note [0]'");
+		const tickTok = toks.find((t) => t.tokenType.name === 'Tick');
+		const result = getHover(tickTok!);
+		expect(result!.contents).toContain('mirror');
+	});
+
+	it("Tick token hover mentions 'bounce' modifier", () => {
+		const toks = tokens("note [0]'");
+		const tickTok = toks.find((t) => t.tokenType.name === 'Tick');
+		const result = getHover(tickTok!);
+		expect(result!.contents).toContain('bounce');
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -198,6 +222,22 @@ describe('getHover — identifier after @ or set (decorator context)', () => {
 		const result = getHover(keyTok!, 'Set');
 		expect(result).not.toBeNull();
 		expect(result!.contents).toContain('key');
+	});
+
+	it('returns decorator docs for "buf" after @', () => {
+		const toks = tokens('@buf');
+		const bufTok = toks.find((t) => t.image === 'buf');
+		expect(bufTok).toBeDefined();
+		const result = getHover(bufTok!, 'At');
+		expect(result).not.toBeNull();
+		expect(result!.contents).toContain('buf');
+	});
+
+	it('buf hover content describes buffer selection for slice/cloud', () => {
+		const toks = tokens('@buf');
+		const bufTok = toks.find((t) => t.image === 'buf');
+		const result = getHover(bufTok!, 'At') as HoverResult;
+		expect(result.contents).toContain('slice');
 	});
 });
 

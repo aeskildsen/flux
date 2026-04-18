@@ -226,7 +226,7 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'',
 		'Attaches a modifier to the immediately preceding token.',
 		'',
-		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `arp`'
+		'Common modifiers: `lock`, `eager(n)`, `stut`, `maybe`, `legato`, `offset`, `at`, `n`, `shuf`, `pick`, `arp`, `rev`, `mirror`, `bounce`'
 	].join('\n'),
 
 	At: [
@@ -541,7 +541,19 @@ const DECORATOR_DOCS: Record<string, string> = {
 	octave: '**`octave`** — octave number (piano convention). Default: 5.',
 	cent: '**`cent`** — pitch deviation in cents (100 per semitone step). Default: 0.',
 	key: '**`key(root scale [octave])`** — compound pitch context: sets root + scale + optional octave together.',
-	tempo: '**`tempo`** — global tempo in BPM.'
+	tempo: '**`tempo`** — global tempo in BPM.',
+	buf: [
+		'**`@buf(\\\\name)`** — buffer selection for `slice` and `cloud`.',
+		'',
+		'Specifies which buffer a `slice` or `cloud` pattern operates on. Accepts a `\\\\symbol` or any sequence generator for per-cycle buffer selection.',
+		'',
+		'```flux',
+		'@buf(\\\\myloop) slice drums [0 2 4 8]',
+		"@buf([\\\\loopA \\\\loopB]'pick) slice drums [0 4 8 12]",
+		'```',
+		'',
+		'`@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.'
+	].join('\n')
 };
 
 // ---------------------------------------------------------------------------
