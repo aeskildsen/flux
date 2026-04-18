@@ -420,31 +420,38 @@ describe('run() — startBeat default (#9)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Zero/negative duration guard (#11)
+// 9. Duration guards (#11) — coincident events, negatives, NaN, runaway
 // ---------------------------------------------------------------------------
 
-describe('run() — zero/negative duration guard (#11)', () => {
-	it('stops the scheduler when an event has duration 0', () => {
-		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1); // always in-window
+describe('run() — duration guards', () => {
+	it('dispatches coincident events (duration 0) without erroring', () => {
+		// Two events at the same beat — e.g. downbeats from two patterns.
+		// The scheduler fires both at the same ntpTime and keeps running.
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
 
 		const callback = vi.fn();
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		run(finiteGen([{ duration: 0 }, { duration: 1 }]), callback, 0.5, 0);
 
-		// Scheduler must stop on the zero-duration event, not emit the second event
-		expect(callback).toHaveBeenCalledTimes(0);
-		expect(errorSpy).toHaveBeenCalledTimes(1);
+		expect(callback).toHaveBeenCalledTimes(2);
+		expect(errorSpy).not.toHaveBeenCalled();
 		errorSpy.mockRestore();
 	});
 
-	it('logs a console.error when duration is zero', () => {
+	it('aborts when consecutive zero-duration events exceed MAX_COINCIDENT_EVENTS', () => {
 		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
 
+		// Infinite generator of zero-duration events — classic runaway.
+		function* runaway() {
+			while (true) yield { duration: 0 };
+		}
+
+		const callback = vi.fn();
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		run(finiteGen([{ duration: 0 }]), vi.fn(), 0.5, 0);
+		run(runaway(), callback, 0.5, 0);
 
 		expect(errorSpy).toHaveBeenCalledTimes(1);
-		expect(errorSpy.mock.calls[0][0]).toMatch(/zero or negative duration/i);
+		expect(errorSpy.mock.calls[0][0]).toMatch(/consecutive zero-duration events/i);
 		errorSpy.mockRestore();
 	});
 
@@ -457,33 +464,7 @@ describe('run() — zero/negative duration guard (#11)', () => {
 
 		expect(callback).toHaveBeenCalledTimes(0);
 		expect(errorSpy).toHaveBeenCalledTimes(1);
-		errorSpy.mockRestore();
-	});
-
-	it('does not freeze — no subsequent ticks fire after a zero-duration stop', () => {
-		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
-
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		run(finiteGen([{ duration: 0 }]), vi.fn(), 0.5, 0);
-
-		// Guard fires synchronously on first tick: active=false, no setTimeout was registered
-		vi.advanceTimersByTime(TICK_INTERVAL_MS * 5);
-		expect(vi.getTimerCount()).toBe(0);
-		errorSpy.mockRestore();
-	});
-
-	it('stops when interval=0 causes a duration-less event to have zero duration', () => {
-		// durationOf(42, 0) returns the interval fallback (0) — guard must fire.
-		// The event value itself has no .duration field; the zero comes from interval.
-		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
-
-		const callback = vi.fn();
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		run(finiteGen([42, 99]), callback, 0); // interval=0, no .duration on events
-
-		expect(callback).toHaveBeenCalledTimes(0);
-		expect(errorSpy).toHaveBeenCalledTimes(1);
-		expect(errorSpy.mock.calls[0][0]).toMatch(/zero or negative duration/i);
+		expect(errorSpy.mock.calls[0][0]).toMatch(/negative or non-finite duration/i);
 		errorSpy.mockRestore();
 	});
 

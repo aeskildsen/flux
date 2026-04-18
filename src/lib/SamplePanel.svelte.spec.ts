@@ -36,7 +36,7 @@ describe('SamplePanel', () => {
 		registerBuffer({ name: 'kick', origin: 'kick.wav', channels: 1, duration: 0.5 });
 		render(SamplePanel, {});
 		await page.getByText('samples (1)').click();
-		await expect.element(page.getByText('kick')).toBeInTheDocument();
+		await expect.element(page.getByText('kick', { exact: true })).toBeInTheDocument();
 	});
 
 	it('shows origin filename in the meta row', async () => {
@@ -170,7 +170,7 @@ describe('SamplePanel', () => {
 		await userEvent.keyboard('{Escape}');
 		// Rename input should be gone; name should still be kick
 		await expect.element(page.getByRole('textbox')).not.toBeInTheDocument();
-		await expect.element(page.getByText('kick')).toBeInTheDocument();
+		await expect.element(page.getByText('kick', { exact: true })).toBeInTheDocument();
 	});
 
 	it('shows an error for an invalid name and does not commit', async () => {

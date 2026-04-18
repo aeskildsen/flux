@@ -8,6 +8,7 @@
 		"build": "NODE_OPTIONS=\"--import tsx\" vite build",
 		"build:synthdefs": "sclang scripts/compile_synthdefs.scd",
 		"check:synthdefs": "tsx scripts/check_synthdefs.ts",
+		"check:examples": "tsx scripts/parse.ts",
 		"preview": "NODE_OPTIONS=\"--import tsx\" vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

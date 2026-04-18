@@ -16,7 +16,7 @@ A **name** is required between the content type and the generator — `note [0 2
 
 ## `note` — polyphonic pitched events
 
-Spawns a new synth instance for every event. Each instance is self-releasing: a gate-close message is sent after the event's time slot × the legato factor. This matches standard SuperCollider `Pbind` conventions.
+Spawns a new synth instance for every event. Each instance is self-releasing: a gate-close message is sent after the event's time slot × the legato factor.
 
 ```flux
 note lead [0 2 4]              // default: loops forever
@@ -24,7 +24,7 @@ note lead [0 2 4 7]'n(2)       // play 2 cycles then stop
 note lead [<0 4 7>]            // chord: three simultaneous voices
 ```
 
-Default SynthDef: `fm`. Override with `note(\mySynth) lead [...]`.
+Default SynthDef: `\fm`. Override with `note(\mySynth) lead [...]`.
 
 Default legato: **0.8** (gate closes at 80 % of the event slot). Override with `'legato(n)`.
 
@@ -47,7 +47,7 @@ mono bass [0 2 4]'stut          // each pitch sent twice
 
 ## `sample` — buffer playback by name
 
-Each event in the list is a `\symbol` that names a loaded buffer. The runtime looks up the buffer ID from the registry and passes it to the SynthDef.
+Each event in the list is a `\symbol` that names a loaded buffer.
 
 ```flux
 sample drums [\kick \hat \snare \hat]

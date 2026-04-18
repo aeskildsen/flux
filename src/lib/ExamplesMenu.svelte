@@ -38,16 +38,18 @@
 		examples ▾
 	</button>
 
-	<ul role="menu" class="menu-list" hidden={!open}>
-		{#each examples as ex (ex.id)}
-			<li role="none">
-				<button role="menuitem" class="menu-item" onclick={() => select(ex.id)}>
-					<span class="item-label">{ex.label}</span>
-					<span class="item-desc">{ex.description}</span>
-				</button>
-			</li>
-		{/each}
-	</ul>
+	{#if open}
+		<ul role="menu" class="menu-list">
+			{#each examples as ex (ex.id)}
+				<li role="none">
+					<button role="menuitem" class="menu-item" onclick={() => select(ex.id)}>
+						<span class="item-label">{ex.label}</span>
+						<span class="item-desc">{ex.description}</span>
+					</button>
+				</li>
+			{/each}
+		</ul>
+	{/if}
 </div>
 
 <style>
@@ -97,10 +99,6 @@
 		border: var(--border-width) solid var(--border);
 		border-radius: var(--radius-sm);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-	}
-
-	.menu-list[hidden] {
-		display: none;
 	}
 
 	.menu-item {
