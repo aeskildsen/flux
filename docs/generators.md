@@ -93,13 +93,13 @@ Uniform random integer (or float) between min and max.
 
 When either bound is a float, the output is a continuous float. In a degree context (inside `[...]`), floats are rounded to the nearest integer before scale lookup. Float bounds are most useful in non-degree contexts like `'legato(0.5rand1.2)`.
 
-### Gaussian noise `gau`
+### Gaussian noise `gauss`
 
 Normal distribution with mean and standard deviation.
 
 ```flux
-0gau4      // Pgauss(mean=0, sdev=4)
-4gau0.5    // mean=4, sdev=0.5 — tight cluster around 4
+0gauss4      // Pgauss(mean=0, sdev=4)
+4gauss0.5    // mean=4, sdev=0.5 — tight cluster around 4
 ```
 
 ### Exponential random `exp`
@@ -111,15 +111,15 @@ Exponentially distributed value between min and max. Sounds more natural for fre
 100exp4000 // useful for filter cutoff
 ```
 
-### Brownian noise `bro`
+### Brownian noise `brown`
 
 Random walk (Brownian motion) bounded between min and max, with a configurable maximum step.
 
 ```flux
-0bro10m2   // Pbrown(min=0, max=10, maxStep=2)
+0brown10m2   // Pbrown(min=0, max=10, maxStep=2)
 ```
 
-Syntax: `min bro max m maxStep`. The `m` separator is part of the generator syntax — no whitespace.
+Syntax: `min brown max m maxStep`. The `m` separator is part of the generator syntax — no whitespace.
 
 ---
 
@@ -157,16 +157,16 @@ Evenly spaced values from first to last.
 
 Syntax: `first lin last x length`.
 
-### Geometric interpolation `geo`
+### Geometric interpolation `geom`
 
 Exponentially spaced values from first to last.
 
 ```flux
-2geo7x8    // 8 values from 2 to 7, geometrically spaced
-1geo100x5  // 1, ~3.16, ~10, ~31.6, 100
+2geom7x8    // 8 values from 2 to 7, geometrically spaced
+1geom100x5  // 1, ~3.16, ~10, ~31.6, 100
 ```
 
-Syntax: `first geo last x length`.
+Syntax: `first geom last x length`.
 
 ---
 
@@ -202,7 +202,7 @@ Without parentheses, `0rand2rand4` is a semantic error — ambiguous chaining re
 Generators can also appear inside sequence lists:
 
 ```flux
-[0 1exp7 4gau2]   // Pseq([0, Pexprand(1,7), Pgauss(4,2)])
+[0 1exp7 4gauss2]   // Pseq([0, Pexprand(1,7), Pgauss(4,2)])
 ```
 
 ---

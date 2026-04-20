@@ -309,7 +309,7 @@ export const Brown = createToken({
 });
 
 /**
- * `m` — max_step separator in brownian generators: `0bro10m2`.
+ * `m` — max_step separator in brownian generators: `0brown10m2`.
  * Matches only when followed by a digit (the max_step value).
  */
 export const BroStep = createToken({
