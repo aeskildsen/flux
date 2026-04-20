@@ -265,14 +265,12 @@ describe('clock.reset()', () => {
 		expect(clock.currentBeat).toBeCloseTo(1);
 	});
 
-	it('throws if context is not set', () => {
-		// Create a fresh module-like state by stopping (no context set scenario is
-		// tested by verifying start() also throws — same guard path).
-		// reset() must throw the same "Clock: call setContext" error as start().
-		// We simulate this by clearing the context via a new instance check:
-		// The real test: after reset, clock behaves as if freshly started.
-		// (setContext is always called in beforeEach so this test verifies reset works
-		// when the context IS set — the throw path mirrors start() which is already tested.)
+	it('sets startTime correctly when called before any start() (context already set)', () => {
+		// The throw-if-no-context path is tested indirectly via the shared guard in start(),
+		// which is already covered in the start/stop describe block. The module-level singleton
+		// makes it impossible to unset the context from a test without accessing private state.
+		// This test verifies that reset() works from a never-started state (startTime is null).
+		// beforeEach always calls setContext(), so _ctx is non-null here.
 		setTime(3.0);
 		clock.reset(); // should not throw — context was set in beforeEach
 		expect(clock.startTime).toBeCloseTo(3.0);
