@@ -572,8 +572,7 @@
 		<div class="feedback-log" bind:this={logEl}>
 			{#each log as entry, i (i)}
 				<div class="log-entry {entry.kind}">
-					{entry.message}{#if entry.count > 1}
-						<span class="log-count">(×{entry.count})</span>{/if}
+					{entry.message}{#if entry.count > 1}<span class="log-count"> (×{entry.count})</span>{/if}
 				</div>
 			{/each}
 		</div>
