@@ -16,6 +16,7 @@
 	import type { SynthDefMetadata } from '$lib/lang/completions.js';
 	import type { PageData } from './$types';
 	import type { ParamSpec } from './+page';
+	import { appendToLog, type LogEntry } from '$lib/log';
 
 	const { data }: { data: PageData } = $props();
 
@@ -34,10 +35,6 @@
 
 	let handle = $state<SchedulerHandle | null>(null);
 
-	interface LogEntry {
-		message: string;
-		kind: 'error' | 'info';
-	}
 	let log = $state<LogEntry[]>([]);
 	let logEl: HTMLDivElement | undefined = $state();
 
@@ -68,7 +65,7 @@
 	}
 
 	function appendLog(message: string, kind: 'error' | 'info') {
-		log.push({ message, kind });
+		log = appendToLog(log, message, kind);
 		// Scroll to bottom after DOM updates
 		setTimeout(() => {
 			if (logEl) logEl.scrollTop = logEl.scrollHeight;
@@ -574,7 +571,10 @@
 
 		<div class="feedback-log" bind:this={logEl}>
 			{#each log as entry, i (i)}
-				<div class="log-entry {entry.kind}">{entry.message}</div>
+				<div class="log-entry {entry.kind}">
+					{entry.message}{#if entry.count > 1}
+						<span class="log-count">(×{entry.count})</span>{/if}
+				</div>
 			{/each}
 		</div>
 	</aside>
