@@ -723,7 +723,7 @@ Decorators **must** appear on their own line and always introduce an indented bl
   note lead [0 1 2]
 ```
 
-**`set` is `@` at global scope.** `set scale(minor)` is sugar for a top-level `@scale(minor)` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
+**`set` and `@` are complementary.** `set scale(minor)` sets a session-wide default; `@scale(minor)` with an indented block overrides it for that block's scope. They share the same parameter namespace but are distinct syntactic forms — `set` never introduces a block, `@` always does.
 
 **Indentation:** block scope uses fixed indentation (2 spaces). Variable indentation is not supported — indentation level is determined by the number of leading 2-space units. This keeps the parser simple and the code visually consistent.
 

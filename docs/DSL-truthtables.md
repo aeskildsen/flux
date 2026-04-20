@@ -182,14 +182,14 @@ Decorators apply lexically like indentation-based blocks.
 
 **Error cases**
 
-| Code                         | Failure Type   | Why                                                    |
-| ---------------------------- | -------------- | ------------------------------------------------------ |
-| `@scale(minor) note [0]`     | Parse error    | Inline decorator form is not allowed.                  |
-| `@buf(kick) sample kick [0]` | Parse error    | Inline decorator form is not allowed.                  |
-| `@key(g# lydian) note [0]`   | Parse error    | Inline decorator form is not allowed.                  |
-| `note [0] + @root(5)`        | Semantic error | Decorator cannot appear as an arithmetic operand.      |
-| `note [@root(5) 0]`          | Parse error    | Decorators are not valid inside list brackets.         |
-| `@root(7)` with no body      | Semantic error | Decorator with no following expression is meaningless. |
+| Code                         | Failure Type   | Why                                                                         |
+| ---------------------------- | -------------- | --------------------------------------------------------------------------- |
+| `@scale(minor) note [0]`     | Parse error    | Inline decorator form is not allowed.                                       |
+| `@buf(kick) sample kick [0]` | Parse error    | Inline decorator form is not allowed.                                       |
+| `@key(g# lydian) note [0]`   | Parse error    | Inline decorator form is not allowed.                                       |
+| `note [0] + @root(5)`        | Semantic error | Decorator cannot appear as an arithmetic operand.                           |
+| `note [@root(5) 0]`          | Parse error    | Decorators are not valid inside list brackets.                              |
+| `@root(7)` with no body      | Parse error    | Decorator must introduce an indented block — no body means no INDENT token. |
 
 ---
 

@@ -351,6 +351,18 @@ describe('decorators', () => {
 		const { parseErrors } = parse(src);
 		expect(parseErrors).toHaveLength(0);
 	});
+
+	it('@root(7) with no body is a parse error — INDENT is mandatory', () => {
+		// Decorator must always introduce an indented block; a lone decorator with no body
+		// fails at the parser level (INDENT token not found), not the evaluator.
+		const { parseErrors } = parse('@root(7)');
+		expect(parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('multiple decorators on the same line before a block body are valid', () => {
+		const { parseErrors } = parse('@scale(minor) @root(7)\n  note lead [0 1 2]');
+		expect(parseErrors).toHaveLength(0);
+	});
 });
 
 describe('timed lists', () => {
