@@ -41,6 +41,18 @@ export const clock = {
 		_startTime = _ctx.currentTime;
 	},
 
+	/**
+	 * Reset the clock to beat 0 at the current AudioContext time.
+	 * Use this for stop→play transitions so playback begins immediately
+	 * rather than waiting for the next cycle boundary on the old clock.
+	 * The cycle counter resets to 0 because generators always restart
+	 * their traversal when playback begins from stopped.
+	 */
+	reset(): void {
+		if (_ctx === null) throw new Error('Clock: call setContext() before reset()');
+		_startTime = _ctx.currentTime;
+	},
+
 	stop(): void {
 		_startTime = null;
 	},
