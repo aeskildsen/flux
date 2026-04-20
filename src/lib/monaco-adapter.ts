@@ -114,14 +114,14 @@ const SCOPE_MAP: Record<string, string> = {
 	Set: 'keyword',
 	// Generator keywords
 	Rand: 'keyword.operator',
-	Gau: 'keyword.operator',
+	Gauss: 'keyword.operator',
 	Exp: 'keyword.operator',
-	Bro: 'keyword.operator',
+	Brown: 'keyword.operator',
 	BroStep: 'keyword.operator',
 	Step: 'keyword.operator',
 	Mul: 'keyword.operator',
 	Lin: 'keyword.operator',
-	Geo: 'keyword.operator',
+	Geom: 'keyword.operator',
 	LenSep: 'keyword.operator',
 	// Accidentals
 	Flat: 'operator',

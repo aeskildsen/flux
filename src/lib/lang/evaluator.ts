@@ -568,9 +568,9 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 		};
 	}
 
-	const gauNode = ((numGen.children.gauGen as CstNode[]) ?? [])[0];
-	if (gauNode) {
-		const sdevLit = ((gauNode.children.numericLiteral as CstNode[]) ?? [])[0];
+	const gaussNode = ((numGen.children.gaussGen as CstNode[]) ?? [])[0];
+	if (gaussNode) {
+		const sdevLit = ((gaussNode.children.numericLiteral as CstNode[]) ?? [])[0];
 		const sdev = sdevLit ? litToNumber(sdevLit) : null;
 		if (sdev === null) return basePoll;
 		return () => gaussSample(basePoll(), sdev);
@@ -584,9 +584,9 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 		return () => expSample(basePoll(), maxVal);
 	}
 
-	const broNode = ((numGen.children.broGen as CstNode[]) ?? [])[0];
-	if (broNode) {
-		const lits = (broNode.children.numericLiteral as CstNode[]) ?? [];
+	const brownNode = ((numGen.children.brownGen as CstNode[]) ?? [])[0];
+	if (brownNode) {
+		const lits = (brownNode.children.numericLiteral as CstNode[]) ?? [];
 		const maxVal = lits[0] ? litToNumber(lits[0]) : null;
 		const maxStep = lits[1] ? litToNumber(lits[1]) : null;
 		if (maxVal === null) return basePoll;
@@ -601,8 +601,8 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 		};
 	}
 
-	type DetKey = 'stepGen' | 'mulGen' | 'linGen' | 'geoGen';
-	for (const key of ['stepGen', 'mulGen', 'linGen', 'geoGen'] as DetKey[]) {
+	type DetKey = 'stepGen' | 'mulGen' | 'linGen' | 'geomGen';
+	for (const key of ['stepGen', 'mulGen', 'linGen', 'geomGen'] as DetKey[]) {
 		const node = ((numGen.children[key] as CstNode[]) ?? [])[0];
 		if (!node) continue;
 		const lits = (node.children.numericLiteral as CstNode[]) ?? [];
@@ -617,7 +617,7 @@ function numGenToPollFn(numGen: CstNode): PollFn | null {
 			if (key === 'stepGen') return stepSeries(start, arg, length);
 			if (key === 'mulGen') return mulSeries(start, arg, length);
 			if (key === 'linGen') return linSeries(start, arg, length);
-			return geoSeries(start, arg, length);
+			return geoSeries(start, arg, length); // geomGen
 		};
 		let values = makeSeries(basePoll());
 		let idx = 0;
@@ -905,11 +905,11 @@ function extractSpread(mods: CstNode[]): SpreadSpec | string | null {
 }
 
 /**
- * Get the natural iteration length of a numericGenerator (step/mul/lin/geo).
+ * Get the natural iteration length of a numericGenerator (step/mul/lin/geom).
  * Returns null if the generator is not a series type with an explicit length.
  */
 function getSeriesLength(numGen: CstNode): number | null {
-	for (const key of ['stepGen', 'mulGen', 'linGen', 'geoGen'] as const) {
+	for (const key of ['stepGen', 'mulGen', 'linGen', 'geomGen'] as const) {
 		const node = ((numGen.children[key] as CstNode[]) ?? [])[0];
 		if (!node) continue;
 		const lits = (node.children.numericLiteral as CstNode[]) ?? [];
@@ -1119,7 +1119,7 @@ function compileElementWithSpread(elem: CstNode, inherited: EagerMode): Compiled
 		return Array.from({ length: count }, (_, i) => innerElements[i % innerElements.length]);
 	}
 
-	// Numeric generator (step/mul/lin/geo or scalar rand/gau/exp/bro/literal)
+	// Numeric generator (step/mul/lin/geom or scalar rand/gauss/exp/brown/literal)
 	const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
 	if (!numGen) {
 		const ce = compileElement(elem, inherited);
@@ -1130,7 +1130,7 @@ function compileElementWithSpread(elem: CstNode, inherited: EagerMode): Compiled
 	const seriesLength = getSeriesLength(numGen);
 
 	if (seriesLength === null) {
-		// Scalar generator (rand, gau, exp, bro, literal without series)
+		// Scalar generator (rand, gauss, exp, brown, literal without series)
 		const poll = numGenToPollFn(numGen);
 		if (!poll) return [];
 
@@ -1738,13 +1738,13 @@ function compilePositiveScalarRunner(posScalar: CstNode): RunnerState | null {
 				],
 				randGen: posNumGen.children.randGen ?? [],
 				tildeGen: posNumGen.children.tildeGen ?? [],
-				gauGen: posNumGen.children.gauGen ?? [],
+				gaussGen: posNumGen.children.gaussGen ?? [],
 				expGen: posNumGen.children.expGen ?? [],
-				broGen: posNumGen.children.broGen ?? [],
+				brownGen: posNumGen.children.brownGen ?? [],
 				stepGen: posNumGen.children.stepGen ?? [],
 				mulGen: posNumGen.children.mulGen ?? [],
 				linGen: posNumGen.children.linGen ?? [],
-				geoGen: posNumGen.children.geoGen ?? []
+				geomGen: posNumGen.children.geomGen ?? []
 			}
 		};
 		const poll = numGenToPollFn(syntheticNumGen) ?? (() => baseVal!);

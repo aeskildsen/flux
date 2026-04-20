@@ -154,11 +154,13 @@
 							><code>0~4</code></td
 						></tr
 					>
-					<tr><td><code>mean gau sdev</code></td><td>Gaussian</td><td><code>0gau4</code></td></tr>
+					<tr
+						><td><code>mean gauss sdev</code></td><td>Gaussian</td><td><code>0gauss4</code></td></tr
+					>
 					<tr><td><code>min exp max</code></td><td>Exponential</td><td><code>1exp7</code></td></tr>
 					<tr
-						><td><code>min bro max m step</code></td><td>Brownian walk</td><td
-							><code>0bro10m2</code></td
+						><td><code>min brown max m step</code></td><td>Brownian walk</td><td
+							><code>0brown10m2</code></td
 						></tr
 					>
 				</tbody>
@@ -190,8 +192,8 @@
 						></tr
 					>
 					<tr
-						><td><code>first geo last x len</code></td><td>Geometric interpolation</td><td
-							><code>2geo7x8</code></td
+						><td><code>first geom last x len</code></td><td>Geometric interpolation</td><td
+							><code>2geom7x8</code></td
 						></tr
 					>
 					<tr

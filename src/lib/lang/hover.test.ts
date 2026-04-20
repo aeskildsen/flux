@@ -102,11 +102,11 @@ describe('getHover — keyword tokens', () => {
 		expect(result).not.toBeNull();
 	});
 
-	it('returns documentation for Gau token', () => {
-		const toks = tokens('0gau4');
-		const gauTok = toks.find((t) => t.tokenType.name === 'Gau');
-		expect(gauTok).toBeDefined();
-		const result = getHover(gauTok!);
+	it('returns documentation for Gauss token', () => {
+		const toks = tokens('0gauss4');
+		const gaussTok = toks.find((t) => t.tokenType.name === 'Gauss');
+		expect(gaussTok).toBeDefined();
+		const result = getHover(gaussTok!);
 		expect(result).not.toBeNull();
 	});
 

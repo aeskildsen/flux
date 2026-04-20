@@ -151,7 +151,7 @@ note lead [A [0 2 4]'spread]       // A + 3 spread values = 4 slots
 note lead [4'spread(3)]            // three copies of 4 → [4 4 4]
 ```
 
-**Bare `'spread` on a scalar** (literal, `rand`, `gau`, etc.) is a no-op with a console warning — scalars have no natural iteration length. Use `'spread(n)` to poll n times.
+**Bare `'spread` on a scalar** (literal, `rand`, `gauss`, etc.) is a no-op with a console warning — scalars have no natural iteration length. Use `'spread(n)` to poll n times.
 
 `'spread` on a top-level list (no enclosing `[...]`) is a semantic error — there are no sibling slots to spread into.
 

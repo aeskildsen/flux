@@ -281,8 +281,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		expect(new Set(collectFirst('note x [0rand6]', 100)).size).toBeGreaterThan(1);
 	});
 
-	it('gau: produces varying notes (mean=3, sdev=1)', () => {
-		expect(new Set(collectFirst('note x [3gau1]', 100)).size).toBeGreaterThan(1);
+	it('gauss: produces varying notes (mean=3, sdev=1)', () => {
+		expect(new Set(collectFirst('note x [3gauss1]', 100)).size).toBeGreaterThan(1);
 	});
 
 	it('exp: all notes within degree range [1, 7] → MIDI [62, 72]', () => {
@@ -295,8 +295,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		}
 	});
 
-	it('bro: stays within degree range [0, 6] → MIDI [60, 71]', () => {
-		const i = inst('note x [0bro6m1]');
+	it('brown: stays within degree range [0, 6] → MIDI [60, 71]', () => {
+		const i = inst('note x [0brown6m1]');
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -305,8 +305,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		}
 	});
 
-	it('bro: changes value over time (stateful)', () => {
-		expect(new Set(collectFirst('note x [0bro6m2]', 50)).size).toBeGreaterThan(1);
+	it('brown: changes value over time (stateful)', () => {
+		expect(new Set(collectFirst('note x [0brown6m2]', 50)).size).toBeGreaterThan(1);
 	});
 
 	it('step: cycles through correct degrees — note [0step2x4]', () => {
@@ -327,10 +327,25 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		expect(collectFirst('note x [0lin4x3]', 4)).toEqual([60, 64, 67, 60]); // wraps
 	});
 
-	it('geo: produces geometrically spaced degrees — note [1geo8x4]', () => {
+	it('geom: produces geometrically spaced degrees — note [1geom8x4]', () => {
 		// geometric interp first=1, last=8, length=4 → degrees [1, 2, 4, 8]
 		// C major: D5=62, E5=64, G5=67, D6=74
-		expect(collectFirst('note x [1geo8x4]', 4)).toEqual([62, 64, 67, 74]);
+		expect(collectFirst('note x [1geom8x4]', 4)).toEqual([62, 64, 67, 74]);
+	});
+
+	it('old name "gau" produces a parse error — use gauss instead', () => {
+		const i = createInstance('note x [0gau4]');
+		expect(i.ok).toBe(false);
+	});
+
+	it('old name "bro" produces a parse error — use brown instead', () => {
+		const i = createInstance('note x [0bro6m1]');
+		expect(i.ok).toBe(false);
+	});
+
+	it('old name "geo" produces a parse error — use geom instead', () => {
+		const i = createInstance('note x [1geo8x4]');
+		expect(i.ok).toBe(false);
 	});
 });
 
@@ -886,8 +901,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		expect(cycleNotes).toEqual([60, 64, 67].map((n) => n + SHIFT));
 	});
 
-	it('geo: [1geo8x4] advances through degrees 1,2,4,8 across 4 cycles in G major/4', () => {
-		const i = inst('@key(g major 4)\n  note x [1geo8x4]');
+	it('geom: [1geom8x4] advances through degrees 1,2,4,8 across 4 cycles in G major/4', () => {
+		const i = inst('@key(g major 4)\n  note x [1geom8x4]');
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
@@ -927,8 +942,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		}
 	});
 
-	it('gau: [3gau1] in G major/4 — varies and is lower than C major/5 equivalent', () => {
-		const i = inst('@key(g major 4)\n  note x [3gau1]');
+	it('gauss: [3gauss1] in G major/4 — varies and is lower than C major/5 equivalent', () => {
+		const i = inst('@key(g major 4)\n  note x [3gauss1]');
 		const seen = new Set<number>();
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
@@ -951,8 +966,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		}
 	});
 
-	it('bro: [0bro6m1] in G major/4 — stays within shifted degree range [55, 66]', () => {
-		const i = inst('@key(g major 4)\n  note x [0bro6m1]');
+	it('brown: [0brown6m1] in G major/4 — stays within shifted degree range [55, 66]', () => {
+		const i = inst('@key(g major 4)\n  note x [0brown6m1]');
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -2890,7 +2905,7 @@ describe('chord literals — error cases', () => {
 // 12. 'spread modifier (truth table 24)
 // ---------------------------------------------------------------------------
 
-describe("'spread — series generators (step/mul/lin/geo)", () => {
+describe("'spread — series generators (step/mul/lin/geom)", () => {
 	it("bare 'spread on step(x4) expands all 4 values into 4 slots", () => {
 		const evs = eval0("note x [0step1x4'spread]");
 		expect(evs).toHaveLength(4);

@@ -23,7 +23,7 @@ Generators are objects that yield a stream of values for use in synth instantiat
 
 Unlike SuperCollider patterns/streams, all generators yield indefinitely. They are never exhausted — it's the caller's responsibility to stop polling when a phrase needs to end.
 
-`[]` is the only non-scalar generator. All other generator forms — numeric literals, `rand`, `gau`, `step`, `mul`, `lin`, `geo`, etc. — are **scalar**: they yield a single value per poll and make no claim about time. `[]` does both: it yields values _and_ assigns each a temporal position within the cycle. This is why nesting `[]` inside `[]` subdivides time (the inner list fills its parent slot with multiple timed events) rather than violating the generator contract — the inner list's temporal extent is simply scaled to fit the outer slot.
+`[]` is the only non-scalar generator. All other generator forms — numeric literals, `rand`, `gauss`, `step`, `mul`, `lin`, `geom`, etc. — are **scalar**: they yield a single value per poll and make no claim about time. `[]` does both: it yields values _and_ assigns each a temporal position within the cycle. This is why nesting `[]` inside `[]` subdivides time (the inner list fills its parent slot with multiple timed events) rather than violating the generator contract — the inner list's temporal extent is simply scaled to fit the outer slot.
 
 This scalar/non-scalar distinction is load-bearing elsewhere in the spec: the right-hand side of transposition and the `'stut` count argument both require a scalar generator and reject `[...]` outright.
 
@@ -33,7 +33,7 @@ This scalar/non-scalar distinction is load-bearing elsewhere in the spec: the ri
 
 > _See truth tables [12 (Whitespace)](DSL-truthtables.md#12-whitespace-truth-table)._
 
-Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `note` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gau`, `exp`, `bro`, `step`, `mul`, `lin`, `geo`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
+Whitespace (spaces or newlines) is required between distinct top-level tokens — for example, between `note` and `[`. Inside generator expressions, however, tokens are written **adjacently with no whitespace**: `0rand4`, not `0 rand 4`. The same applies to all generator keywords (`gauss`, `exp`, `brown`, `step`, `mul`, `lin`, `geom`) and their separators (`m`, `x`). Whitespace inside a generator expression is a syntax error.
 
 Inside `[...]` sequence generators, elements are separated by spaces. Commas are not valid separators — except inside a range expression (see below).
 
@@ -164,11 +164,11 @@ note lead [_ 2 4]      // rest on the 1st slot
 // scale lookup — microtonal degrees are not supported. Float bounds are most
 // meaningful in non-degree contexts, e.g. 'legato(0.5rand1.2).
 
-0gau4    // Pgauss(mean = 0, sdev = 4)
+0gauss4    // Pgauss(mean = 0, sdev = 4)
 
 1exp7    // Pexprand(min = 1, max = 7)
 
-0bro10m2 // Pbrown(min = 0, max = 10, max_step = 2)
+0brown10m2 // Pbrown(min = 0, max = 10, max_step = 2)
 ```
 
 ### Deterministic generators
@@ -184,7 +184,7 @@ note lead [_ 2 4]      // rest on the 1st slot
 2lin7x8
 
 // Geometric/exponential interpolation (no counterpart in SC)
-2geo7x8
+2geom7x8
 ```
 
 ### UTF-8 byte generator
@@ -226,7 +226,7 @@ atomicGenerator = sequenceGenerator
 Generators can be sequenced like any literals.
 
 ```flux
-[0 1exp7 4gau2] // Pseq([0, Pexprand(1, 7), Pgauss(4, 2)])
+[0 1exp7 4gauss2] // Pseq([0, Pexprand(1, 7), Pgauss(4, 2)])
 ```
 
 Nesting generators as input to other generators is achieved with parentheses, which disambiguates chained expressions such as `0rand2rand4`:
@@ -235,7 +235,7 @@ Nesting generators as input to other generators is achieved with parentheses, wh
 (0rand2)rand4   // Pwhite(Pwhite(0, 2), 4)
 ```
 
-How often nested generators are polled is determined by `'lock` vs. `'eager`. Stateful generators (`step`, `mul`, `lin`, `geo`) maintain their state and loop after the sequence ends.
+How often nested generators are polled is determined by `'lock` vs. `'eager`. Stateful generators (`step`, `mul`, `lin`, `geom`) maintain their state and loop after the sequence ends.
 
 ### Generator filters
 
@@ -305,9 +305,9 @@ note lead [A 0step1x4'spread]
 
 **What `'spread` operates on:**
 
-- **Series generators** (`step`, `mul`, `lin`, `geo`): bare `'spread` expands all N values of one complete iteration (the `xN` length) into N consecutive sibling slots.
+- **Series generators** (`step`, `mul`, `lin`, `geom`): bare `'spread` expands all N values of one complete iteration (the `xN` length) into N consecutive sibling slots.
 - **List generators** (`[...]`, including range notation `[0..7]`): bare `'spread` flattens the list's elements into the parent list's slots. `[[0 2 4]'spread]` is equivalent to `[0 2 4]`; more usefully, `[A [0 2 4]'spread]` yields 4 slots (A, 0, 2, 4).
-- **Scalar generators** (`rand`, `gau`, `exp`, `bro`, integer/float literals, `utf8{word}`): bare `'spread` is a **no-op with a console warning** — scalar generators have no natural iteration length. `'spread(n)` on a scalar IS valid and expands to n consecutive polls of the same generator.
+- **Scalar generators** (`rand`, `gauss`, `exp`, `brown`, integer/float literals, `utf8{word}`): bare `'spread` is a **no-op with a console warning** — scalar generators have no natural iteration length. `'spread(n)` on a scalar IS valid and expands to n consecutive polls of the same generator.
 
 **`'spread(n)` — explicit count:**
 

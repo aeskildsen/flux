@@ -31,13 +31,13 @@ const TOKEN_TYPE_DOC_KEY: Record<string, string> = {
 	Cloud: 'cloud',
 	Utf8Kw: 'utf8',
 	Rand: 'rand',
-	Gau: 'gau',
+	Gauss: 'gauss',
 	Exp: 'exp',
-	Bro: 'bro',
+	Brown: 'brown',
 	Step: 'step',
 	Mul: 'mul',
 	Lin: 'lin',
-	Geo: 'geo',
+	Geom: 'geom',
 	Tilde: '~',
 	Set: 'set'
 };
@@ -121,13 +121,13 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'```'
 	].join('\n'),
 
-	Gau: [
-		'**`N gau M`** — gaussian (normal) distribution.',
+	Gauss: [
+		'**`N gauss M`** — gaussian (normal) distribution.',
 		'',
 		'Mean = N, standard deviation = M.',
 		'',
 		'```flux',
-		'0gau4  // Pgauss(0, 4)',
+		'0gauss4  // Pgauss(0, 4)',
 		'```'
 	].join('\n'),
 
@@ -141,20 +141,20 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'```'
 	].join('\n'),
 
-	Bro: [
-		'**`N bro M m S`** — brownian motion (Perlin noise).',
+	Brown: [
+		'**`N brown M m S`** — brownian motion (Perlin noise).',
 		'',
 		'Walks randomly within [N, M] with a maximum step of S per event.',
 		'',
 		'```flux',
-		'0bro10m2  // Pbrown(0, 10, 2)',
+		'0brown10m2  // Pbrown(0, 10, 2)',
 		'```'
 	].join('\n'),
 
 	BroStep: [
 		'**`m`** — max-step separator in brownian generators.',
 		'',
-		'`0bro10m2` → min=0, max=10, max\\_step=2'
+		'`0brown10m2` → min=0, max=10, max\\_step=2'
 	].join('\n'),
 
 	Step: [
@@ -187,13 +187,13 @@ const TOKEN_TYPE_DOCS: Record<string, string> = {
 		'```'
 	].join('\n'),
 
-	Geo: [
-		'**`N geo M x L`** — geometric (exponential) interpolation.',
+	Geom: [
+		'**`N geom M x L`** — geometric (exponential) interpolation.',
 		'',
 		'Generates L values from N to M with exponential spacing.',
 		'',
 		'```flux',
-		'2geo7x8',
+		'2geom7x8',
 		'```'
 	].join('\n'),
 
