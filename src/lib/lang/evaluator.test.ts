@@ -537,136 +537,136 @@ describe('default pitch context — C major / C5 (baseline)', () => {
 
 describe('@root — changes root pitch class (semitone offset from C)', () => {
 	it('@root(7) shifts root to G: degree 0 = G5 = MIDI 67', () => {
-		expect(notes('@root(7) note x [0]')[0]).toBe(67);
+		expect(notes('@root(7)\n  note x [0]')[0]).toBe(67);
 	});
 
 	it('@root(7) degree 1 in major = A5 = MIDI 69', () => {
 		// G5=67 + 2 semitones = 69
-		expect(notes('@root(7) note x [1]')[0]).toBe(69);
+		expect(notes('@root(7)\n  note x [1]')[0]).toBe(69);
 	});
 
 	it('@root(0) is same as default (C)', () => {
-		expect(notes('@root(0) note x [0]')[0]).toBe(60);
+		expect(notes('@root(0)\n  note x [0]')[0]).toBe(60);
 	});
 
 	it('@root(2) shifts to D: degree 0 = D5 = MIDI 62', () => {
-		expect(notes('@root(2) note x [0]')[0]).toBe(62);
+		expect(notes('@root(2)\n  note x [0]')[0]).toBe(62);
 	});
 });
 
 describe('@octave — changes the octave', () => {
 	it('@octave(4) lowers by one octave: C4 = MIDI 48', () => {
-		expect(notes('@octave(4) note x [0]')[0]).toBe(48);
+		expect(notes('@octave(4)\n  note x [0]')[0]).toBe(48);
 	});
 
 	it('@octave(6) raises by one octave: C6 = MIDI 72', () => {
-		expect(notes('@octave(6) note x [0]')[0]).toBe(72);
+		expect(notes('@octave(6)\n  note x [0]')[0]).toBe(72);
 	});
 
 	it('@octave(5) is the default: C5 = MIDI 60', () => {
-		expect(notes('@octave(5) note x [0]')[0]).toBe(60);
+		expect(notes('@octave(5)\n  note x [0]')[0]).toBe(60);
 	});
 
 	it('@octave(3) deep bass: C3 = MIDI 36', () => {
-		expect(notes('@octave(3) note x [0]')[0]).toBe(36);
+		expect(notes('@octave(3)\n  note x [0]')[0]).toBe(36);
 	});
 });
 
 describe('@scale — changes the active scale', () => {
 	// minor intervals: [2,1,2,2,1,2,2] → degree 2 = 3 semitones from root → Eb5 = 63
 	it('@scale(minor) degree 2 = Eb5 = MIDI 63', () => {
-		expect(notes('@scale(minor) note x [2]')[0]).toBe(63);
+		expect(notes('@scale(minor)\n  note x [2]')[0]).toBe(63);
 	});
 
 	it('@scale(major) degree 2 = E5 = MIDI 64 (same as default)', () => {
-		expect(notes('@scale(major) note x [2]')[0]).toBe(64);
+		expect(notes('@scale(major)\n  note x [2]')[0]).toBe(64);
 	});
 
 	// major_pentatonic: [2,2,3,2,3] → degree 2 = 4 semitones → E5 = 64
 	it('@scale(major_pentatonic) degree 2 = E5 = MIDI 64', () => {
-		expect(notes('@scale(major_pentatonic) note x [2]')[0]).toBe(64);
+		expect(notes('@scale(major_pentatonic)\n  note x [2]')[0]).toBe(64);
 	});
 
 	// minor_pentatonic: [3,2,2,3,2] → degree 1 = 3 semitones → Eb5 = 63
 	it('@scale(minor_pentatonic) degree 1 = Eb5 = MIDI 63', () => {
-		expect(notes('@scale(minor_pentatonic) note x [1]')[0]).toBe(63);
+		expect(notes('@scale(minor_pentatonic)\n  note x [1]')[0]).toBe(63);
 	});
 
 	// dorian: [2,1,2,2,2,1,2] → degree 6 = 10 semitones → Bb5 = 70
 	it('@scale(dorian) degree 6 = Bb5 = MIDI 70', () => {
-		expect(notes('@scale(dorian) note x [6]')[0]).toBe(70);
+		expect(notes('@scale(dorian)\n  note x [6]')[0]).toBe(70);
 	});
 
 	// phrygian: [1,2,2,2,1,2,2] → degree 1 = 1 semitone → Db5 = 61
 	it('@scale(phrygian) degree 1 = Db5 = MIDI 61', () => {
-		expect(notes('@scale(phrygian) note x [1]')[0]).toBe(61);
+		expect(notes('@scale(phrygian)\n  note x [1]')[0]).toBe(61);
 	});
 
 	// lydian: [2,2,2,1,2,2,1] → degree 3 = 6 semitones → F#5 = 66
 	it('@scale(lydian) degree 3 = F#5 = MIDI 66', () => {
-		expect(notes('@scale(lydian) note x [3]')[0]).toBe(66);
+		expect(notes('@scale(lydian)\n  note x [3]')[0]).toBe(66);
 	});
 
 	// mixolydian: [2,2,1,2,2,1,2] → degree 6 = 10 semitones → Bb5 = 70
 	it('@scale(mixolydian) degree 6 = Bb5 = MIDI 70', () => {
-		expect(notes('@scale(mixolydian) note x [6]')[0]).toBe(70);
+		expect(notes('@scale(mixolydian)\n  note x [6]')[0]).toBe(70);
 	});
 
 	// locrian: [1,2,2,1,2,2,2] → degree 4 = 6 semitones → F#5 = 66
 	it('@scale(locrian) degree 4 = F#5 = MIDI 66', () => {
-		expect(notes('@scale(locrian) note x [4]')[0]).toBe(66);
+		expect(notes('@scale(locrian)\n  note x [4]')[0]).toBe(66);
 	});
 
 	// harmonic_minor: [2,1,2,2,1,3,1] → degree 6 = 11 semitones → B5 = 71
 	it('@scale(harmonic_minor) degree 6 = B5 = MIDI 71', () => {
-		expect(notes('@scale(harmonic_minor) note x [6]')[0]).toBe(71);
+		expect(notes('@scale(harmonic_minor)\n  note x [6]')[0]).toBe(71);
 	});
 
 	// melodic_minor: [2,1,2,2,2,2,1] → degree 5 = 9 semitones → A5 = 69
 	it('@scale(melodic_minor) degree 5 = A5 = MIDI 69', () => {
-		expect(notes('@scale(melodic_minor) note x [5]')[0]).toBe(69);
+		expect(notes('@scale(melodic_minor)\n  note x [5]')[0]).toBe(69);
 	});
 
 	// harmonic_major: [2,2,1,2,1,3,1] → degree 5 = 8 semitones → Ab5 = 68
 	it('@scale(harmonic_major) degree 5 = Ab5 = MIDI 68', () => {
-		expect(notes('@scale(harmonic_major) note x [5]')[0]).toBe(68);
+		expect(notes('@scale(harmonic_major)\n  note x [5]')[0]).toBe(68);
 	});
 
 	// blues: [3,2,1,1,3,2] → degree 2 = 5 semitones → F5 = 65
 	it('@scale(blues) degree 2 = F5 = MIDI 65', () => {
-		expect(notes('@scale(blues) note x [2]')[0]).toBe(65);
+		expect(notes('@scale(blues)\n  note x [2]')[0]).toBe(65);
 	});
 
 	// whole_tone: [2,2,2,2,2,2] → degree 3 = 6 semitones → F#5 = 66
 	it('@scale(whole_tone) degree 3 = F#5 = MIDI 66', () => {
-		expect(notes('@scale(whole_tone) note x [3]')[0]).toBe(66);
+		expect(notes('@scale(whole_tone)\n  note x [3]')[0]).toBe(66);
 	});
 
 	// diminished: [2,1,2,1,2,1,2,1] → degree 4 = 6 semitones → F#5 = 66
 	it('@scale(diminished) degree 4 = F#5 = MIDI 66', () => {
-		expect(notes('@scale(diminished) note x [4]')[0]).toBe(66);
+		expect(notes('@scale(diminished)\n  note x [4]')[0]).toBe(66);
 	});
 
 	// augmented: [3,1,3,1,3,1] → degree 2 = 4 semitones → E5 = 64
 	it('@scale(augmented) degree 2 = E5 = MIDI 64', () => {
-		expect(notes('@scale(augmented) note x [2]')[0]).toBe(64);
+		expect(notes('@scale(augmented)\n  note x [2]')[0]).toBe(64);
 	});
 });
 
 describe('@cent — pitch deviation in cents', () => {
 	it('@cent(0) no deviation: note number is still 60 (cent offset is separate metadata)', () => {
-		expect(notes('@cent(0) note x [0]')[0]).toBe(60);
+		expect(notes('@cent(0)\n  note x [0]')[0]).toBe(60);
 	});
 
 	it('@cent(50) stores a non-zero cent offset on events', () => {
-		const res = inst('@cent(50) note x [0]').evaluate({ cycleNumber: 0 });
+		const res = inst('@cent(50)\n  note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
 		expect((res.events[0] as any).note).toBe(60);
 		expect((res.events[0] as any).cent).toBe(50);
 	});
 
 	it('@cent(-50) stores a negative cent offset', () => {
-		const res = inst('@cent(-50) note x [0]').evaluate({ cycleNumber: 0 });
+		const res = inst('@cent(-50)\n  note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
 		expect((res.events[0] as any).cent).toBe(-50);
 	});
@@ -681,45 +681,45 @@ describe('@cent — pitch deviation in cents', () => {
 describe('@key — compound decorator (root + scale [+ octave])', () => {
 	it('@key(g lydian) degree 0 = G5 = MIDI 67', () => {
 		// rootMidi = 60 + 7 = 67. Lydian degree 0 = 0 → MIDI 67
-		expect(notes('@key(g lydian) note x [0]')[0]).toBe(67);
+		expect(notes('@key(g lydian)\n  note x [0]')[0]).toBe(67);
 	});
 
 	it('@key(g lydian) degree 3 = C#6 = MIDI 73', () => {
 		// Lydian: [2,2,2,1,2,2,1] → offset at degree 3 = 6 → 67+6 = 73
-		expect(notes('@key(g lydian) note x [3]')[0]).toBe(73);
+		expect(notes('@key(g lydian)\n  note x [3]')[0]).toBe(73);
 	});
 
 	it('@key(g# lydian) degree 0 = G#5 = MIDI 68', () => {
 		// rootMidi = 60 + 8 = 68
-		expect(notes('@key(g# lydian) note x [0]')[0]).toBe(68);
+		expect(notes('@key(g# lydian)\n  note x [0]')[0]).toBe(68);
 	});
 
 	it('@key(a minor) degree 0 = A5 = MIDI 69', () => {
 		// rootMidi = 60 + 9 = 69
-		expect(notes('@key(a minor) note x [0]')[0]).toBe(69);
+		expect(notes('@key(a minor)\n  note x [0]')[0]).toBe(69);
 	});
 
 	it('@key(a minor) degree 2 = C6 = MIDI 72', () => {
 		// A5=69, minor[2] = 3 semitones → 72
-		expect(notes('@key(a minor) note x [2]')[0]).toBe(72);
+		expect(notes('@key(a minor)\n  note x [2]')[0]).toBe(72);
 	});
 
 	it('@key(c major 4) degree 0 = C4 = MIDI 48', () => {
 		// rootMidi = 60 + 0 - 12 = 48
-		expect(notes('@key(c major 4) note x [0]')[0]).toBe(48);
+		expect(notes('@key(c major 4)\n  note x [0]')[0]).toBe(48);
 	});
 
 	it('@key(c major 6) degree 0 = C6 = MIDI 72', () => {
-		expect(notes('@key(c major 6) note x [0]')[0]).toBe(72);
+		expect(notes('@key(c major 6)\n  note x [0]')[0]).toBe(72);
 	});
 
 	it('@key(bb major) degree 0 = Bb5 = MIDI 70', () => {
 		// rootMidi = 60 + 10 = 70
-		expect(notes('@key(bb major) note x [0]')[0]).toBe(70);
+		expect(notes('@key(bb major)\n  note x [0]')[0]).toBe(70);
 	});
 
 	it('@key(G lydian) (uppercase) degree 0 = G5 = MIDI 67', () => {
-		expect(notes('@key(G lydian) note x [0]')[0]).toBe(67);
+		expect(notes('@key(G lydian)\n  note x [0]')[0]).toBe(67);
 	});
 });
 
@@ -748,24 +748,20 @@ describe('set — writes to global context', () => {
 });
 
 describe('decorator scoping (truth table 8)', () => {
-	it('block body inherits outer decorator: @scale(minor) note x [2] = Eb5 = 63', () => {
+	it('block decorator inherits to body: @scale(minor) note x [2] = Eb5 = 63', () => {
 		expect(notes('@scale(minor)\n  note x [2]')[0]).toBe(63);
-	});
-
-	it('inline decorator: @scale(minor) note x [2] = Eb5 = 63', () => {
-		expect(notes('@scale(minor) note x [2]')[0]).toBe(63);
 	});
 
 	it('no decorator: note [0] uses global defaults → C5 = 60', () => {
 		expect(notes('note x [0]')[0]).toBe(60);
 	});
 
-	it('@key(g# lydian) inline: degree 0 = G#5 = 68', () => {
-		expect(notes('@key(g# lydian) note x [0]')[0]).toBe(68);
+	it('@key(g# lydian) block form: degree 0 = G#5 = 68', () => {
+		expect(notes('@key(g# lydian)\n  note x [0]')[0]).toBe(68);
 	});
 
-	it('@key(g# lydian 4) inline: degree 0 = G#4 = 56', () => {
-		expect(notes('@key(g# lydian 4) note x [0]')[0]).toBe(56);
+	it('@key(g# lydian 4) block form: degree 0 = G#4 = 56', () => {
+		expect(notes('@key(g# lydian 4)\n  note x [0]')[0]).toBe(56);
 	});
 
 	it('nested @root(7) outer, @scale(minor) inner: both apply — G minor degree 2 = Bb5 = 70', () => {
@@ -786,8 +782,8 @@ describe('decorator scoping (truth table 8)', () => {
 
 describe('set vs @ interaction', () => {
 	it('@ overrides set for its scope', () => {
-		// set root(7): global G. @root(0) overrides to C for the inline loop.
-		expect(notes('set root(7)\n@root(0) note x [0]')[0]).toBe(60);
+		// set root(7): global G. @root(0) overrides to C for the scoped loop.
+		expect(notes('set root(7)\n@root(0)\n  note x [0]')[0]).toBe(60);
 	});
 
 	it('set applies when no @ override', () => {
@@ -797,42 +793,42 @@ describe('set vs @ interaction', () => {
 
 describe('stochastic decorator arguments', () => {
 	it('@root with constant generator: @root(7) is the same as a literal', () => {
-		expect(notes('@root(7) note x [0]')[0]).toBe(67);
+		expect(notes('@root(7)\n  note x [0]')[0]).toBe(67);
 	});
 
 	it('@root with step generator: lock-by-default freezes root at first value', () => {
 		// @root(0step7x2) — decorators lock by default, so root is frozen at 0 (= C5).
-		const ns = collectFirst('@root(0step7x2) note x [0]', 4);
+		const ns = collectFirst('@root(0step7x2)\n  note x [0]', 4);
 		expect(ns.every((n) => n === ns[0])).toBe(true);
 		expect(ns[0]).toBe(60); // locked at step start value 0 → C5
 	});
 });
 
-describe('multiple inline decorators on same pattern', () => {
-	it('@scale(minor) @root(7) note x [0]: G minor, degree 0 = G5 = 67', () => {
-		expect(notes('@scale(minor) @root(7) note x [0]')[0]).toBe(67);
+describe('multiple decorators on same decorator line', () => {
+	it('@scale(minor) @root(7) block: G minor, degree 0 = G5 = 67', () => {
+		expect(notes('@scale(minor) @root(7)\n  note x [0]')[0]).toBe(67);
 	});
 
-	it('@scale(minor) @root(7) note x [2]: G minor degree 2 = Bb5 = 70', () => {
+	it('@scale(minor) @root(7) block: G minor degree 2 = Bb5 = 70', () => {
 		// G5=67, minor[2] = 3 semitones → 70
-		expect(notes('@scale(minor) @root(7) note x [2]')[0]).toBe(70);
+		expect(notes('@scale(minor) @root(7)\n  note x [2]')[0]).toBe(70);
 	});
 });
 
 describe('pitch chain: combined root + octave + scale', () => {
 	it('root=5 (F), octave=4, major, degree 0 = F4 = MIDI 53', () => {
 		// F5=65, F4=53
-		expect(notes('@root(5) @octave(4) note x [0]')[0]).toBe(53);
+		expect(notes('@root(5) @octave(4)\n  note x [0]')[0]).toBe(53);
 	});
 
 	it('root=7 (G), major, degree 2 = B5 = MIDI 71', () => {
 		// G5=67, major degree 2 = 4 semitones → 71
-		expect(notes('@root(7) note x [2]')[0]).toBe(71);
+		expect(notes('@root(7)\n  note x [2]')[0]).toBe(71);
 	});
 
 	it('@key(g minor) degree 7 wraps to G6 = MIDI 79', () => {
 		// G5=67, degree 7 = 12 semitones up (full octave) → 79
-		expect(notes('@key(g minor) note x [7]')[0]).toBe(79);
+		expect(notes('@key(g minor)\n  note x [7]')[0]).toBe(79);
 	});
 });
 
@@ -851,17 +847,17 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	const SHIFT = -5;
 
 	it('literal degree: [2] in G major/4 → E4 = 59', () => {
-		expect(notes('@key(g major 4) note x [2]')[0]).toBe(64 + SHIFT);
+		expect(notes('@key(g major 4)\n  note x [2]')[0]).toBe(64 + SHIFT);
 	});
 
 	it('literal list: [0 2 4 6] in G major/4 — all four notes shifted -5', () => {
-		expect(notes('@key(g major 4) note x [0 2 4 6]')).toEqual(
+		expect(notes('@key(g major 4)\n  note x [0 2 4 6]')).toEqual(
 			[60, 64, 67, 71].map((n) => n + SHIFT)
 		);
 	});
 
 	it('step: [0step2x4] advances through degrees 0,2,4,6 across 4 cycles in G major/4', () => {
-		const i = inst('@key(g major 4) note x [0step2x4]');
+		const i = inst('@key(g major 4)\n  note x [0step2x4]');
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
@@ -871,7 +867,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	});
 
 	it('mul: [1mul2x4] advances through degrees 1,2,4,8 across 4 cycles in G major/4', () => {
-		const i = inst('@key(g major 4) note x [1mul2x4]');
+		const i = inst('@key(g major 4)\n  note x [1mul2x4]');
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
@@ -881,7 +877,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	});
 
 	it('lin: [0lin4x3] advances through degrees 0,2,4 across 3 cycles in G major/4', () => {
-		const i = inst('@key(g major 4) note x [0lin4x3]');
+		const i = inst('@key(g major 4)\n  note x [0lin4x3]');
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
@@ -891,7 +887,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	});
 
 	it('geo: [1geo8x4] advances through degrees 1,2,4,8 across 4 cycles in G major/4', () => {
-		const i = inst('@key(g major 4) note x [1geo8x4]');
+		const i = inst('@key(g major 4)\n  note x [1geo8x4]');
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
@@ -902,7 +898,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 
 	it('rand: [0rand4] in G major/4 — all notes in shifted G-major range', () => {
 		const validInG = new Set([60, 62, 64, 65, 67].map((n) => n + SHIFT));
-		const i = inst('@key(g major 4) note x [0rand4]');
+		const i = inst('@key(g major 4)\n  note x [0rand4]');
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -911,7 +907,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	});
 
 	it('rand: [0rand4] in G major/4 — produces more than one distinct note', () => {
-		const i = inst('@key(g major 4) note x [0rand4]');
+		const i = inst('@key(g major 4)\n  note x [0rand4]');
 		const seen = new Set<number>();
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
@@ -923,7 +919,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 
 	it('tilde (~): [0~4] in G major/4 — all notes in shifted range', () => {
 		const validInG = new Set([60, 62, 64, 65, 67].map((n) => n + SHIFT));
-		const i = inst('@key(g major 4) note x [0~4]');
+		const i = inst('@key(g major 4)\n  note x [0~4]');
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -932,7 +928,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	});
 
 	it('gau: [3gau1] in G major/4 — varies and is lower than C major/5 equivalent', () => {
-		const i = inst('@key(g major 4) note x [3gau1]');
+		const i = inst('@key(g major 4)\n  note x [3gau1]');
 		const seen = new Set<number>();
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
@@ -946,7 +942,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 
 	it('exp: [1exp7] in G major/4 — all notes in shifted range [57, 67]', () => {
 		// C/5: degrees 1–7 → MIDI 62–72. G/4: -5 → 57–67.
-		const i = inst('@key(g major 4) note x [1exp7]');
+		const i = inst('@key(g major 4)\n  note x [1exp7]');
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -956,7 +952,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	});
 
 	it('bro: [0bro6m1] in G major/4 — stays within shifted degree range [55, 66]', () => {
-		const i = inst('@key(g major 4) note x [0bro6m1]');
+		const i = inst('@key(g major 4)\n  note x [0bro6m1]');
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -968,7 +964,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 	it('step in minor: [0step1x3] in A minor/5 advances A5→B5→C6', () => {
 		// A minor root=9, octave=5 → rootMidi=69. minor intervals: [2,1,2,2,1,2,2]
 		// degree 0→69(A5), degree 1→71(B5), degree 2→72(C6)
-		const i = inst('@key(a minor) note x [0step1x3]');
+		const i = inst('@key(a minor)\n  note x [0step1x3]');
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
@@ -981,7 +977,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		// D dorian: root=2, octave=5 → rootMidi=62. dorian intervals: [2,1,2,2,2,1,2]
 		// degrees 0–4 offsets: [0,2,3,5,7] → MIDI [62,64,65,67,69]
 		const validDDorian = new Set([62, 64, 65, 67, 69]);
-		const i = inst('@key(d dorian) note x [0rand4]');
+		const i = inst('@key(d dorian)\n  note x [0rand4]');
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
@@ -991,7 +987,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 
 	it('multi-element list in non-default context: all elements shifted', () => {
 		// C/5: [0 2 4] → [60, 64, 67]. G/4: → [55, 59, 62]
-		expect(notes('@key(g major 4) note x [0 2 4]')).toEqual([55, 59, 62]);
+		expect(notes('@key(g major 4)\n  note x [0 2 4]')).toEqual([55, 59, 62]);
 	});
 
 	it('set root(9) + step: note [0step1x3] advances A5→B5→C#6', () => {
@@ -1366,7 +1362,9 @@ describe('accidentals (truth table 15)', () => {
 	it('accidentals work with non-default scale context', () => {
 		// @key(g major): root=G5=67, G major scale. degree 2 = B5 = 71.
 		// degree 2b = B5 - 1 = Bb5 = 70.
-		expect(notes('@key(g major) note x [2b]')[0]).toBe(notes('@key(g major) note x [2]')[0] - 1);
+		expect(notes('@key(g major)\n  note x [2b]')[0]).toBe(
+			notes('@key(g major)\n  note x [2]')[0] - 1
+		);
 	});
 });
 
@@ -1403,7 +1401,9 @@ describe('transposition (truth table 10)', () => {
 
 	it('transposition participates in full pitch chain', () => {
 		// @key(g major) note x [0] + 2 should equal @key(g major) note x [2]
-		expect(notes('@key(g major) note x [0] + 2')[0]).toBe(notes('@key(g major) note x [2]')[0]);
+		expect(notes('@key(g major)\n  note x [0] + 2')[0]).toBe(
+			notes('@key(g major)\n  note x [2]')[0]
+		);
 	});
 });
 
@@ -1597,7 +1597,7 @@ describe("note'n statement (truth table 7)", () => {
 
 	it("note'n supports pitch context decorators", () => {
 		// @key(g major) note x [0]'n → G5 = 67
-		expect(notes("@key(g major) note x [0]'n")[0]).toBe(67);
+		expect(notes("@key(g major)\n  note x [0]'n")[0]).toBe(67);
 	});
 
 	it("integer 'at on continuation line", () => {
@@ -1938,7 +1938,7 @@ describe('timed lists — @ and : are absolute beat offsets from cycle start', (
 
 	it('timed list supports pitch context', () => {
 		// @key(g major) note x [0@0 2@1/2] → G5=67, B5=71
-		expect(notes('@key(g major) note x [0@0 2@1/2]')).toEqual([67, 71]);
+		expect(notes('@key(g major)\n  note x [0@0 2@1/2]')).toEqual([67, 71]);
 	});
 
 	it('note x [0 2@1] — bare degree gets natural slot, @-timed degree gets override', () => {
@@ -2085,25 +2085,27 @@ describe('block comments', () => {
 });
 
 describe('accidentals in non-default pitch contexts', () => {
-	it('@root(7) note x [2#] — sharp applied after root shift (G major, degree 2 = B5 = 71, +1 = 72)', () => {
+	it('@root(7)\n  note x [2#] — sharp applied after root shift (G major, degree 2 = B5 = 71, +1 = 72)', () => {
 		// G5=67, G major scale, degree 2 = B5 = 71, sharp → 72 = C6
-		expect(notes('@root(7) note x [2#]')[0]).toBe(notes('@root(7) note x [2]')[0] + 1);
+		expect(notes('@root(7)\n  note x [2#]')[0]).toBe(notes('@root(7)\n  note x [2]')[0] + 1);
 	});
 
-	it('@scale(minor) note x [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
+	it('@scale(minor)\n  note x [4b] — flat applied in minor context (degree 4 = G5 = 67, -1 = 66)', () => {
 		// C minor, degree 4 = G5 = 67 (minor has same perfect 5th), flat → 66 = F#5
-		expect(notes('@scale(minor) note x [4b]')[0]).toBe(notes('@scale(minor) note x [4]')[0] - 1);
-	});
-
-	it('@key(g major 4) note x [3#] — accidental in compound key context', () => {
-		// G major octave 4: root = G4 = 55. degree 3 in major = 5 semitones → C5 = 60. Sharp → 61.
-		expect(notes('@key(g major 4) note x [3#]')[0]).toBe(
-			notes('@key(g major 4) note x [3]')[0] + 1
+		expect(notes('@scale(minor)\n  note x [4b]')[0]).toBe(
+			notes('@scale(minor)\n  note x [4]')[0] - 1
 		);
 	});
 
-	it('@root(7) note x [2bb] — double flat: two semitones below', () => {
-		expect(notes('@root(7) note x [2bb]')[0]).toBe(notes('@root(7) note x [2]')[0] - 2);
+	it('@key(g major 4)\n  note x [3#] — accidental in compound key context', () => {
+		// G major octave 4: root = G4 = 55. degree 3 in major = 5 semitones → C5 = 60. Sharp → 61.
+		expect(notes('@key(g major 4)\n  note x [3#]')[0]).toBe(
+			notes('@key(g major 4)\n  note x [3]')[0] + 1
+		);
+	});
+
+	it('@root(7)\n  note x [2bb] — double flat: two semitones below', () => {
+		expect(notes('@root(7)\n  note x [2bb]')[0]).toBe(notes('@root(7)\n  note x [2]')[0] - 2);
 	});
 });
 
@@ -2447,7 +2449,7 @@ describe('sample content type', () => {
 	});
 
 	it('@buf on sample is a semantic error', () => {
-		const inst = createInstance('@buf(\\x) sample drums [\\kick]');
+		const inst = createInstance('@buf(\\x)\n  sample drums [\\kick]');
 		expect(inst.ok).toBe(false);
 	});
 });
@@ -2473,7 +2475,7 @@ describe('slice content type', () => {
 	});
 
 	it('@buf(\\myloop) sets bufferName on slice events', () => {
-		const evs = eval0('@buf(\\myloop) slice drums [0 2]') as SliceEvent[];
+		const evs = eval0('@buf(\\myloop)\n  slice drums [0 2]') as SliceEvent[];
 		expect(evs[0].bufferName).toBe('myloop');
 		expect(evs[1].bufferName).toBe('myloop');
 	});
@@ -2504,7 +2506,7 @@ describe('cloud content type', () => {
 	});
 
 	it('@buf(\\myloop) sets bufferName on cloud event', () => {
-		const evs = eval0('@buf(\\myloop) cloud atmos []') as CloudEvent[];
+		const evs = eval0('@buf(\\myloop)\n  cloud atmos []') as CloudEvent[];
 		expect(evs[0].bufferName).toBe('myloop');
 	});
 
@@ -2848,7 +2850,7 @@ describe('chord literals — basic', () => {
 
 describe('chord literals — scale context', () => {
 	it('@scale(minor) note x [<0 2>] — voices resolved under minor scale', () => {
-		const evs = eval0('@scale(minor) note x [<0 2>]');
+		const evs = eval0('@scale(minor)\n  note x [<0 2>]');
 		expect(evs).toHaveLength(2);
 		// C minor/C5: degree 0 = C5 = 60, degree 2 = Eb5 = 63
 		const sortedNotes = evs.map((e) => pitched(e).note).sort((a, b) => a - b);
@@ -3464,20 +3466,20 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 	// --- Static \symbol form (existing behaviour — must remain working) ---
 
 	it('@buf(\\myloop) sets bufferName on slice events (static, regression)', () => {
-		const evs = eval0('@buf(\\myloop) slice drums [0 2]') as SliceEvent[];
+		const evs = eval0('@buf(\\myloop)\n  slice drums [0 2]') as SliceEvent[];
 		expect(evs[0].bufferName).toBe('myloop');
 		expect(evs[1].bufferName).toBe('myloop');
 	});
 
 	it('@buf(\\recording) sets bufferName on cloud event (static, regression)', () => {
-		const evs = eval0('@buf(\\recording) cloud grain []') as CloudEvent[];
+		const evs = eval0('@buf(\\recording)\n  cloud grain []') as CloudEvent[];
 		expect(evs[0].bufferName).toBe('recording');
 	});
 
 	// --- Dynamic generator form — per-cycle buffer selection ---
 
 	it("@buf([\\loopA \\loopB]'pick) parses without error for slice", () => {
-		const i = createInstance("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8 12]");
+		const i = createInstance("@buf([\\loopA \\loopB]'pick)\n  slice drums [0 4 8 12]");
 		expect(i.ok).toBe(true);
 		if (!i.ok) return;
 		const r = i.evaluate({ cycleNumber: 0 });
@@ -3485,7 +3487,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 	});
 
 	it("@buf([\\loopA \\loopB]'pick) bufferName is one of the two options each cycle", () => {
-		const i = inst("@buf([\\loopA \\loopB]'pick) slice drums [0 4]");
+		const i = inst("@buf([\\loopA \\loopB]'pick)\n  slice drums [0 4]");
 		const seen = new Set<string>();
 		for (let c = 0; c < 50; c++) {
 			const r = i.evaluate({ cycleNumber: c });
@@ -3504,7 +3506,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 
 	it('all slice events within one cycle share the same bufferName from @buf generator', () => {
 		// All events in a single cycle must use the same buffer name (sampled once per cycle)
-		const i = inst("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8 12]");
+		const i = inst("@buf([\\loopA \\loopB]'pick)\n  slice drums [0 4 8 12]");
 		for (let c = 0; c < 20; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
@@ -3515,7 +3517,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 	});
 
 	it("@buf([\\a \\b \\c]'shuf) slice — cycles through shuffled buffer names", () => {
-		const i = createInstance("@buf([\\a \\b \\c]'shuf) slice drums [0 4]");
+		const i = createInstance("@buf([\\a \\b \\c]'shuf)\n  slice drums [0 4]");
 		expect(i.ok).toBe(true);
 		if (!i.ok) return;
 		const r = i.evaluate({ cycleNumber: 0 });
@@ -3527,7 +3529,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 
 	it('@buf([\\loopA \\loopB]) slice — cycles through buffers in order', () => {
 		// Default traversal: sequential. Cycle 0 → loopA, cycle 1 → loopB, cycle 2 → loopA, ...
-		const i = inst('@buf([\\loopA \\loopB]) slice drums [0 4]');
+		const i = inst('@buf([\\loopA \\loopB])\n  slice drums [0 4]');
 		const r0 = i.evaluate({ cycleNumber: 0 });
 		const r1 = i.evaluate({ cycleNumber: 1 });
 		const r2 = i.evaluate({ cycleNumber: 2 });
@@ -3541,7 +3543,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 	});
 
 	it("@buf([\\loopA \\loopB]'pick) cloud — bufferName set on cloud event", () => {
-		const i = inst("@buf([\\loopA \\loopB]'pick) cloud grain []");
+		const i = inst("@buf([\\loopA \\loopB]'pick)\n  cloud grain []");
 		for (let c = 0; c < 20; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
@@ -3553,7 +3555,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 
 	it("@buf([\\loopA \\loopB]'lock) — buffer name is chosen once and frozen", () => {
 		// 'lock freezes the value on first evaluation
-		const i = inst("@buf([\\loopA \\loopB]'lock) slice drums [0 4]");
+		const i = inst("@buf([\\loopA \\loopB]'lock)\n  slice drums [0 4]");
 		let lockedName: string | undefined;
 		for (let c = 0; c < 10; c++) {
 			const r = i.evaluate({ cycleNumber: c });
@@ -3569,7 +3571,7 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 	});
 
 	it("@buf(\\myloop) — static form still uses 'lock semantics (same name every cycle)", () => {
-		const i = inst('@buf(\\myloop) slice drums [0 4]');
+		const i = inst('@buf(\\myloop)\n  slice drums [0 4]');
 		for (let c = 0; c < 5; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
@@ -3581,14 +3583,14 @@ describe('@buf with generator expression — per-cycle buffer selection', () => 
 	// --- Error cases ---
 
 	it('@buf on sample is still a semantic error', () => {
-		const i = createInstance("@buf([\\x \\y]'pick) sample drums [\\kick]");
+		const i = createInstance("@buf([\\x \\y]'pick)\n  sample drums [\\kick]");
 		expect(i.ok).toBe(false);
 	});
 
 	it("@buf([\\loopA \\loopB]'eager(2)) slice — buffer advances every 2 cycles", () => {
 		// 'eager(2): polled at cycles 0, 2, 4, ... and held in between.
 		// Sequential poll: cycle 0 → idx 0 → loopA; cycle 2 → idx 1 → loopB; cycle 4 → idx 0 → loopA
-		const i = inst("@buf([\\loopA \\loopB]'eager(2)) slice drums [0 4]");
+		const i = inst("@buf([\\loopA \\loopB]'eager(2))\n  slice drums [0 4]");
 		const getName = (c: number) => {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);

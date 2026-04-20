@@ -402,31 +402,18 @@ class FluxParser extends CstParser {
 	// -------------------------------------------------------------------------
 
 	decoratorBlock = this.RULE('decoratorBlock', () => {
-		// One or more decorators, followed by either:
-		//   - an inline body on the same line (patternStatement), OR
-		//   - an INDENT-indented body on subsequent lines.
+		// One or more decorators on their own line(s), followed by an INDENT-indented body.
+		// The inline form (@scale(minor) note lead [0 1 2]) is not allowed — parse error.
 		this.AT_LEAST_ONE(() => {
 			this.SUBRULE(this.decorator);
 		});
+		// Indented block body (mandatory — decorators must introduce a block)
+		this.CONSUME(INDENT);
 		this.OR([
-			// Indented block body
-			{
-				ALT: () => {
-					this.CONSUME(INDENT);
-					this.OR2([
-						{ ALT: () => this.SUBRULE(this.patternStatement) },
-						{ ALT: () => this.SUBRULE(this.decoratorBlock) }
-					]);
-					this.CONSUME(DEDENT);
-				}
-			},
-			// Inline body on the same line
-			{
-				ALT: () => {
-					this.SUBRULE2(this.patternStatement);
-				}
-			}
+			{ ALT: () => this.SUBRULE(this.patternStatement) },
+			{ ALT: () => this.SUBRULE(this.decoratorBlock) }
 		]);
+		this.CONSUME(DEDENT);
 	});
 
 	decorator = this.RULE('decorator', () => {
