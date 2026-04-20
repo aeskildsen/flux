@@ -63,14 +63,14 @@ import {
 	Slash,
 	Tilde,
 	Rand,
-	Gau,
+	Gauss,
 	Exp,
-	Bro,
+	Brown,
 	BroStep,
 	Step,
 	Mul,
 	Lin,
-	Geo,
+	Geom,
 	LenSep,
 	Question,
 	Sharp,
@@ -531,13 +531,13 @@ class FluxParser extends CstParser {
 			this.OR2([
 				{ ALT: () => this.SUBRULE(this.randGen) },
 				{ ALT: () => this.SUBRULE(this.tildeGen) },
-				{ ALT: () => this.SUBRULE(this.gauGen) },
+				{ ALT: () => this.SUBRULE(this.gaussGen) },
 				{ ALT: () => this.SUBRULE(this.expGen) },
-				{ ALT: () => this.SUBRULE(this.broGen) },
+				{ ALT: () => this.SUBRULE(this.brownGen) },
 				{ ALT: () => this.SUBRULE(this.stepGen) },
 				{ ALT: () => this.SUBRULE(this.mulGen) },
 				{ ALT: () => this.SUBRULE(this.linGen) },
-				{ ALT: () => this.SUBRULE(this.geoGen) }
+				{ ALT: () => this.SUBRULE(this.geomGen) }
 			]);
 		});
 	});
@@ -1052,13 +1052,13 @@ class FluxParser extends CstParser {
 			this.OR2([
 				{ ALT: () => this.SUBRULE(this.randGen) },
 				{ ALT: () => this.SUBRULE(this.tildeGen) },
-				{ ALT: () => this.SUBRULE(this.gauGen) },
+				{ ALT: () => this.SUBRULE(this.gaussGen) },
 				{ ALT: () => this.SUBRULE(this.expGen) },
-				{ ALT: () => this.SUBRULE(this.broGen) },
+				{ ALT: () => this.SUBRULE(this.brownGen) },
 				{ ALT: () => this.SUBRULE(this.stepGen) },
 				{ ALT: () => this.SUBRULE(this.mulGen) },
 				{ ALT: () => this.SUBRULE(this.linGen) },
-				{ ALT: () => this.SUBRULE(this.geoGen) }
+				{ ALT: () => this.SUBRULE(this.geomGen) }
 			]);
 		});
 	});
@@ -1086,9 +1086,9 @@ class FluxParser extends CstParser {
 		this.SUBRULE(this.numericLiteral);
 	});
 
-	gauGen = this.RULE('gauGen', () => {
-		// 0gau4 — Pgauss(mean, sdev)
-		this.CONSUME(Gau);
+	gaussGen = this.RULE('gaussGen', () => {
+		// 0gauss4 — Pgauss(mean, sdev)
+		this.CONSUME(Gauss);
 		this.SUBRULE(this.numericLiteral);
 	});
 
@@ -1098,9 +1098,9 @@ class FluxParser extends CstParser {
 		this.SUBRULE(this.numericLiteral);
 	});
 
-	broGen = this.RULE('broGen', () => {
-		// 0bro10m2 — Pbrown(min, max, max_step)
-		this.CONSUME(Bro);
+	brownGen = this.RULE('brownGen', () => {
+		// 0brown10m2 — Pbrown(min, max, max_step)
+		this.CONSUME(Brown);
 		this.SUBRULE(this.numericLiteral); // max
 		this.CONSUME(BroStep); // 'm' separator
 		this.SUBRULE2(this.numericLiteral); // max_step
@@ -1130,9 +1130,9 @@ class FluxParser extends CstParser {
 		this.SUBRULE2(this.numericLiteral); // length
 	});
 
-	geoGen = this.RULE('geoGen', () => {
-		// 2geo7x8 — geometric interpolation
-		this.CONSUME(Geo);
+	geomGen = this.RULE('geomGen', () => {
+		// 2geom7x8 — geometric interpolation
+		this.CONSUME(Geom);
 		this.SUBRULE(this.numericLiteral); // last
 		this.CONSUME(LenSep); // 'x' separator
 		this.SUBRULE2(this.numericLiteral); // length

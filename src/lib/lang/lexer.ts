@@ -281,10 +281,10 @@ export const Rand = createToken({
 	// Monaco scope: 'keyword'
 });
 
-/** `gau` — gaussian random (Pgauss). e.g. `0gau4`. */
-export const Gau = createToken({
-	name: 'Gau',
-	pattern: { exec: genKeywordPattern('gau', /[\d(]/) },
+/** `gauss` — gaussian random (Pgauss). e.g. `0gauss4`. */
+export const Gauss = createToken({
+	name: 'Gauss',
+	pattern: { exec: genKeywordPattern('gauss', /[\d(]/) },
 	line_breaks: false
 	// Monaco scope: 'keyword'
 });
@@ -298,12 +298,12 @@ export const Exp = createToken({
 });
 
 /**
- * `bro` — brownian motion (Pbrown). e.g. `0bro10m2`.
+ * `brown` — brownian motion (Pbrown). e.g. `0brown10m2`.
  * The `m` separator for max_step is a separate token (BroStep).
  */
-export const Bro = createToken({
-	name: 'Bro',
-	pattern: { exec: genKeywordPattern('bro', /[\d(]/) },
+export const Brown = createToken({
+	name: 'Brown',
+	pattern: { exec: genKeywordPattern('brown', /[\d(]/) },
 	line_breaks: false
 	// Monaco scope: 'keyword'
 });
@@ -343,10 +343,10 @@ export const Lin = createToken({
 	// Monaco scope: 'keyword'
 });
 
-/** `geo` — geometric interpolation. e.g. `2geo7x8`. */
-export const Geo = createToken({
-	name: 'Geo',
-	pattern: { exec: genKeywordPattern('geo', /\d/) },
+/** `geom` — geometric interpolation. e.g. `2geom7x8`. */
+export const Geom = createToken({
+	name: 'Geom',
+	pattern: { exec: genKeywordPattern('geom', /\d/) },
 	line_breaks: false
 	// Monaco scope: 'keyword'
 });
@@ -370,7 +370,7 @@ export const LenSep = createToken({
 // or `#` doesn't get swallowed by Identifier.
 //
 // `Flat` matches `b` only when NOT followed by an identifier character or
-// digit, preventing `bro` from matching as Flat + "ro". (The Bro token uses
+// digit, preventing `brown` from matching as Flat + "rown". (The Brown token uses
 // its own custom pattern and is ordered before Flat anyway, but this guard
 // makes the rule robust.)
 //
@@ -754,16 +754,16 @@ export const allTokens = [
 	// Generator keywords (longer ones first where prefixes overlap)
 	Step, // 'step' before 'set' — no overlap, but keep deterministic order
 	Rand,
-	Gau,
+	Gauss,
 	Exp,
-	Bro,
+	Brown,
 	Mul,
 	Lin,
-	Geo,
+	Geom,
 	BroStep, // 'm' — single char, after multi-char keywords; before Flat ('b')
 	LenSep, // 'x' — single char, after all multi-char keywords
 	// Accidentals — before Identifier so standalone 'b' and '#' tokenise correctly
-	Flat, // 'b' — must come after Bro/BroStep so 'bro...' is not split
+	Flat, // 'b' — must come after Brown/BroStep so 'brown...' is not split
 	Sharp, // '#'
 	// Rest — before Identifier so standalone '_' doesn't tokenise as Identifier
 	Rest,

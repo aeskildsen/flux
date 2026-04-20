@@ -19,14 +19,14 @@ import {
 	RParen,
 	Tilde,
 	Rand,
-	Gau,
+	Gauss,
 	Exp,
-	Bro,
+	Brown,
 	BroStep,
 	Step,
 	Mul,
 	Lin,
-	Geo,
+	Geom,
 	LenSep,
 	Question,
 	Symbol,
@@ -185,10 +185,10 @@ describe('FluxLexer', () => {
 			expect(tokens[2].tokenType).toBe(Integer);
 		});
 
-		it('tokenizes "gau": 0gau4', () => {
-			const { tokens, errors } = FluxLexer.tokenize('0gau4');
+		it('tokenizes "gauss": 0gauss4', () => {
+			const { tokens, errors } = FluxLexer.tokenize('0gauss4');
 			expect(errors).toHaveLength(0);
-			expect(tokens[1].tokenType).toBe(Gau);
+			expect(tokens[1].tokenType).toBe(Gauss);
 		});
 
 		it('tokenizes "exp": 1exp7', () => {
@@ -199,13 +199,13 @@ describe('FluxLexer', () => {
 			expect(tokens[2].tokenType).toBe(Integer);
 		});
 
-		it('tokenizes "bro" with "m" separator: 0bro10m2', () => {
-			const { tokens, errors } = FluxLexer.tokenize('0bro10m2');
+		it('tokenizes "brown" with "m" separator: 0brown10m2', () => {
+			const { tokens, errors } = FluxLexer.tokenize('0brown10m2');
 			expect(errors).toHaveLength(0);
-			// Integer(0) Bro Integer(10) BroStep Integer(2)
+			// Integer(0) Brown Integer(10) BroStep Integer(2)
 			expect(tokens).toHaveLength(5);
 			expect(tokens[0].tokenType).toBe(Integer);
-			expect(tokens[1].tokenType).toBe(Bro);
+			expect(tokens[1].tokenType).toBe(Brown);
 			expect(tokens[2].tokenType).toBe(Integer);
 			expect(tokens[3].tokenType).toBe(BroStep);
 			expect(tokens[4].tokenType).toBe(Integer);
@@ -233,10 +233,10 @@ describe('FluxLexer', () => {
 			expect(tokens[1].tokenType).toBe(Lin);
 		});
 
-		it('tokenizes "geo": 2geo7x8', () => {
-			const { tokens, errors } = FluxLexer.tokenize('2geo7x8');
+		it('tokenizes "geom": 2geom7x8', () => {
+			const { tokens, errors } = FluxLexer.tokenize('2geom7x8');
 			expect(errors).toHaveLength(0);
-			expect(tokens[1].tokenType).toBe(Geo);
+			expect(tokens[1].tokenType).toBe(Geom);
 		});
 
 		it('longer_alt: "random" is Identifier, not Rand + om', () => {
@@ -448,10 +448,10 @@ describe('FluxLexer', () => {
 			expect(tokens[2].tokenType).toBe(Sharp);
 		});
 
-		it('bro followed by digit tokenises as Bro, not Flat+identifier', () => {
-			const { tokens, errors } = FluxLexer.tokenize('0bro10m2');
+		it('brown followed by digit tokenises as Brown, not Flat+identifier', () => {
+			const { tokens, errors } = FluxLexer.tokenize('0brown10m2');
 			expect(errors).toHaveLength(0);
-			expect(tokens[1].tokenType).toBe(Bro);
+			expect(tokens[1].tokenType).toBe(Brown);
 			// No Flat token should appear
 			expect(tokens.some((t) => t.tokenType === Flat)).toBe(false);
 		});
@@ -488,16 +488,37 @@ describe('FluxLexer', () => {
 			expect(tokens[6].tokenType).toBe(Identifier);
 		});
 
-		it('nested generators in a list: [0 1exp7 4gau2]', () => {
-			const { tokens, errors } = FluxLexer.tokenize('[0 1exp7 4gau2]');
+		it('nested generators in a list: [0 1exp7 4gauss2]', () => {
+			const { tokens, errors } = FluxLexer.tokenize('[0 1exp7 4gauss2]');
 			expect(errors).toHaveLength(0);
-			// LBracket Integer  Integer Exp Integer  Integer Gau Integer  RBracket
+			// LBracket Integer  Integer Exp Integer  Integer Gauss Integer  RBracket
 			expect(tokens[0].tokenType).toBe(LBracket);
 			expect(tokens[tokens.length - 1].tokenType).toBe(RBracket);
 			const expIdx = tokens.findIndex((t) => t.tokenType === Exp);
-			const gauIdx = tokens.findIndex((t) => t.tokenType === Gau);
+			const gaussIdx = tokens.findIndex((t) => t.tokenType === Gauss);
 			expect(expIdx).toBeGreaterThan(0);
-			expect(gauIdx).toBeGreaterThan(expIdx);
+			expect(gaussIdx).toBeGreaterThan(expIdx);
+		});
+
+		it('old name "gau" is no longer a keyword — tokenises as Identifier', () => {
+			// After the rename, "gau" does NOT match the Gauss token; the lexer
+			// sees it as a plain Identifier (followed by a digit it can't attach to).
+			const { tokens } = FluxLexer.tokenize('0gau4');
+			// The presence of an Identifier token (not Gauss) confirms the old name is gone.
+			const hasGauss = tokens.some((t) => t.tokenType === Gauss);
+			expect(hasGauss).toBe(false);
+		});
+
+		it('old name "bro" is no longer a keyword — tokenises as Identifier', () => {
+			const { tokens } = FluxLexer.tokenize('0bro4');
+			const hasBrown = tokens.some((t) => t.tokenType === Brown);
+			expect(hasBrown).toBe(false);
+		});
+
+		it('old name "geo" is no longer a keyword — tokenises as Identifier', () => {
+			const { tokens } = FluxLexer.tokenize('1geo4');
+			const hasGeom = tokens.some((t) => t.tokenType === Geom);
+			expect(hasGeom).toBe(false);
 		});
 
 		it("note with stut modifier: note [0rand7 4rand6]'stut(4)", () => {
