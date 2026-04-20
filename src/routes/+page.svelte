@@ -362,6 +362,10 @@
 		clearOutgoing();
 		handle?.stop();
 		handle = null;
+		// Stop the clock so clock.startTime is null in the stopped state.
+		// This is safe: the scheduler is no longer running so beatToAudioTime
+		// will not be called. The clock is reset on the next play action.
+		clock.stop();
 	}
 
 	onDestroy(() => {
@@ -392,15 +396,26 @@
 		}
 		const inst = instResult;
 
-		const firstPlay = clock.startTime === null;
-		if (firstPlay) clock.start();
-
 		const CYCLE_BEATS = 4; // 1 DSL cycle = 4 real beats
-		// On first play currentBeat is 0, so ceil(0/4)*4 = 0 = "right now".
-		// Add CYCLE_BEATS so the first event lands one cycle ahead, giving the
-		// lookahead scheduler enough runway to deliver bundles before their NTP time.
-		const nextCycleBeat =
-			Math.ceil(clock.currentBeat / CYCLE_BEATS) * CYCLE_BEATS + (firstPlay ? CYCLE_BEATS : 0);
+
+		// Branch on playback state:
+		// - Stopped (handle === null): reset the cycle clock to 0 and begin at beat 0
+		//   immediately. This is a phase-defining action — the first sound arrives within
+		//   the scheduler's lookahead window (~100 ms), not several seconds later.
+		// - Running (handle !== null): quantise the change to the next cycle boundary.
+		//   This is a phase-preserving action that keeps patterns metrically aligned
+		//   during live coding (consistent with the Transport Semantics spec section).
+		const startingFromStopped = handle === null;
+		if (startingFromStopped) {
+			clock.reset();
+		} else if (clock.startTime === null) {
+			// Safety: clock was somehow stopped without handle being cleared — start fresh.
+			clock.start();
+		}
+
+		const nextCycleBeat = startingFromStopped
+			? 0
+			: Math.ceil(clock.currentBeat / CYCLE_BEATS) * CYCLE_BEATS;
 
 		// Let the current loop finish its cycle, then stop it.
 		// setStopBeat prevents the old loop from scheduling the event at

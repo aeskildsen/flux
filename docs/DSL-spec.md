@@ -1049,3 +1049,27 @@ All generators are evaluated eagerly at the cycle boundary — never lazily mid-
 This guarantee is what makes `'stut` and other count-modifying modifiers tractable: the scheduler receives a complete, fixed-length event array per cycle and can calculate durations, gate times, and subdivisions without needing to consult generators again during playback.
 
 Generators have no access to external runtime state (e.g. MIDI input, sensor values, another pattern's current position) at the moment of playback. Values are committed at cycle start. This is intentional: Flux is a live coding tool, not a DAW. If a value should change, the performer re-evaluates the expression, which takes effect at the next cycle boundary.
+
+---
+
+## Transport Semantics
+
+### Start from stopped
+
+When the user starts playback from a stopped state (Ctrl-Enter while nothing is playing), the cycle clock and cycle counter are **reset to 0** and dispatching begins immediately — at beat 0 of cycle 0. "Immediately" means within the scheduler's normal lookahead window, not at the literal instant of the keystroke.
+
+This is a **phase-defining** action. There is no prior metrical frame to preserve, so the clock starts fresh. The first sound should arrive within one lookahead window (~100 ms) after the keypress.
+
+### Edit while running
+
+When the user re-evaluates while playback is already running (Ctrl-Enter while a loop is active), the change is **quantised to the next cycle boundary**. The outgoing loop plays to the end of its current cycle; the new loop picks up from beat 0 of the next cycle. The cycle clock is not reset — it continues uninterrupted.
+
+This is a **phase-preserving** action, consistent with TidalCycles and Sonic Pi. Quantising to the cycle boundary keeps patterns metrically aligned during live coding.
+
+### Pause/resume (future)
+
+If a pause state is added in the future, **pause→resume must preserve clock phase** — it must not reset the cycle clock. Resuming from a paused position is a phase-preserving action: the clock continues from where it was frozen. Only a full stop→play transition is phase-defining.
+
+### Cycle counter
+
+The cycle counter (used by `'stretch`, `cycleOffset`, and similar constructs) resets to 0 on every stop→play transition. Continuing the counter across stop/play boundaries is not a behaviour any pattern relies on, and resetting matches user expectation: pressing play always starts from cycle 0.
