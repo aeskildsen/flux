@@ -115,11 +115,22 @@ Defines how often nested generators are sampled.
 
 **Note:** When either bound of `rand` (or `~`) is a float, the output is a continuous float sampled uniformly from `[min, max)`. When used as a scale degree inside `[]`, the float is rounded to the nearest integer before scale lookup — microtonal degrees are not supported. Float bounds are most useful in non-degree contexts such as `'legato`, `@cent`, and decorator arguments.
 
+**Gaussian, brownian, and geometric interpolation generators**
+
+| Code         | Interpretation                                        | Evaluation                                       | Result                                           |
+| ------------ | ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| `0gauss4`    | Gaussian (normal) distribution: mean=0, sdev=4.       | Produces float from normal distribution.         | Values cluster around 0; most within ±4 of mean. |
+| `0brown10m2` | Brownian motion: min=0, max=10, max_step=2.           | Steps by at most 2 each poll, clipped to [0,10]. | Values drift slowly within range.                |
+| `1geom0.5x8` | Geometric interpolation: first=1, last=0.5, length=8. | 8 exponentially-spaced values from 1 to 0.5.     | Produces [1, 0.917, 0.841, …, 0.5] (approx).     |
+
 **Error cases**
 
 | Code          | Failure Type   | Why                                                                    |
 | ------------- | -------------- | ---------------------------------------------------------------------- |
 | `0rand4rand7` | Semantic error | Ambiguous chained generators; parentheses required to clarify nesting. |
+| `0gau4`       | Parse error    | `gau` is not a recognised generator keyword; use `gauss` instead.      |
+| `0bro4`       | Parse error    | `bro` is not a recognised generator keyword; use `brown` instead.      |
+| `1geo0.5`     | Parse error    | `geo` is not a recognised generator keyword; use `geom` instead.       |
 
 ---
 
