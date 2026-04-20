@@ -79,6 +79,6 @@ metadata: (
 	]),
 	description: "DX7-inspired FM synthesizer using algorithm 5: three parallel 2-operator (modulator->carrier) stacks summed to a stereo output. Each stack has its own ADSR envelopes, frequency ratios, FM index, detuning, and LFO phase, giving a lively, chorus-like movement. Defaults produce a bell-flavoured pitched tone with a clear fundamental.",
 	url: ""
-)).add;
+));
 
 ~synthdefs = [x];
