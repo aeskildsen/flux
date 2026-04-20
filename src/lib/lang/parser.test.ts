@@ -115,17 +115,25 @@ describe('name conventions — \\symbol vs bare identifier', () => {
 		expect(parse('set scale(\\minor)').parseErrors).toHaveLength(0);
 	});
 
-	it('@scale(minor) — bare identifier is accepted inline', () => {
-		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
+	it('@scale(minor) — bare identifier accepted in block form', () => {
+		expect(parse('@scale(minor)\n  note lead [0 1 2]').parseErrors).toHaveLength(0);
 	});
 
-	it('@scale(\\minor) — symbol parses without error (evaluator rejects semantically)', () => {
+	it('@scale(minor) inline — parse error (inline decorator form disallowed)', () => {
+		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('@scale(\\minor) — symbol accepted in block form (evaluator rejects semantically)', () => {
 		// Grammar accepts \symbol in all decorator positions; semantic validation is evaluator's job.
-		expect(parse('@scale(\\minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
+		expect(parse('@scale(\\minor)\n  note lead [0 1 2]').parseErrors).toHaveLength(0);
 	});
 
-	it('@scale(dorian) — other scale names work as bare identifiers', () => {
-		expect(parse('@scale(dorian) note lead [0 2 4]').parseErrors).toHaveLength(0);
+	it('@scale(\\minor) inline — parse error (inline decorator form disallowed)', () => {
+		expect(parse('@scale(\\minor) note lead [0 1 2]').parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('@scale(dorian) — other scale names work as bare identifiers in block form', () => {
+		expect(parse('@scale(dorian)\n  note lead [0 2 4]').parseErrors).toHaveLength(0);
 	});
 
 	it('set key(g# lydian) — bare identifiers accepted in key position', () => {
@@ -318,9 +326,9 @@ describe('continuation modifiers', () => {
 });
 
 describe('decorators', () => {
-	it('parses an inline decorator: @scale(minor) note lead [0 1 2]', () => {
+	it('inline decorator is a parse error: @scale(minor) note lead [0 1 2]', () => {
 		const { parseErrors } = parse('@scale(minor) note lead [0 1 2]');
-		expect(parseErrors).toHaveLength(0);
+		expect(parseErrors.length).toBeGreaterThan(0);
 	});
 
 	it('parses a block decorator with bare identifier', () => {
@@ -328,8 +336,13 @@ describe('decorators', () => {
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses @key compound decorator: @key(g# lydian) note lead [0]', () => {
+	it('inline @key compound decorator is a parse error: @key(g# lydian) note lead [0]', () => {
 		const { parseErrors } = parse('@key(g# lydian) note lead [0]');
+		expect(parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('parses @key compound decorator in block form', () => {
+		const { parseErrors } = parse('@key(g# lydian)\n  note lead [0]');
 		expect(parseErrors).toHaveLength(0);
 	});
 
@@ -677,8 +690,8 @@ describe('generator naming — valid forms', () => {
 		expect(parse('note lead [0 2 4] | fx(\\lpf)').parseErrors).toHaveLength(0);
 	});
 
-	it('parses inline decorator with named generator: @scale(minor) note lead [0 1 2]', () => {
-		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors).toHaveLength(0);
+	it('inline decorator is a parse error: @scale(minor) note lead [0 1 2]', () => {
+		expect(parse('@scale(minor) note lead [0 1 2]').parseErrors.length).toBeGreaterThan(0);
 	});
 
 	it('parses block decorator with named generator', () => {
@@ -1042,38 +1055,48 @@ describe("modifierSuffix — 'arp traversal modifier", () => {
 // ---------------------------------------------------------------------------
 
 describe('@buf — generator expression argument', () => {
-	it('parses @buf(\\myloop) — static symbol form', () => {
-		const { parseErrors, lexErrors } = parse('@buf(\\myloop) slice drums [0 2 4]');
+	it('@buf(\\myloop) inline is a parse error (inline decorator form disallowed)', () => {
+		const { parseErrors } = parse('@buf(\\myloop) slice drums [0 2 4]');
+		expect(parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('parses @buf(\\myloop) — static symbol form in block form', () => {
+		const { parseErrors, lexErrors } = parse('@buf(\\myloop)\n  slice drums [0 2 4]');
 		expect(lexErrors).toHaveLength(0);
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it("parses @buf([\\loopA \\loopB]'pick) — list of symbols with 'pick modifier", () => {
-		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8]");
+	it("parses @buf([\\loopA \\loopB]'pick) — list of symbols with 'pick modifier in block form", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'pick)\n  slice drums [0 4 8]");
 		expect(lexErrors).toHaveLength(0);
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it('parses @buf([\\loopA \\loopB]) — list of symbols with default (seq) traversal', () => {
-		const { parseErrors, lexErrors } = parse('@buf([\\loopA \\loopB]) slice drums [0 4]');
+	it("@buf([\\loopA \\loopB]'pick) inline is a parse error", () => {
+		const { parseErrors } = parse("@buf([\\loopA \\loopB]'pick) slice drums [0 4 8]");
+		expect(parseErrors.length).toBeGreaterThan(0);
+	});
+
+	it('parses @buf([\\loopA \\loopB]) — list of symbols with default (seq) traversal in block form', () => {
+		const { parseErrors, lexErrors } = parse('@buf([\\loopA \\loopB])\n  slice drums [0 4]');
 		expect(lexErrors).toHaveLength(0);
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it("parses @buf([\\a \\b \\c]'shuf) — list of symbols with 'shuf modifier", () => {
-		const { parseErrors, lexErrors } = parse("@buf([\\a \\b \\c]'shuf) slice drums [0 4]");
+	it("parses @buf([\\a \\b \\c]'shuf) — list of symbols with 'shuf modifier in block form", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\a \\b \\c]'shuf)\n  slice drums [0 4]");
 		expect(lexErrors).toHaveLength(0);
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it("parses @buf([\\loopA \\loopB]'pick) on cloud", () => {
-		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'pick) cloud grain []");
+	it("parses @buf([\\loopA \\loopB]'pick) on cloud in block form", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'pick)\n  cloud grain []");
 		expect(lexErrors).toHaveLength(0);
 		expect(parseErrors).toHaveLength(0);
 	});
 
-	it("parses @buf([\\loopA \\loopB]'lock) — list with 'lock modifier", () => {
-		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'lock) slice drums [0 4]");
+	it("parses @buf([\\loopA \\loopB]'lock) — list with 'lock modifier in block form", () => {
+		const { parseErrors, lexErrors } = parse("@buf([\\loopA \\loopB]'lock)\n  slice drums [0 4]");
 		expect(lexErrors).toHaveLength(0);
 		expect(parseErrors).toHaveLength(0);
 	});

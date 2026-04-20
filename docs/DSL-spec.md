@@ -712,10 +712,15 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`.
 
 Here `note lead [0 1 2]` inherits `@scale(minor)` and `@root(7)`. `note lead [0 2 4 5]` inherits all three, with `@octave(4)` added at the nested level.
 
-For single-expression use, decorators may appear inline on the same line:
+Decorators **must** appear on their own line and always introduce an indented block — writing a decorator inline on the same line as an expression is a **parse error**:
 
 ```flux
+// parse error — inline form is not allowed
 @scale(minor) note lead [0 1 2]
+
+// correct — decorator on its own line, body indented
+@scale(minor)
+  note lead [0 1 2]
 ```
 
 **`set` is `@` at global scope.** `set scale(minor)` is sugar for a top-level `@scale(minor)` with no indented body. They are the same mechanism at different scopes — `set` establishes session-wide defaults, `@` overrides them for a block.
@@ -726,18 +731,23 @@ For single-expression use, decorators may appear inline on the same line:
 
 ### `@buf` — buffer selection for `slice` and `cloud`
 
-`@buf(\name)` is a pattern-level decorator that specifies which buffer a `slice` or `cloud` pattern operates on. It is written inline before the content type keyword:
+`@buf(\name)` is a pattern-level decorator that specifies which buffer a `slice` or `cloud` pattern operates on. Like all decorators, `@buf` must appear on its own line introducing an indented block:
 
 ```flux
-@buf(\myloop) slice drums [0 2 4 8]
-@buf(\recording) cloud grain []
+@buf(\myloop)
+  slice drums [0 2 4 8]
+@buf(\recording)
+  cloud grain []
 ```
 
 `@buf` accepts a `\symbol` argument or a generator expression that produces `\symbol` values:
 
 ```flux
-@buf([\loopA \loopB]'pick) slice drums [0 4 8 12]  // per-cycle buffer selection
+@buf([\loopA \loopB]'pick)
+  slice drums [0 4 8 12]  // per-cycle buffer selection
 ```
+
+Writing `@buf` inline before the content expression is a **parse error** — the same rule that applies to all decorators.
 
 `@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.
 

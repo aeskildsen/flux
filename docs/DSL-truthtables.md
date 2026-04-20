@@ -172,22 +172,24 @@ All content types loop indefinitely by default. `'n` opts into finite playback; 
 
 Decorators apply lexically like indentation-based blocks.
 
-| Code                                            | Interpretation          | Evaluation                  | Result                                |
-| ----------------------------------------------- | ----------------------- | --------------------------- | ------------------------------------- |
-| `@scale(minor)` ↵ `  note [0]`                  | Scope covering pattern. | scale=minor in block.       | Degree resolved under minor scale.    |
-| `@root(7)` ↵ `  @scale(minor)` ↵ `    note [0]` | Nested decorators.      | Inner overrides outer.      | root=7, scale=minor.                  |
-| `note [0]` with no decorators                   | Global defaults.        | Use global scale/root.      | Normal behavior.                      |
-| `@scale(minor) note [0]`                        | Inline decorator.       | Single-expression scope.    | scale=minor for that note only.       |
-| `@key(g# lydian) note [0]`                      | Compound decorator.     | Sets root=g#, scale=lydian. | Multi-arg decorator, no special case. |
-| `@key(g# lydian 4) note [0]`                    | With explicit octave.   | Sets root, scale, octave=4. | Three-arg form.                       |
+| Code                                            | Interpretation          | Evaluation                  | Result                             |
+| ----------------------------------------------- | ----------------------- | --------------------------- | ---------------------------------- |
+| `@scale(minor)` ↵ `  note [0]`                  | Scope covering pattern. | scale=minor in block.       | Degree resolved under minor scale. |
+| `@root(7)` ↵ `  @scale(minor)` ↵ `    note [0]` | Nested decorators.      | Inner overrides outer.      | root=7, scale=minor.               |
+| `note [0]` with no decorators                   | Global defaults.        | Use global scale/root.      | Normal behavior.                   |
+| `@key(g# lydian)` ↵ `  note [0]`                | Compound decorator.     | Sets root=g#, scale=lydian. | Multi-arg decorator, block form.   |
+| `@key(g# lydian 4)` ↵ `  note [0]`              | With explicit octave.   | Sets root, scale, octave=4. | Three-arg form, block form.        |
 
 **Error cases**
 
-| Code                    | Failure Type   | Why                                                    |
-| ----------------------- | -------------- | ------------------------------------------------------ |
-| `note [0] + @root(5)`   | Semantic error | Decorator cannot appear as an arithmetic operand.      |
-| `note [@root(5) 0]`     | Parse error    | Decorators are not valid inside list brackets.         |
-| `@root(7)` with no body | Semantic error | Decorator with no following expression is meaningless. |
+| Code                         | Failure Type   | Why                                                    |
+| ---------------------------- | -------------- | ------------------------------------------------------ |
+| `@scale(minor) note [0]`     | Parse error    | Inline decorator form is not allowed.                  |
+| `@buf(kick) sample kick [0]` | Parse error    | Inline decorator form is not allowed.                  |
+| `@key(g# lydian) note [0]`   | Parse error    | Inline decorator form is not allowed.                  |
+| `note [0] + @root(5)`        | Semantic error | Decorator cannot appear as an arithmetic operand.      |
+| `note [@root(5) 0]`          | Parse error    | Decorators are not valid inside list brackets.         |
+| `@root(7)` with no body      | Semantic error | Decorator with no following expression is meaningless. |
 
 ---
 
