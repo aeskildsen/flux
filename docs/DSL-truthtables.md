@@ -225,6 +225,8 @@ Piped insert FX attaches to preceding pattern expression. Wet/dry level (integer
 | `note [0] \| fx(\lpf)'tail(10)`        | Custom silence tail. | FX node freed 10s after source stops.   | Extended reverb/delay tails. |
 | `note [0] \| fx(\lpf)'tail(0)`         | Immediate free.      | FX node freed when source stops.        | No tail.                     |
 
+**Note on `'eager(0)` with FX params.** FX events are emitted exactly once per cycle, so a stochastic FX param like `fx(\lpf)'cutoff(400rand2000)` produces one draw per cycle regardless of whether its effective eager mode is `'eager(0)` (per source event) or `'eager(1)` (per cycle) — there is only one sampling opportunity per cycle to begin with. `'eager(n)` for n ≥ 2 and `'lock` behave as documented elsewhere.
+
 **Error cases**
 
 | Code                    | Failure Type   | Why                                                             |
@@ -337,6 +339,28 @@ How legato values control note duration. Default legato for `note` is **0.8**. `
 | ----------------------- | -------------- | ---------------------------------------------- |
 | `note [0]'legato(0)`    | Semantic error | Zero legato means zero-duration gate; invalid. |
 | `note [0]'legato(-0.5)` | Semantic error | Negative legato is not meaningful.             |
+
+---
+
+# 13b. **`'maybe` Truth Table**
+
+How the `'maybe(p)` probability filter samples its probability argument and drops events.
+
+| Code                              | Interpretation                       | Evaluation                                                                                                                     | Result                                                      |
+| --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `[0 2 4]'maybe`                   | Default probability `p = 0.5`.       | Independent coin toss per output event.                                                                                        | Each event dropped with probability 0.5.                    |
+| `[0 2 4]'maybe(0.8)`              | Constant `p = 0.8`.                  | Coin toss per output event with `p = 0.8`.                                                                                     | Each event kept with probability 0.8.                       |
+| `[0 2 4]'maybe(0.3rand0.9)`       | Stochastic `p`, default `'eager(0)`. | `p` drawn per source slot; coin toss then fires per output event (per stutter copy).                                           | `p` may differ per source slot; each copy decided anew.     |
+| `[a b]'stut(3)'maybe(0.3rand0.9)` | Stut × maybe interaction.            | 2 source slots × 3 stutter copies = 6 output events. `p` drawn once for slot a and once for slot b. 6 independent coin tosses. | Some copies of a and some copies of b may drop.             |
+| `[0 2 4]'maybe(0.5'lock)`         | Locked probability.                  | `p` drawn once, frozen; coin toss per output event uses the frozen `p`.                                                        | Same `p` forever; individual events still random.           |
+| `[0 2 4]'maybe(0.5)'eager(1)`     | List-level `'eager(1)` propagates.   | `p` drawn once per cycle (shared across source slots); coin toss still per output event.                                       | Probability consistent across cycle; drops still per-event. |
+
+**Key distinction.** `'maybe` has two sources of randomness:
+
+1. The probability `p` itself (subject to `'lock`/`'eager(n)` semantics, per-source-slot by default).
+2. The per-output-event coin toss (always fresh).
+
+This means `'maybe(0)` silences every event, `'maybe(1)` keeps every event, and intermediate values produce independent drops per output event — even across stutter copies of a single source slot.
 
 ---
 
@@ -478,7 +502,7 @@ Direct SynthDef argument access. Valid wherever modifiers are valid.
 | `note[0]`             | Parse error    | Missing space between content type keyword and `[`.                              |
 | `0 rand 4`            | Parse error    | Whitespace inside generator expression.                                          |
 | `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.                                          |
-| `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.                                         |
+| `[x]'eager(-1)`       | Warn + clamp   | Negative eager period is clamped to 0 (per source event) with a console warning. |
 | `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.                                  |
 | `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.                                     |
 | `{4:1/2 7:3/2}`       | Lex error      | `{}` outside of `utf8{...}` context is invalid; bare `{` or `}` is unrecognised. |

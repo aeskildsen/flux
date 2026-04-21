@@ -14,13 +14,16 @@
  *
  * Each generator node is compiled to a Runner — a stateful object that holds:
  *   - a raw `poll()` function (the underlying generator logic)
- *   - an EagerMode annotation ('lock, 'eager(1), 'eager(n))
- *   - a cached value and the cycle number it was last sampled on
+ *   - an EagerMode annotation ('lock, 'eager(0), 'eager(1), 'eager(n))
+ *   - a cached value plus the (cycle, sourceSlot) it was last sampled on
  *
- * On `runner.sample(ctx)`:
- *   - lock:      return cached value; sample raw only on first ever call
- *   - eager(n):  sample raw at cycle start when cycleNumber % n === 0;
- *                cache the value for all remaining calls in that cycle
+ * On `sampleRunner(runner, cycle, sourceSlot)`:
+ *   - lock:       return cached value; sample raw only on first ever call
+ *   - eager(0):   per source event — re-sample whenever (cycle, sourceSlot)
+ *                 changes (default)
+ *   - eager(1):   per cycle — re-sample when cycle changes, cache within cycle
+ *   - eager(n):   every n cycles — re-sample when cycle % n === 0 and
+ *                 cycle !== lastSampledCycle
  *
  * ## Scale context (Phase 6c)
  *
@@ -43,7 +46,8 @@
  *
  * ## Phase 6d additions
  *
- * - 'stut(n): repeat each event n times; total events = N×k, each slot = 1/(N×k)
+ * - 'stut(n): each source slot gets its own k (drawn per slot under 'eager(0));
+ *             total output slots = Σkᵢ; each output slot gets 1/Σkᵢ of the cycle.
  * - 'maybe(p): pass each event with probability p; empty array is ok
  * - 'shuf: shuffle elements once per cycle, then traverse in order
  * - 'pick: random element each slot (with optional ? weights for weighted selection)
@@ -244,9 +248,14 @@ function modifierToEagerMode(mod: CstNode): EagerMode | null {
 		if (!genExpr) return { kind: 'eager', period: 0 };
 		const period = extractConstantNumber(genExpr);
 		const n = Math.round(period ?? 0);
-		// Negative n is a semantic error — clamp to 0 so the evaluator keeps running;
-		// the validator layer (future) will surface this as a user-facing error.
-		return { kind: 'eager', period: Math.max(0, n) };
+		// Leniency for live coding: negative n is clamped to 0 (per source event)
+		// with a warning, rather than a hard error — keeps the pattern running
+		// while making the bad input visible.
+		if (n < 0) {
+			console.warn(`[flux] 'eager(${n}): negative argument clamped to 0 (per source event)`);
+			return { kind: 'eager', period: 0 };
+		}
+		return { kind: 'eager', period: n };
 	}
 	return null;
 }
@@ -1321,7 +1330,7 @@ type CompiledDecoratorArg = RunnerState;
  */
 function compileDecoratorNumericArg(numGen: CstNode, mods: CstNode[]): CompiledDecoratorArg {
 	const poll = numGenToPollFn(numGen) ?? (() => 0);
-	// For decorators, 'lock is the default (not eager(1))
+	// For decorators, 'lock is the default (not 'eager(0) as elsewhere — spec §decorators)
 	const mode = extractEagerMode(mods) ?? { kind: 'lock' };
 	return makeRunner(poll, mode);
 }
@@ -1735,11 +1744,16 @@ function extractArithmeticOp(transpNode: CstNode): ArithmeticOp | null {
 
 /**
  * Compile a positiveScalar CST node to a RunnerState.
+ * `defaultMode` is the surrounding list-level eager mode which propagates when
+ * the scalar itself carries no explicit 'lock/'eager annotation (issue #57).
  * Returns null if the node is missing or malformed.
  */
-function compilePositiveScalarRunner(posScalar: CstNode): RunnerState | null {
+function compilePositiveScalarRunner(
+	posScalar: CstNode,
+	defaultMode: EagerMode = DEFAULT_MODE
+): RunnerState | null {
 	const scalarMods = (posScalar.children.modifierSuffix as CstNode[]) ?? [];
-	const mode = extractEagerMode(scalarMods) ?? DEFAULT_MODE;
+	const mode = extractEagerMode(scalarMods) ?? defaultMode;
 
 	const posNumGen = ((posScalar.children.positiveNumericGenerator as CstNode[]) ?? [])[0];
 	if (posNumGen) {
@@ -1794,8 +1808,13 @@ function compilePositiveScalarRunner(posScalar: CstNode): RunnerState | null {
 /**
  * Compile the arithmetic/transposition node from a pattern statement.
  * Handles all 6 operators (+, -, *, /, **, %) and both scalar and list RHS.
+ * The list-level eager mode propagates as the default for a stochastic scalar
+ * RHS (issue #57), so `[0 2 4] + 0rand3'eager(1)` collapses to one draw per cycle.
  */
-function compileTransposition(patternNode: CstNode): CompiledTransposition {
+function compileTransposition(
+	patternNode: CstNode,
+	listMode: EagerMode = DEFAULT_MODE
+): CompiledTransposition {
 	const transpNode = ((patternNode.children.transposition as CstNode[]) ?? [])[0];
 	if (!transpNode) return null;
 
@@ -1820,7 +1839,7 @@ function compileTransposition(patternNode: CstNode): CompiledTransposition {
 	const posScalar = ((transpNode.children.positiveScalar as CstNode[]) ?? [])[0];
 	if (!posScalar) return null;
 
-	const scalarRunner = compilePositiveScalarRunner(posScalar);
+	const scalarRunner = compilePositiveScalarRunner(posScalar, listMode);
 	if (!scalarRunner) return null;
 	return { op, scalarRunner };
 }
@@ -2247,7 +2266,7 @@ function compilePattern(
 	// 'numSlices modifier (slice only)
 	let numSlicesRunner: RunnerState | null = null;
 	if (hasModifier(allMods, 'numSlices')) {
-		numSlicesRunner = extractModifierScalar(allMods, 'numSlices', 1, 0);
+		numSlicesRunner = extractModifierScalar(allMods, 'numSlices', 1, 0, listMode);
 	}
 
 	// 'at
@@ -2256,8 +2275,8 @@ function compilePattern(
 	// 'n (finite playback)
 	const repeat = extractRepeat(allMods);
 
-	// Transposition
-	const transposition = compileTransposition(patternNode);
+	// Transposition — list-level eager propagates to the RHS runner default.
+	const transposition = compileTransposition(patternNode, listMode);
 
 	// FX pipe
 	const pipeNode = ((patternNode.children.pipeExpr as CstNode[]) ?? [])[0];
@@ -2419,9 +2438,12 @@ function compileFxNode(fxNode: CstNode): CompiledFx {
 }
 
 function evaluateFxEvent(compiledFx: CompiledFx, cycle: number, atOffset: number): FxEvent {
+	// Exactly one FxEvent is emitted per cycle, so there is no per-source-event
+	// concept for FX param runners — sampling always passes srcIdx = 0. Under the
+	// default 'eager(0) that means one draw per cycle (same semantics as 'eager(1)).
 	const params: Record<string, number> = {};
 	for (const { name, runner } of compiledFx.paramRunners) {
-		params[name] = sampleRunner(runner, cycle);
+		params[name] = sampleRunner(runner, cycle, 0);
 	}
 	return {
 		contentType: 'fx',

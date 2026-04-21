@@ -3,7 +3,7 @@
  *
  * Organisation:
  *   1. API & instance basics
- *   2. Cycle semantics — eager(1), 'lock, eager(n), modifier precedence
+ *   2. Cycle semantics — default eager(0), 'lock, eager(n), modifier precedence
  *   3. Generators — degree-to-MIDI in default C major / C5 context
  *   4. rand / tilde — float bound semantics
  *   5. Pitch context — @root, @octave, @scale, @cent, @key, set, scoping
@@ -150,7 +150,7 @@ describe('instance.evaluate — per-cycle output', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Cycle semantics — eager(1), 'lock, eager(n), modifier precedence
+// 2. Cycle semantics — default eager(0), 'lock, eager(n), modifier precedence
 // ---------------------------------------------------------------------------
 
 describe('default eager(0) — per-source-event polling', () => {
@@ -269,6 +269,27 @@ describe("'eager(0) — per-source-event redraw (new default, issue #57)", () =>
 		for (const t of totals) expect(t % 3).toBe(0);
 	});
 
+	it('default eager(0) on "param with multi-element list: [0 2 4]"amp(0.3rand0.8) yields distinct amps per source event', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		const r = inst('note x [0 2 4]"amp(0.3rand0.8)').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const amps = r.events.map((e) => (e as { params?: Record<string, number> }).params!.amp);
+		expect(amps).toHaveLength(3);
+		expect(new Set(amps.map((a) => a.toFixed(8))).size).toBeGreaterThan(1);
+	});
+
+	it('list-level \'eager(1) propagates to "param: [0 2 4]\'eager(1)"amp(0.3rand0.8) shares one amp per cycle', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// The 'eager(1) must sit on the list (before the "param) to be picked up as
+		// listMode; placed after "param it chains onto the paramSuffix and does not
+		// propagate.
+		const r = inst('note x [0 2 4]\'eager(1)"amp(0.3rand0.8)').evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const amps = r.events.map((e) => (e as { params?: Record<string, number> }).params!.amp);
+		expect(amps).toHaveLength(3);
+		expect(new Set(amps.map((a) => a.toFixed(8))).size).toBe(1);
+	});
+
 	it("list-level 'eager(1) propagates to legato: [0 2 4]'legato(0.5rand1.2)'eager(1) shares one legato per cycle", () => {
 		vi.spyOn(Math, 'random').mockRestore();
 		const r = inst("note x [0 2 4]'legato(0.5rand1.2)'eager(1)").evaluate({ cycleNumber: 0 });
@@ -283,9 +304,66 @@ describe("'eager(0) — per-source-event redraw (new default, issue #57)", () =>
 		for (const cycle of ns) expect(cycle[0]).toBe(first);
 	});
 
-	it('negative eager argument still clamped (not an error that crashes)', () => {
-		// 'eager(-1) is documented as semantic error but evaluator should be lenient
-		expect(() => createInstance("note x [0rand7'eager(-1)]")).not.toThrow();
+	it("list-level 'eager(1) propagates to arithmetic RHS: [0 2 4]'eager(1) + 0rand3 shares one offset per cycle", () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// Under default eager(0) each of the 3 events sees an independent 0rand3 draw;
+		// list-level 'eager(1) propagates the mode to the RHS scalar runner so every cycle
+		// adds the same offset to all three degrees. In C major this shifts [0 2 4] by a
+		// constant k ∈ {0,1,2,3}, producing only two possible gap pairs — (4,3) or (3,4) —
+		// depending on which diatonic mode the result lands in. Crucially, both gaps are
+		// always ≥ 2 (no chromatic/unison collapses), which DOES happen under eager(0).
+		const i = inst("note x [0 2 4]'eager(1) + 0rand3");
+		const gapPairs = new Set<string>();
+		for (let c = 0; c < 60; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const ns = r.events.map((e) => (e as { note: number }).note);
+			gapPairs.add(`${ns[1] - ns[0]},${ns[2] - ns[1]}`);
+		}
+		// Only diatonic triad shapes allowed: (4,3) or (3,4).
+		for (const pair of gapPairs) expect(['4,3', '3,4']).toContain(pair);
+		// Must be at most 2 distinct pairs (shared offset ⇒ never any other combo).
+		expect(gapPairs.size).toBeLessThanOrEqual(2);
+	});
+
+	it("default 'eager(0) on arithmetic RHS: [0 2 4] + 0rand3 draws 3 independent offsets over many cycles", () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// With eager(0) as default, the RHS draws 3 independent offsets per cycle.
+		// Over 100 cycles we should see the inter-event gaps vary (sometimes shrink, sometimes grow),
+		// which cannot happen under a shared per-cycle offset.
+		const gapSets = new Set<string>();
+		const i = inst('note x [0 2 4] + 0rand3');
+		for (let c = 0; c < 100; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const ns = r.events.map((e) => (e as { note: number }).note);
+			gapSets.add(`${ns[1] - ns[0]},${ns[2] - ns[1]}`);
+		}
+		// Under shared eager(1) there would be few distinct gap pairs (bounded by the 4 possible input gaps
+		// times the fact they shift together). Under eager(0) many more combinations appear.
+		expect(gapSets.size).toBeGreaterThan(4);
+	});
+
+	it("'eager(-1) warns and clamps to per-source-event (lenient live-coding behaviour)", () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const i = createInstance("note x [0rand7]'eager(-1)");
+		expect(i.ok).toBe(true);
+		expect(warnSpy).toHaveBeenCalled();
+		const msg = warnSpy.mock.calls[0]?.[0] as string;
+		expect(msg).toMatch(/eager\(-1\)/);
+		expect(msg).toMatch(/clamped to 0/);
+
+		// Behaviour matches explicit 'eager(0): over many cycles, at least two distinct values appear
+		// (and not just one as would be the case under 'lock or 'eager(k) for large k).
+		if (!i.ok) throw new Error(i.error);
+		const vals = new Set<number>();
+		for (let c = 0; c < 20; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			vals.add((r.events[0] as { note: number }).note);
+		}
+		expect(vals.size).toBeGreaterThan(1);
+		warnSpy.mockRestore();
 	});
 });
 

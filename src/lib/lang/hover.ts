@@ -371,7 +371,7 @@ const MODIFIER_DOCS: Record<string, string> = {
 		'',
 		'```flux',
 		"note [0rand7 4rand6]'lock     // both elements frozen after first cycle",
-		"note [0rand7'lock 4rand6]     // first element frozen, second draws every cycle",
+		"note [0rand7'lock 4rand6]     // first element frozen, second draws per source event",
 		'```'
 	].join('\n'),
 

@@ -603,10 +603,12 @@ note lead [0 1 2] * 2        // double each degree: 0, 2, 4
 note lead utf8{coffee} % 14  // map byte values into scale-degree range
 ```
 
-**Scalar right-hand side** — the value is applied uniformly to every element each cycle (existing `+`/`-` behaviour is preserved):
+**Scalar right-hand side** — a constant scalar value is applied uniformly to every element each cycle (existing `+`/`-` behaviour is preserved). A stochastic scalar (e.g. `0rand3`) follows the default eager rules: by default `'eager(0)` redraws the RHS per source event; list-level `'eager(1)` shares one draw across all source events in the cycle.
 
 ```flux
-note lead [0 2 4] + 3        // every element gets +3 scale steps
+note lead [0 2 4] + 3              // every element gets +3 scale steps
+note lead [0 2 4] + 0rand3         // default 'eager(0): independent offset per source event
+note lead [0 2 4]'eager(1) + 0rand3  // one offset per cycle, shared across all events
 ```
 
 **Generator right-hand side** — a list generator (`[...]`) or scalar generator may appear on the right. When a list generator is used, its values wrap around for position i: `rhs_value = rhs[i % rhs_length]`. Both operands reset their state at cycle boundaries.
@@ -973,7 +975,7 @@ To apply a modifier to the whole content-type expression (including a transposit
 - `'eager(n)` for n ≥ 2 — redraw every n cycles.
 - `'lock` — draw once at first evaluation, freeze forever.
 
-Negative arguments are a semantic error.
+Negative arguments are clamped to `0` (per source event) with a console warning — leniency for live coding, so a mistyped sign does not kill the pattern.
 
 A "source event" is a pre-stutter slot: for `[0 1]'stut(1~4)`, the two source events are the `0` and `1` slots, each of which may be stuttered into multiple output events. Under `'eager(0)`, stochastic modifier arguments like `1~4`, `'legato(0.5rand1.2)`, `"amp(0.3rand0.8)` are redrawn per source event; all stuttered copies of a single source event share that draw.
 
