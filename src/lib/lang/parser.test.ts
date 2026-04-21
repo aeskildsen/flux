@@ -436,8 +436,12 @@ describe("modifierSuffix — timing: 'lock and 'eager", () => {
 		expect(parse("note lead [0 2 4]'lock").parseErrors).toHaveLength(0);
 	});
 
-	it("parses bare 'eager (shorthand for eager(1))", () => {
+	it("parses bare 'eager (shorthand for eager(0))", () => {
 		expect(parse("note lead [0 2 4]'eager").parseErrors).toHaveLength(0);
+	});
+
+	it("parses 'eager(0) on a list (per-source-event)", () => {
+		expect(parse("note lead [0 2 4]'eager(0)").parseErrors).toHaveLength(0);
 	});
 
 	it("parses 'eager(1) on a list", () => {

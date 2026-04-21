@@ -260,7 +260,7 @@ note lead [0rand7 4rand6]'stut
 // repeat each generated value 4 times
 note lead [0rand7 4rand6]'stut(4)
 
-// repeat each value 2-4 times, count drawn once per cycle (default eager(1))
+// repeat each value 2-4 times, count drawn per source event (default eager(0))
 note lead [0rand7 4rand6]'stut(2rand4)
 
 // count redrawn every 4 cycles
@@ -269,8 +269,9 @@ note lead [0rand7 4rand6]'stut(2rand4'eager(4))
 
 How `'eager` and `'lock` apply to `'stut`:
 
-- Default (`'eager(1)`): stutter count is drawn once per cycle — `note lead [0rand7 4rand6]'stut(2rand4)`.
-- `'stut(2rand4'eager(4))`: count is redrawn every 4 cycles.
+- Default (`'eager(0)`): stutter count is drawn per source event — each pre-stutter slot gets its own count.
+- `'stut(2rand4'eager(1))`: count drawn once per cycle, shared by all source slots.
+- `'stut(2rand4'eager(4))`: count redrawn every 4 cycles.
 - `'stut(2rand4'lock)`: stutter count is chosen once and frozen forever.
 
 The stutter count must be a positive integer ≥ 1. A count of 0 or a negative value is a semantic error. The count argument must be a scalar generator — a list generator is a semantic error.
@@ -319,7 +320,7 @@ note lead [A 0step1x4'spread]
 
 **Per-cycle consumption:**
 
-`'spread` consumes one full iteration per cycle. Series generators reset and re-seed at cycle boundaries per existing `'eager(1)` default rules. Bare `'spread` on a series generator is equivalent to drawing all N values of that iteration.
+`'spread` consumes one full iteration per cycle. Series generators reset and re-seed at cycle boundaries per the default eager rules. Bare `'spread` on a series generator is equivalent to drawing all N values of that iteration.
 
 **Validity:**
 
@@ -420,7 +421,8 @@ Legato is a modifier, patternisable like any other stochastic argument:
 
 ```flux
 note lead [0 2 4 7]'legato(0.8)                  // fixed legato (same as default)
-note lead [0 2 4 7]'legato(0.5rand1.2)            // stochastic legato, eager(1) by default
+note lead [0 2 4 7]'legato(0.5rand1.2)            // stochastic legato, eager(0) by default (per source event)
+note lead [0 2 4 7]'legato(0.5rand1.2'eager(1))  // one legato value per cycle, shared by all events
 note lead [0 2 4 7]'legato(0.5rand1.2'eager(4))  // new legato value every 4 cycles
 ```
 
@@ -596,15 +598,17 @@ Supported operators:
 ```flux
 note lead [0 2 4] + 2        // shift all degrees up 2 scale steps
 note lead [0 2 4] - 1        // shift down 1 scale step
-note lead [0 2 4] + 0rand3   // stochastic transposition, eager(1) by default
+note lead [0 2 4] + 0rand3   // stochastic transposition, eager(0) by default (redrawn per source event)
 note lead [0 1 2] * 2        // double each degree: 0, 2, 4
 note lead utf8{coffee} % 14  // map byte values into scale-degree range
 ```
 
-**Scalar right-hand side** — the value is applied uniformly to every element each cycle (existing `+`/`-` behaviour is preserved):
+**Scalar right-hand side** — a constant scalar value is applied uniformly to every element each cycle (existing `+`/`-` behaviour is preserved). A stochastic scalar (e.g. `0rand3`) follows the default eager rules: by default `'eager(0)` redraws the RHS per source event; list-level `'eager(1)` shares one draw across all source events in the cycle.
 
 ```flux
-note lead [0 2 4] + 3        // every element gets +3 scale steps
+note lead [0 2 4] + 3              // every element gets +3 scale steps
+note lead [0 2 4] + 0rand3         // default 'eager(0): independent offset per source event
+note lead [0 2 4]'eager(1) + 0rand3  // one offset per cycle, shared across all events
 ```
 
 **Generator right-hand side** — a list generator (`[...]`) or scalar generator may appear on the right. When a list generator is used, its values wrap around for position i: `rhs_value = rhs[i % rhs_length]`. Both operands reset their state at cycle boundaries.
@@ -657,7 +661,7 @@ chordElement    = numericGenerator | degreeLiteral | rest ;
 
 - `<>` must contain at least one element; a bare `<>` with no elements is a parse error.
 - Elements inside `<>` are separated by spaces (same as `[...]`).
-- Each element is an independent generator evaluated at cycle boundary under standard `'eager` semantics.
+- Each element is an independent generator evaluated under standard `'eager` semantics.
 - A chord literal is a **non-scalar** generator — it is valid wherever a sequence element (`[...]`) or standalone event body is valid.
 
 **Constraints:**
@@ -928,7 +932,7 @@ The sign `'` in an expression like `x'y` indicates a **modifier**, i.e. that `y`
 Modifiers are methods that return `this`, so chaining is supported:
 
 ```flux
-note lead [0rand7 4rand6]'eager'stut(2)
+note lead [0rand7 4rand6]'eager(1)'stut(2)
 ```
 
 Modifiers attach to the **immediately preceding token**, not to the whole expression. This is the core rule governing modifier placement throughout the language.
@@ -964,18 +968,23 @@ To apply a modifier to the whole content-type expression (including a transposit
 
 ### `'lock` and `'eager(n)`
 
-`'eager(1)` is the default for all generators. The argument is a positive integer cycle period:
+`'eager(0)` is the default for all generators. The argument is a non-negative integer cycle period (or `0` for per-event):
 
-- `'eager(1)` — draw once per cycle (default; bare `'eager` is shorthand for this)
-- `'eager(n)` — redraw every n cycles (n must be a positive integer ≥ 1)
-- `'lock` — draw once at first evaluation, freeze forever
+- `'eager(0)` — redraw on every source event (pre-stutter). Default; bare `'eager` is shorthand for this.
+- `'eager(1)` — draw once per cycle, shared across all source events in that cycle.
+- `'eager(n)` for n ≥ 2 — redraw every n cycles.
+- `'lock` — draw once at first evaluation, freeze forever.
 
-`'eager(0)` and negative arguments are semantic errors — the cycle-boundary evaluation model requires n ≥ 1.
+Negative arguments are clamped to `0` (per source event) with a console warning — leniency for live coding, so a mistyped sign does not kill the pattern.
 
-Each generator is an independent stateful object. `'eager(n)` on a list propagates down as the default to each element; each element applies the annotation to its own generator independently. There is no implicit value-sharing between elements.
+A "source event" is a pre-stutter slot: for `[0 1]'stut(1~4)`, the two source events are the `0` and `1` slots, each of which may be stuttered into multiple output events. Under `'eager(0)`, stochastic modifier arguments like `1~4`, `'legato(0.5rand1.2)`, `"amp(0.3rand0.8)` are redrawn per source event; all stuttered copies of a single source event share that draw.
+
+Each generator is an independent stateful object. `'eager(n)` on a list propagates down as the default to each element and to modifier arguments on that list; each generator applies its own annotation independently. There is no implicit value-sharing between elements.
 
 ```flux
-// draw new values on every cycle (explicit, same as default)
+// draw new values on every source event (explicit, same as default)
+note lead [0rand7 4]'eager(0)
+// one draw per cycle shared by all slots (was the old default)
 note lead [0rand7 4]'eager(1)
 // redraw every 4 cycles
 note lead [0 4rand6]'eager(4)
@@ -987,7 +996,7 @@ note lead [0rand7 4rand6]'lock
 
 ```flux
 note lead [0rand7 4rand6]'lock       // both elements lock at their own first-drawn values
-note lead [0rand7'lock 4rand6]       // first element locked, second draws every cycle (inner overrides outer)
+note lead [0rand7'lock 4rand6]       // first element locked, second draws per source event (inner overrides outer)
 ```
 
 ### Modifier continuation lines
@@ -1021,7 +1030,7 @@ note bass [0 2 4] | fx(\lpf)"cutoff(800)"rq(0.3)  // on FX node
 The value argument accepts the same expressions as modifiers — literals, generators, stochastic expressions:
 
 ```flux
-note pad [0 2 4]"amp(0.3rand0.8)              // stochastic amp, eager(1) by default
+note pad [0 2 4]"amp(0.3rand0.8)              // stochastic amp, eager(0) by default (per source event)
 note pad [0 2 4]"amp(0.3rand0.8'eager(4))     // redraw every 4 cycles
 note pad [0 2 4]"amp(0.3rand0.8'lock)         // freeze at first drawn value
 ```
