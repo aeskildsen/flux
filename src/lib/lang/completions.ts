@@ -82,16 +82,17 @@ const MODIFIER_COMPLETIONS: CompletionItem[] = [
 	{
 		label: 'eager',
 		insertText: 'eager',
-		detail: "'eager — redraw once per cycle (default)",
-		documentation: "Bare 'eager = 'eager(1).",
+		detail: "'eager — redraw per source event (default)",
+		documentation: "Bare 'eager = 'eager(0). Each pre-stutter slot gets a fresh draw.",
 		kind: 'keyword'
 	},
 	{
 		label: 'eager(n)',
-		insertText: 'eager(${1:4})',
+		insertText: 'eager(${1:1})',
 		isSnippet: true,
-		detail: "'eager(n) — redraw every n cycles",
-		documentation: 'n must be a positive integer ≥ 1.',
+		detail: "'eager(n) — redraw cadence",
+		documentation:
+			'0 = per source event (default). 1 = once per cycle (shared). n ≥ 2 = every n cycles.',
 		kind: 'snippet'
 	},
 	{

@@ -153,7 +153,7 @@ describe('instance.evaluate — per-cycle output', () => {
 // 2. Cycle semantics — eager(1), 'lock, eager(n), modifier precedence
 // ---------------------------------------------------------------------------
 
-describe('eager(1) — resample at each cycle boundary (default)', () => {
+describe('default eager(0) — per-source-event polling', () => {
 	it('step generator advances once per cycle (one-element list)', () => {
 		// 0step1x4 → degrees [0,1,2,3]. 4 cycles → 4 distinct values.
 		const ns = collectNotes('note x [0step1x4]', 4);
@@ -166,12 +166,126 @@ describe('eager(1) — resample at each cycle boundary (default)', () => {
 		for (const cycle of ns) expect(cycle[0]).toBe(first);
 	});
 
-	it('value within a cycle is fixed — same cycleNumber returns same note', () => {
+	it('value within a cycle for a single source slot is fixed — same cycleNumber returns same note', () => {
 		const i = inst('note x [0step1x4]');
 		const res0a = i.evaluate({ cycleNumber: 0 });
 		const res0b = i.evaluate({ cycleNumber: 0 });
 		if (!res0a.ok || !res0b.ok) throw new Error('eval failed');
 		expect((res0a.events[0] as any).note).toBe((res0b.events[0] as any).note);
+	});
+});
+
+describe("'eager(0) — per-source-event redraw (new default, issue #57)", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("parses 'eager(0) as legal syntax", () => {
+		expect(createInstance("note x [0rand7]'eager(0)").ok).toBe(true);
+	});
+
+	it("bare 'eager is shorthand for 'eager(0): [0 2 4] with 0.5rand1.2 legato gives distinct legatos per event", () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		const i = inst("note x [0 2 4]'legato(0.5rand1.2)'eager");
+		const seen = new Set<number>();
+		for (let c = 0; c < 5; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			// 3 events per cycle — under eager(0) default each gets own legato
+			const ds = r.events.map((e) => e.duration);
+			ds.forEach((d) => seen.add(+d.toFixed(6)));
+		}
+		// Over 5 cycles × 3 events = 15 draws — should have many distinct values
+		expect(seen.size).toBeGreaterThan(3);
+	});
+
+	it("default 'stut(1~4) on [a b]: stut count redrawn per source slot", () => {
+		// With eager(0) as default, stut's 1~4 polls once per source slot (not once per cycle).
+		// So 0 may get 1 copy, 1 may get 3 copies (etc.) — stretched over many cycles we should
+		// see the total event count vary more than if it were a single-draw-per-cycle.
+		vi.spyOn(Math, 'random').mockRestore();
+		const i = inst("note x [0 2]'stut(1~4)");
+		const countsPerCycle: number[] = [];
+		for (let c = 0; c < 50; c++) {
+			const r = i.evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			countsPerCycle.push(r.events.length);
+		}
+		// Under old per-cycle: each cycle's total = 2 × k where k ∈ [1,4] → even totals in {2,4,6,8}.
+		// Under per-source-slot: each cycle's total = k_0 + k_1 (two independent draws) → totals in {2..8} with odd totals reachable.
+		const hasOdd = countsPerCycle.some((n) => n % 2 === 1);
+		expect(hasOdd).toBe(true);
+	});
+
+	it("default 'legato(0.5rand1.2) on [0 2 4]: 3 distinct legatos per cycle (one per source event)", () => {
+		// Mock random to return increasing values per call so draws are distinguishable
+		vi.spyOn(Math, 'random').mockRestore();
+		const r = inst("note x [0 2 4]'legato(0.5rand1.2)").evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const ds = r.events.map((e) => +e.duration.toFixed(8));
+		// Under eager(0) default, 3 independent draws → very likely 3 distinct values
+		expect(new Set(ds).size).toBeGreaterThan(1);
+	});
+
+	it('inline !4 repetition under default eager(0): each of the 4 slots gets independent draws', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// 0rand7!4 expands to [0rand7 0rand7 0rand7 0rand7] sharing one runner.
+		// Under eager(0), each source slot triggers a fresh poll.
+		const counts = new Set<number>();
+		for (let c = 0; c < 20; c++) {
+			const r = inst('note x [0rand7!4]').evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			const ns = r.events.map((e) => (e as any).note as number);
+			counts.add(new Set(ns).size);
+		}
+		// With eager(0), we expect multiple distinct values within at least one cycle
+		expect([...counts].some((k) => k > 1)).toBe(true);
+	});
+
+	it('stut repeats share a single draw per source slot (not per output event)', () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// [0rand7]'stut(3): one source slot, 3 stuttered copies.
+		// Under eager(0), the source slot draws once; all 3 copies share.
+		for (let c = 0; c < 10; c++) {
+			const r = inst("note x [0rand7]'stut(3)").evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			expect(r.events).toHaveLength(3);
+			const ns = r.events.map((e) => (e as any).note as number);
+			expect(new Set(ns).size).toBe(1); // all 3 share same draw
+		}
+	});
+
+	it("list-level 'eager(1) propagates to modifier args: [0 2 4]'stut(1~4)'eager(1) shares k across source slots", () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		// Total events per cycle = source_count × k where k is one draw per cycle.
+		// source_count = 3 → totals ∈ {3, 6, 9, 12}. No odd totals other than 3 or 9.
+		const totals = new Set<number>();
+		for (let c = 0; c < 50; c++) {
+			const r = inst("note x [0 2 4]'stut(1~4)'eager(1)").evaluate({ cycleNumber: c });
+			if (!r.ok) throw new Error(r.error);
+			totals.add(r.events.length);
+		}
+		// All totals must be multiples of 3 (source count)
+		for (const t of totals) expect(t % 3).toBe(0);
+	});
+
+	it("list-level 'eager(1) propagates to legato: [0 2 4]'legato(0.5rand1.2)'eager(1) shares one legato per cycle", () => {
+		vi.spyOn(Math, 'random').mockRestore();
+		const r = inst("note x [0 2 4]'legato(0.5rand1.2)'eager(1)").evaluate({ cycleNumber: 0 });
+		if (!r.ok) throw new Error(r.error);
+		const ds = r.events.map((e) => +e.duration.toFixed(8));
+		expect(new Set(ds).size).toBe(1);
+	});
+
+	it("inner 'lock beats outer 'eager(0) — value frozen", () => {
+		const ns = collectNotes("note x [0rand7'lock]'eager(0)", 5);
+		const first = ns[0][0];
+		for (const cycle of ns) expect(cycle[0]).toBe(first);
+	});
+
+	it('negative eager argument still clamped (not an error that crashes)', () => {
+		// 'eager(-1) is documented as semantic error but evaluator should be lenient
+		expect(() => createInstance("note x [0rand7'eager(-1)]")).not.toThrow();
 	});
 });
 
@@ -189,7 +303,7 @@ describe("'lock — freeze on first sample", () => {
 		expect(ns[3]).toEqual(ns[0]);
 	});
 
-	it("'lock and eager(1) produce different behaviour over multiple cycles", () => {
+	it("'lock and default eager (0) produce different behaviour over multiple cycles", () => {
 		const withLock = collectNotes("note x [0step1x4'lock]", 4);
 		const withEager = collectNotes('note x [0step1x4]', 4);
 		expect(new Set(withEager.map((c) => c[0])).size).toBe(4);
@@ -221,7 +335,7 @@ describe('eager(n) — resample every n cycles', () => {
 });
 
 describe('modifier precedence: inner overrides outer', () => {
-	it("inner 'lock beats outer eager(1) default — value frozen (truth table 2 row 1)", () => {
+	it("inner 'lock beats default eager(0) — value frozen (truth table 2 row 1)", () => {
 		const ns = collectNotes("note x [0step1x4'lock]", 4);
 		const first = ns[0][0];
 		for (const cycle of ns) expect(cycle[0]).toBe(first);
@@ -1076,6 +1190,8 @@ describe("'stut — stutter (truth table 3)", () => {
 	});
 
 	it("'stut(2rand4'eager(4)) redraws count every 4 cycles", () => {
+		// Single source slot → per-source-slot polling and per-cycle polling coincide;
+		// explicit eager(4) makes the count held for 4 cycles.
 		const i = inst("note x [0]'stut(2rand4'eager(4))");
 		const counts: number[] = [];
 		for (let c = 0; c < 8; c++) {
@@ -1269,8 +1385,8 @@ describe("'legato — duration scaling (truth table 13)", () => {
 		for (const d of durations('note x [0 2 4]')) expect(d).toBeCloseTo((1 / 3) * 0.8);
 	});
 
-	it("'legato(0.5rand1.2) draws once per cycle — all events in cycle share same duration", () => {
-		const r = inst("note x [0 2 4]'legato(0.5rand1.2)").evaluate({ cycleNumber: 0 });
+	it("'legato(0.5rand1.2'eager(1)) draws once per cycle — all events in cycle share same duration", () => {
+		const r = inst("note x [0 2 4]'legato(0.5rand1.2'eager(1))").evaluate({ cycleNumber: 0 });
 		if (!r.ok) throw new Error(r.error);
 		const ds = r.events.map((e) => e.duration);
 		expect(ds[0]).toBeCloseTo(ds[1]);
@@ -1812,7 +1928,7 @@ describe('"param notation on loop/line (truth table 18)', () => {
 		expect(noteEv.params).toBeUndefined();
 	});
 
-	it('"param with stochastic value varies per cycle (eager(1) default)', () => {
+	it('"param with stochastic value varies per cycle (single source slot under default eager(0))', () => {
 		const i = inst('note x [0]"amp(0.3rand0.8)');
 		const results = Array.from({ length: 100 }, (_, c) => {
 			const r = i.evaluate({ cycleNumber: c });
@@ -2077,8 +2193,8 @@ describe('inline repetition — !n', () => {
 		expect(offs[3]).toBeCloseTo(0.75);
 	});
 
-	it('stochastic element 0rand7!4 — all four copies share the same drawn value per cycle', () => {
-		const ns = notes('note x [0rand7!4]');
+	it("stochastic element 0rand7!4 with 'eager(1) — all four copies share the same drawn value per cycle", () => {
+		const ns = notes("note x [0rand7!4]'eager(1)");
 		expect(ns).toHaveLength(4);
 		// eager(1): value drawn once per cycle — all four copies identical
 		expect(new Set(ns).size).toBe(1);

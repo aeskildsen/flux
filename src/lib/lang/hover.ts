@@ -376,12 +376,16 @@ const MODIFIER_DOCS: Record<string, string> = {
 	].join('\n'),
 
 	eager: [
-		"**`'eager(n)`** — redraw every n cycles.",
+		"**`'eager(n)`** — redraw cadence for stochastic generators.",
 		'',
-		"Default: `'eager(1)` (once per cycle). Bare `'eager` = `'eager(1)`.",
+		"- `'eager(0)` — redraw on every source event (default; bare `'eager` is shorthand).",
+		"- `'eager(1)` — draw once per cycle, shared across all events in that cycle.",
+		"- `'eager(n)` for n ≥ 2 — redraw every n cycles.",
 		'',
 		'```flux',
-		"note [0 4rand6]'eager(4)  // redraw every 4 cycles",
+		"note [0 2 4]'legato(0.5rand1.2)            // default 'eager(0): per source event",
+		"note [0 2 4]'legato(0.5rand1.2)'eager(1)  // one legato per cycle (shared)",
+		"note [0 4rand6]'eager(4)                   // redraw every 4 cycles",
 		'```'
 	].join('\n'),
 

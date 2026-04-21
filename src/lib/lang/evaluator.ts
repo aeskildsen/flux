@@ -228,9 +228,9 @@ function pitchClassToSemitone(image: string): number | null {
 // EagerMode
 // ---------------------------------------------------------------------------
 
-type EagerMode = { kind: 'lock' } | { kind: 'eager'; period: number }; // period ≥ 1: 1 = per-cycle (default), n = every n cycles
+type EagerMode = { kind: 'lock' } | { kind: 'eager'; period: number }; // period ≥ 0: 0 = per source event (default), 1 = per cycle, n = every n cycles
 
-const DEFAULT_MODE: EagerMode = { kind: 'eager', period: 1 };
+const DEFAULT_MODE: EagerMode = { kind: 'eager', period: 0 };
 
 /** Parse a modifierSuffix CST node into an EagerMode, or return null if it's not a lock/eager modifier. */
 function modifierToEagerMode(mod: CstNode): EagerMode | null {
@@ -240,11 +240,13 @@ function modifierToEagerMode(mod: CstNode): EagerMode | null {
 	if (name === 'lock') return { kind: 'lock' };
 	if (name === 'eager') {
 		const genExpr = ((mod.children.generatorExpr as CstNode[]) ?? [])[0];
-		if (!genExpr) return { kind: 'eager', period: 1 };
+		// Bare 'eager = 'eager(0) = per source event (new default, issue #57)
+		if (!genExpr) return { kind: 'eager', period: 0 };
 		const period = extractConstantNumber(genExpr);
-		// n < 1 is a semantic error — clamp to 1 so the evaluator keeps running;
+		const n = Math.round(period ?? 0);
+		// Negative n is a semantic error — clamp to 0 so the evaluator keeps running;
 		// the validator layer (future) will surface this as a user-facing error.
-		return { kind: 'eager', period: Math.max(1, Math.round(period ?? 1)) };
+		return { kind: 'eager', period: Math.max(0, n) };
 	}
 	return null;
 }
@@ -272,25 +274,50 @@ type RunnerState = {
 	hasValue: boolean;
 	cachedValue: number;
 	lastSampledCycle: number;
+	lastSampledSourceSlot: number;
 };
 
 function makeRunner(poll: PollFn, mode: EagerMode): RunnerState {
-	return { poll, mode, hasValue: false, cachedValue: 0, lastSampledCycle: -1 };
+	return {
+		poll,
+		mode,
+		hasValue: false,
+		cachedValue: 0,
+		lastSampledCycle: -1,
+		lastSampledSourceSlot: -1
+	};
 }
 
 /**
  * Sample a runner for the current event.
  *
  * @param runner     The runner to sample.
- * @param cycle  Current cycle number (from CycleContext).
+ * @param cycle      Current cycle number (from CycleContext).
+ * @param sourceSlot Index of the pre-stutter source slot within the cycle (default 0).
+ *                   Used by `'eager(0)` to redraw per source event.
  */
-function sampleRunner(runner: RunnerState, cycle: number): number {
+function sampleRunner(runner: RunnerState, cycle: number, sourceSlot: number = 0): number {
 	const { mode } = runner;
 
 	if (mode.kind === 'lock') {
 		if (!runner.hasValue) {
 			runner.cachedValue = runner.poll();
 			runner.hasValue = true;
+		}
+		return runner.cachedValue;
+	}
+
+	// eager(0): per source event — re-poll when (cycle, sourceSlot) changes.
+	if (mode.period === 0) {
+		if (
+			!runner.hasValue ||
+			cycle !== runner.lastSampledCycle ||
+			sourceSlot !== runner.lastSampledSourceSlot
+		) {
+			runner.cachedValue = runner.poll();
+			runner.hasValue = true;
+			runner.lastSampledCycle = cycle;
+			runner.lastSampledSourceSlot = sourceSlot;
 		}
 		return runner.cachedValue;
 	}
@@ -2168,28 +2195,28 @@ function compilePattern(
 	// Pattern-level modifiers (direct + continuation)
 	const allMods = collectPatternModifiers(patternNode);
 
-	// 'stut
+	// 'stut — list-level eager mode propagates as the default for the stut arg.
 	let stutRunner: RunnerState | null = null;
 	if (hasModifier(allMods, 'stut')) {
-		stutRunner = extractModifierScalar(allMods, 'stut', 2, 0);
+		stutRunner = extractModifierScalar(allMods, 'stut', 2, 0, listMode);
 	}
 
 	// 'maybe
 	let maybeRunner: RunnerState | null = null;
 	if (hasModifier(allMods, 'maybe')) {
-		maybeRunner = extractModifierScalar(allMods, 'maybe', 0.5, 0);
+		maybeRunner = extractModifierScalar(allMods, 'maybe', 0.5, 0, listMode);
 	}
 
 	// 'legato
 	let legatoRunner: RunnerState | null = null;
 	if (hasModifier(allMods, 'legato')) {
-		legatoRunner = extractModifierScalar(allMods, 'legato', 0.8, 0);
+		legatoRunner = extractModifierScalar(allMods, 'legato', 0.8, 0, listMode);
 	}
 
 	// 'offset
 	let offsetRunner: RunnerState | null = null;
 	if (hasModifier(allMods, 'offset')) {
-		offsetRunner = extractModifierScalar(allMods, 'offset', 0, 0);
+		offsetRunner = extractModifierScalar(allMods, 'offset', 0, 0, listMode);
 	}
 
 	// Sequence shape modifiers: 'rev, 'mirror, 'bounce (post-traversal, pre-stut)
@@ -2244,7 +2271,8 @@ function compilePattern(
 		: null;
 	const synthdef = synthdefTok ? synthdefTok.image.slice(1) : null;
 
-	// "param modifiers — direct SynthDef argument access on the pattern statement
+	// "param modifiers — direct SynthDef argument access on the pattern statement.
+	// List-level eager mode propagates as the default for "param values.
 	const paramSuffixes = (patternNode.children.paramSuffix as CstNode[]) ?? [];
 	const paramRunners: Array<{ name: string; runner: RunnerState }> = [];
 	for (const ps of paramSuffixes) {
@@ -2254,7 +2282,7 @@ function compilePattern(
 		const genExpr = ((ps.children.generatorExpr as CstNode[]) ?? [])[0];
 		if (!genExpr) continue;
 		const genMods = (genExpr.children.modifierSuffix as CstNode[]) ?? [];
-		const mode = extractEagerMode(genMods) ?? DEFAULT_MODE;
+		const mode = extractEagerMode(genMods) ?? listMode;
 		const atomic = ((genExpr.children.atomicGenerator as CstNode[]) ?? [])[0];
 		if (!atomic) continue;
 		const numGen = ((atomic.children.numericGenerator as CstNode[]) ?? [])[0];
@@ -2610,6 +2638,11 @@ function orderedSubElements(
 type SlotParams = {
 	legato: number;
 	cycle: number;
+	/**
+	 * Index of the pre-stutter source slot within the cycle. Used by 'eager(0)
+	 * to redraw runners per source event.
+	 */
+	sourceSlot: number;
 	scaleCtx: ScaleContext;
 	/**
 	 * Per-slot arithmetic function (issue #31): applies the arithmetic operator to
@@ -2652,6 +2685,9 @@ function expandSlot(
 		const subSlot = slotDuration / ordered.length;
 		const out: ScheduledEvent[] = [];
 		for (let j = 0; j < ordered.length; j++) {
+			// Nested sub-elements inherit the parent's sourceSlot so stutter copies of a
+			// subsequence still share draws. Distinct sub-positions within the subsequence
+			// are not considered separate source events for eager(0) purposes.
 			out.push(...expandSlot(ordered[j], slotStart + j * subSlot, subSlot, p));
 		}
 		return out;
@@ -2691,7 +2727,7 @@ function expandSlot(
 	}
 
 	// scalar — pitch-bearing element for note, mono, slice
-	const rawDegree = sampleRunner(el.runner, p.cycle);
+	const rawDegree = sampleRunner(el.runner, p.cycle, p.sourceSlot);
 	const beatOffset = el.beatOverride !== undefined ? el.beatOverride : slotStart;
 
 	// Apply arithmetic operator if present (issue #31).
@@ -2780,53 +2816,52 @@ function evaluateCompiledPattern(
 	// All events in the cycle share this one buffer name.
 	const bufName: string | null = bufRunner ? sampleBufRunner(bufRunner, cycle) : null;
 
-	// Sample stutter count once per cycle
-	const stutCount = stutRunner ? Math.max(1, Math.round(sampleRunner(stutRunner, cycle))) : 1;
-
-	// Sample legato once per cycle — note defaults to 0.8 (SC Pbind convention); mono ignores it entirely
-	const legato =
-		contentType === 'mono'
-			? 1.0
-			: legatoRunner
-				? sampleRunner(legatoRunner, cycle)
-				: contentType === 'note'
-					? 0.8
-					: 1.0;
-
-	// Sample offset once per cycle
-	const offsetMs = offsetRunner ? sampleRunner(offsetRunner, cycle) : undefined;
-
-	// Sample "param runners once per cycle
-	let noteParams: Record<string, number> | undefined;
-	if (paramRunners.length > 0) {
-		noteParams = {};
-		for (const { name, runner } of paramRunners) {
-			noteParams[name] = sampleRunner(runner, cycle);
-		}
-	}
-
-	// Sample maybe probability once per cycle
-	const maybeProb = maybeRunner ? sampleRunner(maybeRunner, cycle) : null;
-
 	// Determine the ordered sequence of elements (traversal strategy)
 	// If 'arp is present it takes precedence and computes its own ordering.
 	const traversedElements = compiled.arpConfig
 		? applyArp(elements, compiled.arpConfig, cycle)
 		: orderedSubElements(elements, compiled.traversal, cycle);
 
-	// Apply sequence shape modifier post-traversal: 'rev, 'mirror, 'bounce
-	const orderedElements = applyShapeMode(traversedElements, compiled.shapeMode);
+	// Apply sequence shape modifier post-traversal: 'rev, 'mirror, 'bounce.
+	// The result is the array of source slots (pre-stutter) for this cycle.
+	const sourceElements = applyShapeMode(traversedElements, compiled.shapeMode);
 
-	// Apply 'stut: expand each element into stutCount copies
-	const expandedElements: CompiledElement[] = [];
-	for (const el of orderedElements) {
-		for (let s = 0; s < stutCount; s++) {
-			expandedElements.push(el);
+	// Sample per-source-slot values for stut count, legato, offset, maybe, and "param runners.
+	// Under 'eager(0) (default) these vary per source slot; under 'eager(1) they collapse to
+	// one shared value per cycle thanks to the runner cache.
+	const noteDefaultLegato = contentType === 'mono' ? 1.0 : contentType === 'note' ? 0.8 : 1.0;
+	type SourceSlotBundle = {
+		el: CompiledElement;
+		stutCount: number;
+		legato: number;
+		offsetMs: number | undefined;
+		maybeProb: number | null;
+		params: Record<string, number> | undefined;
+	};
+	const sourceSlotData: SourceSlotBundle[] = sourceElements.map((el, srcIdx) => {
+		const stutCount = stutRunner
+			? Math.max(1, Math.round(sampleRunner(stutRunner, cycle, srcIdx)))
+			: 1;
+		const legato =
+			contentType === 'mono'
+				? 1.0
+				: legatoRunner
+					? sampleRunner(legatoRunner, cycle, srcIdx)
+					: noteDefaultLegato;
+		const offsetMs = offsetRunner ? sampleRunner(offsetRunner, cycle, srcIdx) : undefined;
+		const maybeProb = maybeRunner ? sampleRunner(maybeRunner, cycle, srcIdx) : null;
+		let params: Record<string, number> | undefined;
+		if (paramRunners.length > 0) {
+			params = {};
+			for (const { name, runner } of paramRunners) {
+				params[name] = sampleRunner(runner, cycle, srcIdx);
+			}
 		}
-	}
+		return { el, stutCount, legato, offsetMs, maybeProb, params };
+	});
 
-	const n = expandedElements.length;
-	const slotDuration = 1 / n;
+	const totalSlots = sourceSlotData.reduce((sum, d) => sum + d.stutCount, 0);
+	const slotDuration = totalSlots > 0 ? 1 / totalSlots : 0;
 	const events: ScheduledEvent[] = [];
 
 	// isFinite: true when 'n modifier is present (pattern plays n times then stops).
@@ -2844,16 +2879,18 @@ function evaluateCompiledPattern(
 	}
 
 	// Pre-compute per-slot arithmetic functions (issue #31).
-	// For scalar RHS, one value is sampled per cycle and applied uniformly.
+	// For scalar RHS, the value is sampled per source slot (respects 'eager(0) per-event default).
 	// For list RHS, values are sampled per slot (with wrap-around).
-	// arithmetic.applyToSlot(rawDegree, slotIndex) → number | null (null = skip event).
-	let arithmeticApply: ((rawDegree: number, slotIndex: number) => number | null) | null = null;
+	// arithmetic.applyToSlot(rawDegree, srcIdx, slotIndex) → number | null (null = skip event).
+	let arithmeticApply:
+		| ((rawDegree: number, srcIdx: number, slotIndex: number) => number | null)
+		| null = null;
 	if (compiled.transposition) {
 		const arith = compiled.transposition;
 		if (arith.listPolls) {
 			const listPolls = arith.listPolls;
 			const listLen = listPolls.length;
-			arithmeticApply = (rawDegree: number, slotIndex: number) => {
+			arithmeticApply = (rawDegree: number, _srcIdx: number, slotIndex: number) => {
 				const rhsVal = listPolls[slotIndex % listLen]();
 				const result = applyArithmeticOp(arith.op, rawDegree, rhsVal);
 				if (result === null) {
@@ -2864,9 +2901,9 @@ function evaluateCompiledPattern(
 				return result;
 			};
 		} else {
-			// Scalar RHS — sample once per cycle
-			const rhsVal = sampleRunner(arith.scalarRunner!, cycle);
-			arithmeticApply = (rawDegree: number) => {
+			// Scalar RHS — sample per source slot (cache collapses to per-cycle under eager(1) etc.)
+			arithmeticApply = (rawDegree: number, srcIdx: number) => {
+				const rhsVal = sampleRunner(arith.scalarRunner!, cycle, srcIdx);
 				const result = applyArithmeticOp(arith.op, rawDegree, rhsVal);
 				if (result === null) {
 					console.warn(`[flux] arithmetic: ${arith.op} by zero; event skipped`);
@@ -2881,8 +2918,16 @@ function evaluateCompiledPattern(
 		? Math.max(1, Math.round(sampleRunner(numSlicesRunner, cycle)))
 		: undefined;
 
-	// cloud: emit one persistent-node event per cycle regardless of list contents
+	// cloud: emit one persistent-node event per cycle regardless of list contents.
+	// cloud has no source slots in the usual sense — sample pattern-level runners at
+	// srcIdx=0 so behaviour is well-defined (per-cycle under any eager setting).
 	if (contentType === 'cloud') {
+		const cloudParams = paramRunners.length > 0 ? ({} as Record<string, number>) : undefined;
+		if (cloudParams) {
+			for (const { name, runner } of paramRunners) {
+				cloudParams[name] = sampleRunner(runner, cycle, 0);
+			}
+		}
 		for (let rep = 0; rep < (isFinite ? Math.min(repeatCount, 999) : 1); rep++) {
 			const cycleOff = atOffset + rep;
 			const ev: CloudEvent = {
@@ -2894,37 +2939,45 @@ function evaluateCompiledPattern(
 			if (bufName !== null) ev.bufferName = bufName;
 			if (cycleOff !== 0) ev.cycleOffset = cycleOff;
 			if (compiled.synthdef !== null) ev.synthdef = compiled.synthdef;
-			if (noteParams !== undefined) ev.params = noteParams;
+			if (cloudParams !== undefined) ev.params = cloudParams;
 			events.push(ev);
 		}
 	} else {
 		for (let rep = 0; rep < (isFinite ? Math.min(repeatCount, 999) : 1); rep++) {
 			const cycleOff = atOffset + rep;
-			for (let i = 0; i < n; i++) {
-				// Apply 'maybe filter
-				if (maybeProb !== null && Math.random() >= maybeProb) continue;
-
-				const el = expandedElements[i];
-				// Build per-slot arithmetic function: closes over slot index i for list RHS wrap-around.
-				const slotArithFn = arithmeticApply
-					? (rawDegree: number) => arithmeticApply!(rawDegree, i)
-					: null;
-				events.push(
-					...expandSlot(el, i * slotDuration, slotDuration, {
-						legato,
-						cycle,
-						scaleCtx,
-						arithmeticFn: slotArithFn,
-						contentType,
-						loopId,
-						offsetMs,
-						cycleOff,
-						synthdef: compiled.synthdef,
-						noteParams,
-						bufName,
-						numSlices
-					})
-				);
+			let slotIdx = 0;
+			for (let srcIdx = 0; srcIdx < sourceSlotData.length; srcIdx++) {
+				const bundle = sourceSlotData[srcIdx];
+				const { el, stutCount, legato, offsetMs, maybeProb, params } = bundle;
+				for (let s = 0; s < stutCount; s++) {
+					// 'maybe filter applies per output event (each stutter copy may be dropped).
+					if (maybeProb !== null && Math.random() >= maybeProb) {
+						slotIdx++;
+						continue;
+					}
+					const currentSlot = slotIdx;
+					const slotArithFn = arithmeticApply
+						? (rawDegree: number) => arithmeticApply!(rawDegree, srcIdx, currentSlot)
+						: null;
+					events.push(
+						...expandSlot(el, slotIdx * slotDuration, slotDuration, {
+							legato,
+							cycle,
+							sourceSlot: srcIdx,
+							scaleCtx,
+							arithmeticFn: slotArithFn,
+							contentType,
+							loopId,
+							offsetMs,
+							cycleOff,
+							synthdef: compiled.synthdef,
+							noteParams: params,
+							bufName,
+							numSlices
+						})
+					);
+					slotIdx++;
+				}
 			}
 		}
 	}

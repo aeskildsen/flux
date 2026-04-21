@@ -41,12 +41,16 @@ A modifier always attaches to the _immediately preceding syntactic token_, which
 
 # 2. **Modifier Precedence Truth Table**
 
-Inner overrides outer. `'lock` beats `'eager(n)`.
+Inner overrides outer. `'lock` beats any `'eager(n)` including `'eager(0)`.
 
 | Inner       | Outer       | Result              |
 | ----------- | ----------- | ------------------- |
+| `'lock`     | `'eager(0)` | `'lock`             |
 | `'lock`     | `'eager(1)` | `'lock`             |
 | `'lock`     | `'eager(3)` | `'lock`             |
+| `'eager(0)` | `'lock`     | inner `'eager(0)`   |
+| `'eager(0)` | `'eager(1)` | inner `'eager(0)`   |
+| `'eager(1)` | `'eager(0)` | inner `'eager(1)`   |
 | `'eager(2)` | `'lock`     | inner `'eager(2)`   |
 | `'eager(2)` | `'eager(5)` | inner `'eager(2)`   |
 | none        | `'lock`     | `'lock` applies     |
@@ -58,13 +62,14 @@ Inner overrides outer. `'lock` beats `'eager(n)`.
 
 How stutter counts are sampled. Applies to all content types.
 
-| Code                        | Interpretation                | Evaluation                         | Result                        |
-| --------------------------- | ----------------------------- | ---------------------------------- | ----------------------------- |
-| `[x]'stut`                  | Default `'stut(2)`            | Draw count once per cycle.         | Each event repeats twice.     |
-| `[x]'stut(4)`               | Fixed count.                  | No randomness.                     | Repeat each event 4×.         |
-| `[x]'stut(2rand4)`          | Random count eager(1).        | Count drawn once per cycle.        | Each cycle has fixed k.       |
-| `[x]'stut(2rand4'lock)`     | Frozen stutter count.         | k drawn once ever.                 | Same k for whole session.     |
-| `[x]'stut(2rand4'eager(4))` | Count redrawn every 4 cycles. | k held for 4 cycles, then redrawn. | Slowly varying burst lengths. |
+| Code                          | Interpretation                   | Evaluation                                  | Result                        |
+| ----------------------------- | -------------------------------- | ------------------------------------------- | ----------------------------- |
+| `[x]'stut`                    | Default `'stut(2)`               | Fixed count of 2.                           | Each event repeats twice.     |
+| `[x]'stut(4)`                 | Fixed count.                     | No randomness.                              | Repeat each event 4×.         |
+| `[a b]'stut(2rand4)`          | Random count eager(0) — default. | Count drawn per source slot (a and b).      | Each source slot has own k.   |
+| `[a b]'stut(2rand4)'eager(1)` | List-level eager(1) propagates.  | Count drawn once per cycle; shared a and b. | One k per cycle.              |
+| `[x]'stut(2rand4'lock)`       | Frozen stutter count.            | k drawn once ever.                          | Same k for whole session.     |
+| `[x]'stut(2rand4'eager(4))`   | Count redrawn every 4 cycles.    | k held for 4 cycles, then redrawn.          | Slowly varying burst lengths. |
 
 **Error cases**
 
@@ -138,11 +143,14 @@ Defines how often nested generators are sampled.
 
 Pattern structure is frozen at cycle start. Applies to all content types.
 
-| Code                     | Interpretation            | Evaluation                                | Result                                   |
-| ------------------------ | ------------------------- | ----------------------------------------- | ---------------------------------------- |
-| `note [0rand4]`          | Single-element generator. | Sample once at cycle start.               | Same value entire cycle; new next cycle. |
-| `note [0rand4'eager(4)]` | Resample every 4 cycles.  | Sample held for 4 cycles, then redrawn.   | Slowly shifting value.                   |
-| `note [a b]'lock`        | Lock list values.         | Each element samples once at first cycle. | Pattern repeats identically forever.     |
+| Code                            | Interpretation            | Evaluation                                       | Result                                            |
+| ------------------------------- | ------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| `note [0rand4]`                 | Single-element generator. | Sample per source event (default `'eager(0)`).   | One source event per cycle → one value per cycle. |
+| `note [0rand4'eager(1)]`        | Explicit per-cycle draw.  | Sample once per cycle.                           | Same value entire cycle.                          |
+| `note [0rand4'eager(4)]`        | Resample every 4 cycles.  | Sample held for 4 cycles, then redrawn.          | Slowly shifting value.                            |
+| `note [a b]'lock`               | Lock list values.         | Each element samples once at first cycle.        | Pattern repeats identically forever.              |
+| `note [a b]'stut(1~4)`          | Per-source-event stutter. | Count drawn fresh for source slot a, then for b. | a and b get independent stutter counts per cycle. |
+| `note [a b]'stut(1~4)'eager(1)` | Per-cycle stutter count.  | List-level `'eager(1)` propagates to stut arg.   | a and b share the same k each cycle.              |
 
 **Error cases**
 
@@ -317,7 +325,8 @@ How legato values control note duration. Default legato for `note` is **0.8**. `
 | `note [0 2 4]'legato(0.8)`                 | Fixed legato.          | Gate closed at 0.8 × event slot.     | Same as default.                       |
 | `note [0 2 4]'legato(1.0)`                 | Full legato.           | Gate closed exactly at next event.   | Notes touch without overlap.           |
 | `note [0 2 4]'legato(1.5)`                 | Overlapping legato.    | Gate held past next event onset.     | Notes overlap (pad/drone effect).      |
-| `note [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(1).  | Value drawn once per cycle.          | Consistent legato within a cycle.      |
+| `note [0 2 4]'legato(0.5rand1.2)`          | Stochastic, eager(0).  | Value drawn per source event.        | 3 distinct legato values per cycle.    |
+| `note [0 2 4]'legato(0.5rand1.2)'eager(1)` | List-level eager(1).   | Value drawn once per cycle.          | All 3 events share one legato.         |
 | `note [0 2 4]'legato(0.5rand1.2'eager(2))` | Redraw every 2 cycles. | New value drawn every 2 cycles.      | Slowly varying articulation.           |
 | `note [0 2 4]'legato(0.5rand1.2'lock)`     | Frozen legato.         | Value drawn once, frozen forever.    | Same articulation for whole session.   |
 | `mono x [0 2 4]'legato(0.8)`               | Legato on mono.        | Modifier accepted, silently ignored. | No effect — mono uses persistent node. |
@@ -439,7 +448,8 @@ Direct SynthDef argument access. Valid wherever modifiers are valid.
 | ------------------------------------------- | --------------------------- | ------------------------------------ | ---------------------------- |
 | `note lead [0 2 4]"amp(0.5)`                | Set `amp` to literal.       | Value passed straight to synth node. | Amplitude fixed at 0.5.      |
 | `note lead [0 2 4]"amp(0.5)"pan(-0.3)`      | Chained params.             | Each param applied independently.    | Both amp and pan set.        |
-| `note pad [0 2 4]"amp(0.3rand0.8)`          | Stochastic value, eager(1). | Value drawn once per cycle.          | Amplitude varies per cycle.  |
+| `note pad [0 2 4]"amp(0.3rand0.8)`          | Stochastic value, eager(0). | Value drawn per source event.        | 3 distinct amps per cycle.   |
+| `note pad [0 2 4]"amp(0.3rand0.8)'eager(1)` | List-level eager(1).        | Value drawn once per cycle.          | All 3 events share one amp.  |
 | `note pad [0 2 4]"amp(0.3rand0.8'eager(4))` | Redraw every 4 cycles.      | Value held 4 cycles then redrawn.    | Slowly varying amplitude.    |
 | `note pad [0 2 4]"amp(0.3rand0.8'lock)`     | Frozen value.               | Drawn once at first eval, frozen.    | Same amplitude forever.      |
 | `note bass [0 2 4] \| fx(\lpf)"cutoff(800)` | Param on FX node.           | cutoff passed to FX synth node.      | Filter cutoff set to 800 Hz. |
@@ -468,7 +478,6 @@ Direct SynthDef argument access. Valid wherever modifiers are valid.
 | `note[0]`             | Parse error    | Missing space between content type keyword and `[`.                              |
 | `0 rand 4`            | Parse error    | Whitespace inside generator expression.                                          |
 | `[0, 1, 2]`           | Parse error    | Commas not valid as element separators.                                          |
-| `[x]'eager(0)`        | Semantic error | eager period must be a positive integer ≥ 1.                                     |
 | `[x]'eager(-1)`       | Semantic error | Negative eager period is not meaningful.                                         |
 | `note [0]'n(0)`       | Semantic error | Zero repetitions means the pattern never plays.                                  |
 | `note [0]'n(-1)`      | Semantic error | Negative repetition count is not meaningful.                                     |
@@ -533,14 +542,14 @@ Compact `[start..end]` / `[start, step..end]` syntax. All bounds inclusive. Eage
 
 `<d1 d2 ... dn>` — N simultaneous degree values in one event slot. Spawns N synths at the same beat offset.
 
-| Code Snippet                   | Interpretation                            | Evaluation                                                                 | Result                                                    |
-| ------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `note x [<0 2 4>]`             | Single chord slot — triad.                | Three NoteEvents at the same beatOffset.                                   | Three simultaneous notes (MIDI 60, 64, 67 in C major/C5). |
-| `note x [<0 2 4> <1 3 6>]`     | Two chord slots, each a triad.            | Cycle: two slots; each produces three NoteEvents.                          | Chords timed like a 2-element list.                       |
-| `note x [<0 4~7> 2]`           | Chord with a generator element.           | `4~7` polled at cycle boundary (`'eager(1)`); degree 2 is the second slot. | First slot: chord (0, random 4–7); second slot: degree 2. |
-| `note x [0 <2 4> 7]`           | Mixed: scalars and chord inside one list. | Three slots; middle slot emits two simultaneous notes.                     | Slot 0: one note; slot 1: two notes; slot 2: one note.    |
-| `@scale(minor) note x [<0 2>]` | Chord in non-default scale context.       | Degrees resolved under minor scale.                                        | Two notes at minor-scale MIDI values for degrees 0 and 2. |
-| `note x [<0 2>]'legato(1.2)`   | Legato applied to chord.                  | Legato applies uniformly to all voices in the chord.                       | Both notes have `duration = slot × 1.2`.                  |
+| Code Snippet                   | Interpretation                            | Evaluation                                                                        | Result                                                    |
+| ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `note x [<0 2 4>]`             | Single chord slot — triad.                | Three NoteEvents at the same beatOffset.                                          | Three simultaneous notes (MIDI 60, 64, 67 in C major/C5). |
+| `note x [<0 2 4> <1 3 6>]`     | Two chord slots, each a triad.            | Cycle: two slots; each produces three NoteEvents.                                 | Chords timed like a 2-element list.                       |
+| `note x [<0 4~7> 2]`           | Chord with a generator element.           | `4~7` polled per source event (`'eager(0)` default); degree 2 is the second slot. | First slot: chord (0, random 4–7); second slot: degree 2. |
+| `note x [0 <2 4> 7]`           | Mixed: scalars and chord inside one list. | Three slots; middle slot emits two simultaneous notes.                            | Slot 0: one note; slot 1: two notes; slot 2: one note.    |
+| `@scale(minor) note x [<0 2>]` | Chord in non-default scale context.       | Degrees resolved under minor scale.                                               | Two notes at minor-scale MIDI values for degrees 0 and 2. |
+| `note x [<0 2>]'legato(1.2)`   | Legato applied to chord.                  | Legato applies uniformly to all voices in the chord.                              | Both notes have `duration = slot × 1.2`.                  |
 
 **Error cases**
 
