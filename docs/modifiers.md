@@ -253,7 +253,8 @@ Inner annotations override outer ones: `[0rand7'lock 4rand6]'eager(4)` — first
 For `slice` content type only. Tells the SynthDef how many slices the buffer is divided into.
 
 ```flux
-@buf(\amen) slice drums [0 4 8 12]'numSlices(16)
+@buf(\amen)
+  slice drums [0 4 8 12]'numSlices(16)
 ```
 
 ---
