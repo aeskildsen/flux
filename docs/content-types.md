@@ -65,8 +65,10 @@ Default SynthDef: `samplePlayer`. The runtime selects `samplePlayer_mono` or `sa
 Each event is an integer slice index into a fixed buffer. Use `'numSlices(n)` to tell the SynthDef how many slices the buffer is divided into.
 
 ```flux
-@buf(\amen) slice drums [0 4 8 12]'numSlices(16)
-@buf([\loopA \loopB]'pick) slice drums [0..15]'numSlices(16)
+@buf(\amen)
+  slice drums [0 4 8 12]'numSlices(16)
+@buf([\loopA \loopB]'pick)
+  slice drums [0..15]'numSlices(16)
 ```
 
 Default SynthDef: `slicePlayer`. The `@buf` decorator (required) selects which buffer to slice. Per-cycle buffer selection is supported — see [Decorators](decorators).
@@ -78,7 +80,8 @@ Default SynthDef: `slicePlayer`. The `@buf` decorator (required) selects which b
 A persistent granular synth node, updated via `.set` messages each cycle. The event list is empty (`[]`) — parameters are controlled via `"param` notation.
 
 ```flux
-@buf(\recording) cloud grain []"density(8)"pos(0.5rand0.8)
+@buf(\recording)
+  cloud grain []"density(8)"pos(0.5rand0.8)
 ```
 
 Default SynthDef: `grainCloud`. Like `mono`, `cloud` maintains a single node per name. Parameters can be modulated stochastically.

@@ -7,7 +7,7 @@ Decorators set pitch context and buffer selection for patterns. They are written
   note lead [0 2 4]
 ```
 
-Decorators can scope a block (indented body) or apply inline to a single expression.
+A decorator is on its own line and scopes the indented block below it. An inline decorator is a parse error.
 
 ---
 
@@ -46,8 +46,6 @@ set key(g# minor)
 ```flux
 @scale(dorian)
   note lead [0 2 4 5 7]
-
-@scale(minor) note lead [0 2 4]   // inline
 ```
 
 ---
@@ -92,7 +90,7 @@ Decorators can scope a block of expressions using indentation:
 ```flux
 @scale(minor) @root(7)
   note lead [0 1 2]
-  @oct(4)
+  @octave(4)
     note bass [0 2 4 5]
 ```
 
@@ -101,10 +99,15 @@ Decorators can scope a block of expressions using indentation:
 
 Indentation uses **2-space units**. The block closes when indentation returns to the enclosing level.
 
-For a single expression, decorators can appear inline on the same line:
+A decorator must be on its own line, with an indented block below it. This rule applies also to a block with one expression. A decorator on the same line as an expression is a parse error:
 
 ```flux
+// parse error
 @scale(minor) note lead [0 1 2]
+
+// correct
+@scale(minor)
+  note lead [0 1 2]
 ```
 
 ---
@@ -126,27 +129,35 @@ Parameters: `scale`, `root`, `octave`, `tempo`, `cent`, `key`.
 
 ## `@buf` — buffer selection for `slice` and `cloud`
 
-`@buf(\name)` specifies which buffer a `slice` or `cloud` pattern operates on. Written inline before the content type keyword.
+`@buf(\name)` specifies which buffer a `slice` or `cloud` pattern operates on. Like all decorators, it is on its own line, and the pattern is indented below it.
 
 ```flux
-@buf(\myloop) slice drums [0 2 4 8]
-@buf(\recording) cloud grain []
+@buf(\myloop)
+  slice drums [0 2 4 8]
+@buf(\recording)
+  cloud grain []
 ```
 
 **Static buffer:**
 
 ```flux
-@buf(\myloop) slice drums [0 2 4 8]'numSlices(16)
+@buf(\myloop)
+  slice drums [0 2 4 8]'numSlices(16)
 ```
 
 **Per-cycle buffer selection:** `@buf` accepts any sequence generator, polled once per cycle. All events within the cycle share the same buffer.
 
 ```flux
-@buf([\loopA \loopB]'pick)    slice drums [0 4 8 12]   // random per cycle
-@buf([\a \b \c]'shuf)         slice drums [0 4 8 12]   // deck-shuffle
-@buf([\loopA \loopB])         slice drums [0 4 8 12]   // sequential cycling
-@buf([\loopA \loopB]'lock)    slice drums [0 4 8 12]   // frozen after first pick
-@buf([\loopA \loopB]'eager(4)) slice drums [0 4 8 12]  // changes every 4 cycles
+@buf([\loopA \loopB]'pick)
+  slice drums [0 4 8 12]  // random per cycle
+@buf([\a \b \c]'shuf)
+  slice drums [0 4 8 12]  // deck-shuffle
+@buf([\loopA \loopB])
+  slice drums [0 4 8 12]  // sequential cycling
+@buf([\loopA \loopB]'lock)
+  slice drums [0 4 8 12]  // frozen after first pick
+@buf([\loopA \loopB]'eager(4))
+  slice drums [0 4 8 12]  // changes every 4 cycles
 ```
 
 `@buf` on `sample` is a semantic error — buffer selection in `sample` is per-event inside the list.

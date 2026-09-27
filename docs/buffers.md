@@ -41,18 +41,25 @@ sample drums [\kick \snare]'shuf    // deck-shuffle
 `@buf(\name)` binds a single buffer to the whole pattern for one cycle. All events in that cycle share the same buffer.
 
 ```flux
-@buf(\amen) slice drums [0 4 8 12]'numSlices(16)
-@buf(\recording) cloud grain []
+@buf(\amen)
+  slice drums [0 4 8 12]'numSlices(16)
+@buf(\recording)
+  cloud grain []
 ```
 
 The buffer name can be selected dynamically per cycle using sequence generators:
 
 ```flux
-@buf([\loopA \loopB]'pick)    slice drums [0..15]   // random per cycle
-@buf([\loopA \loopB])         slice drums [0..15]   // sequential cycling
-@buf([\loopA \loopB]'shuf)    slice drums [0..15]   // deck-shuffle per cycle
-@buf([\loopA \loopB]'lock)    slice drums [0..15]   // frozen at first pick
-@buf([\loopA \loopB]'eager(4)) slice drums [0..15]  // change every 4 cycles
+@buf([\loopA \loopB]'pick)
+  slice drums [0..15]  // random per cycle
+@buf([\loopA \loopB])
+  slice drums [0..15]  // sequential cycling
+@buf([\loopA \loopB]'shuf)
+  slice drums [0..15]  // deck-shuffle per cycle
+@buf([\loopA \loopB]'lock)
+  slice drums [0..15]  // frozen at first pick
+@buf([\loopA \loopB]'eager(4))
+  slice drums [0..15]  // change every 4 cycles
 ```
 
 The generator is polled **once per cycle** — not once per event.
@@ -64,9 +71,12 @@ The generator is polled **once per cycle** — not once per event.
 `slice` divides a buffer into equal-length slices and plays individual slices by index. Use `'numSlices(n)` to tell the SynthDef how many slices the buffer is divided into.
 
 ```flux
-@buf(\amen) slice drums [0 4 8 12]'numSlices(16)   // 16-slice grid
-@buf(\amen) slice drums [0..15]'numSlices(16)      // all 16 slices in order
-@buf(\amen) slice drums [0..15]'pick'numSlices(16) // random slice each event
+@buf(\amen)
+  slice drums [0 4 8 12]'numSlices(16)  // 16-slice grid
+@buf(\amen)
+  slice drums [0..15]'numSlices(16)  // all 16 slices in order
+@buf(\amen)
+  slice drums [0..15]'pick'numSlices(16) // random slice each event
 ```
 
 Slice indices are integers starting at 0.
@@ -78,7 +88,8 @@ Slice indices are integers starting at 0.
 `cloud` uses a persistent granular synth node. The event list is empty (`[]`) — parameters are modulated via `"param` each cycle.
 
 ```flux
-@buf(\recording) cloud grain []"density(8)"pos(0.5rand0.8)
+@buf(\recording)
+  cloud grain []"density(8)"pos(0.5rand0.8)
 ```
 
 Key params for `grainCloud`: `density` (grains per second), `pos` (playback position 0.0–1.0).
