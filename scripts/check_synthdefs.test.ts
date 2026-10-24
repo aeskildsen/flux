@@ -6,31 +6,15 @@
  * the tests are self-contained and work in CI where sclang is absent and
  * the compiled_synthdefs/ output is not committed.
  *
- * The top-level runner code (hasSclang / process.exit) is suppressed by
- * stubbing child_process.spawnSync before the module is imported, so it
- * returns {error: new Error()} making hasSclang() → false → process.exit(0).
- * We stub process.exit as well so it doesn't actually kill the test process.
+ * The runner code of check_synthdefs.ts runs only when the script is
+ * executed directly, so importing the module here compiles nothing.
  */
 import { mkdirSync, writeFileSync, utimesSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Stub spawnSync before importing the module so the top-level hasSclang()
-// call returns false → process.exit(0) branch, which we also stub.
-vi.mock('child_process', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('child_process')>();
-	return {
-		...actual,
-		spawnSync: vi.fn(() => ({ error: new Error('mocked: no sclang') })),
-		execSync: vi.fn()
-	};
-});
-
-const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as () => never);
-
-const { needsRecompile } = await import('./check_synthdefs.js');
+import { beforeEach, describe, expect, it } from 'vitest';
+import { needsRecompile } from './check_synthdefs.js';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -58,10 +42,6 @@ describe('needsRecompile', () => {
 		metadataPath = path.join(targetDir, 'metadata.json');
 		mkdirSync(sourceDir, { recursive: true });
 		mkdirSync(targetDir, { recursive: true });
-	});
-
-	afterEach(() => {
-		exitSpy.mockClear();
 	});
 
 	it('returns true when metadata.json is missing', () => {

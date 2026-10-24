@@ -4,6 +4,11 @@ import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	// src/lib/engine-location.ts builds the engine URLs from the base path.
+	// The same value as kit.paths.base in svelte.config.ts.
+	define: {
+		__FLUX_BASE_PATH__: JSON.stringify(process.env.BASE_PATH ?? '')
+	},
 	optimizeDeps: {
 		include: ['chevrotain']
 	},

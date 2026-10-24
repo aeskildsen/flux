@@ -78,7 +78,7 @@ function tickHealth(): void {
 	const m = (_instance as any)?.getMetrics();
 	if (!m) return;
 
-	const dropped: number = m.scsynthMessagesDropped ?? 0;
+	const dropped: number = m.engineMessagesDropped ?? 0;
 	const audioCtx: string = m.audioContextState ?? '';
 	const inPct: number = Math.round(m.inBufferUsed?.percentage ?? 0);
 	const outPct: number = Math.round(m.outBufferUsed?.percentage ?? 0);

@@ -64,7 +64,9 @@ export function run<T>(
 		const sonic = getInstance();
 		const ctx = clock.audioContext;
 
-		if (!sonic || !ctx || !sonic.initTime) {
+		const ntpStartTime = sonic?.clock?.getNTPStartTime() ?? 0;
+
+		if (!sonic || !ctx || !ntpStartTime) {
 			// Engine not ready yet (or NTP sync pending) — retry next tick
 			waitedForEngine = true;
 			timerId = setTimeout(tick, TICK_INTERVAL_MS);
@@ -126,10 +128,10 @@ export function run<T>(
 			}
 			// clock.beatToAudioTime returns an absolute AudioContext.currentTime value anchored
 			// to when clock.start() was called (same timeline as ctx.currentTime).
-			// sonic.initTime is the NTP base timestamp (seconds since 1900-01-01) at the moment
+			// ntpStartTime is the NTP base timestamp (seconds since 1900-01-01) at the moment
 			// the AudioContext was created. Adding them converts a scheduled beat to the absolute
 			// NTP timestamp required by SuperSonic's OSC bundle prescheduler.
-			const ntpTime = sonic.initTime + clock.beatToAudioTime(nextBeat);
+			const ntpTime = ntpStartTime + clock.beatToAudioTime(nextBeat);
 			try {
 				callback(value, ntpTime);
 			} catch (e) {

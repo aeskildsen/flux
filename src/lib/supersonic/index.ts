@@ -13,6 +13,7 @@ export type { Server, SynthParams } from './osc.js';
 export type {
 	SuperSonicInstance,
 	SuperSonicConfig,
+	SuperSonicClock,
 	StatusKind,
 	EngineHealth,
 	AddAction

@@ -19,7 +19,7 @@ k = SynthDef(\kick, {
 metadata: (
 	credit: "Anders Eskildsen",
 	type: \instrument,
-	contentTypes: [\note, \mono],
+	contentTypes: [\note],
 	specs: Dictionary.newFrom([
 		\pan, ControlSpec(-1, 1, 2, 0.0, 0, ""),
 		\amp, ControlSpec(0, 1, 4, 0, 0.1, "amp"),

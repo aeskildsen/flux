@@ -29,4 +29,5 @@ coverage/
 dev-references
 static/compiled_synthdefs
 .claude/settings.local.json
-.claude/agent-memory
+# The engine that scripts/engine.ts copies from the flux-engine package
+/static/flux-engine

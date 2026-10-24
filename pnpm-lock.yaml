@@ -63,6 +63,9 @@ importers:
       eslint-plugin-svelte:
         specifier: ^3.16.0
         version: 3.16.0(eslint@9.39.4(supports-color@7.2.0))(svelte@5.55.0)
+      flux-engine:
+        specifier: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz
+        version: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz
       globals:
         specifier: ^17.4.0
         version: 17.4.0
@@ -85,11 +88,11 @@ importers:
         specifier: ^2.13.1
         version: 2.13.1
       supersonic-scsynth:
-        specifier: ^0.61.0
-        version: 0.61.0
+        specifier: ^0.91.0
+        version: 0.91.0
       supersonic-scsynth-core:
-        specifier: ^0.61.0
-        version: 0.61.0
+        specifier: ^0.91.0
+        version: 0.91.0
       svelte:
         specifier: ^5.55.0
         version: 5.55.0
@@ -1036,6 +1039,10 @@ packages:
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
 
+  flux-engine@https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz:
+    resolution: {integrity: sha512-crHi0a6qPnEsRXlg0DqoO9Q+9aFUsBbqhnv5lGVWl2p7/zMkt/O+cWMfV3vz7betlk1wA+9Yrz5PK49zOxgCnw==, tarball: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz}
+    version: 0.91.0-flux.1
+
   fsevents@2.3.2:
     resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -1447,11 +1454,11 @@ packages:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
 
-  supersonic-scsynth-core@0.61.0:
-    resolution: {integrity: sha512-sCsUjUvxlrj0Vme5XQAbqf9/eMtBaOIwj4Jr9sSKaKTnNSKDjFjAMlkO4qwmpDdIaAHL3rFUWBPwdphzqfe88g==}
+  supersonic-scsynth-core@0.91.0:
+    resolution: {integrity: sha512-ucOZ4mRgbteyCz3KM1SqkM2vx1nEp3/CBGJgmImwGvFxJBF4zw5MuStHJlrlQ+/7ZEeUU4SwRmGWTlpP9JHNyg==}
 
-  supersonic-scsynth@0.61.0:
-    resolution: {integrity: sha512-Zp5/xL0DX5pkaUClRJtNKKfe8SOiUqZ9BFNrvIUcrB1FSeou9aiGphQd5WjOOQvNlCgiymMp8GNsT1Rw230tuw==}
+  supersonic-scsynth@0.91.0:
+    resolution: {integrity: sha512-vCkz6cg4+DYKsyKbhMOnJ7TYae61xbH6yHU7pICLDxfb7JiGtgut7fMzCul2uANi0bYAVQzHzmm3hhz2dIQ30w==}
     engines: {node: '>=18.0.0'}
 
   supports-color@7.2.0:
@@ -2534,6 +2541,8 @@ snapshots:
 
   flatted@3.4.2: {}
 
+  flux-engine@https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz: {}
+
   fsevents@2.3.2:
     optional: true
 
@@ -2909,9 +2918,9 @@ snapshots:
 
   strip-json-comments@3.1.1: {}
 
-  supersonic-scsynth-core@0.61.0: {}
+  supersonic-scsynth-core@0.91.0: {}
 
-  supersonic-scsynth@0.61.0:
+  supersonic-scsynth@0.91.0:
     dependencies:
       '@thi.ng/malloc': 6.1.151
 

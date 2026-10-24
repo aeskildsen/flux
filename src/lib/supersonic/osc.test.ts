@@ -13,7 +13,7 @@ function makeMockInstance(): { instance: SuperSonicInstance; calls: (string | nu
 		send: vi.fn((...args: (string | number)[]) => calls.push(args)),
 		sendOSC: vi.fn(),
 		audioContext: null,
-		initTime: 0
+		clock: undefined
 	} satisfies SuperSonicInstance;
 	return { instance, calls };
 }

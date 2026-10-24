@@ -111,4 +111,19 @@ describe('health metrics', () => {
 		await wait(600);
 		expect(serverState.health.audioContextState).toBe('running');
 	});
+
+	it('gets the dropped-message counter from the engine metrics', () => {
+		// tickHealth() reads this field. A missing field reads as 0 and hides drops.
+		const metrics = (getInstance() as any).getMetrics();
+		expect(typeof metrics.engineMessagesDropped).toBe('number');
+	});
+});
+
+describe('engine clock', () => {
+	it('gives an NTP start time after boot', () => {
+		// The scheduler adds this value to AudioContext times to make OSC bundle time tags.
+		// 3_900_000_000 s after 1900 is in 2023.
+		const ntpStart = getInstance()?.clock?.getNTPStartTime() ?? 0;
+		expect(ntpStart).toBeGreaterThan(3_900_000_000);
+	});
 });

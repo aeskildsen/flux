@@ -2,10 +2,16 @@
  * Checks whether compiled synthdefs are up to date with their sources.
  * If any .scsyndef is missing or older than its source .scd, re-runs the
  * compile script. Requires sclang to be installed; skips silently if not.
+ * With --force, it compiles in all cases, and fails when sclang is missing.
+ *
+ * sclang compiles with the class files of the engine package (see
+ * engine.ts), so that SynthDefs can use the flux-engine UGens.
  */
-import { execSync, spawnSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { existsSync, statSync, readFileSync, readdirSync } from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
+import { sclangArgs } from './engine';
 
 const root = process.cwd();
 const sourceDir = path.join(root, 'synthdefs');
@@ -58,14 +64,21 @@ export function needsRecompile(opts?: {
 	return false;
 }
 
-if (!hasSclang()) {
-	console.log('sclang not found — skipping synthdef freshness check');
-	process.exit(0);
-}
-
-if (needsRecompile()) {
-	console.log('Synthdefs are stale — recompiling...');
-	execSync(`sclang "${compileScript}"`, { stdio: 'inherit' });
-} else {
-	console.log('Synthdefs are up to date');
+// Runs only when the script is executed directly, not when a test imports it.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	const force = process.argv.includes('--force');
+	if (!hasSclang()) {
+		if (force) {
+			// A forced build must not pass with missing or stale SynthDefs.
+			console.error('sclang not found — cannot compile synthdefs');
+			process.exitCode = 1;
+		} else {
+			console.log('sclang not found — skipping synthdef freshness check');
+		}
+	} else if (force || needsRecompile()) {
+		console.log('Compiling synthdefs...');
+		execFileSync('sclang', sclangArgs(compileScript), { stdio: 'inherit' });
+	} else {
+		console.log('Synthdefs are up to date');
+	}
 }

@@ -10,8 +10,10 @@ permissions:
   pages: write
   id-token: write
 
+# One group for each branch: a new push cancels the older run on the same
+# branch only. A push to a feature branch does not cancel a deploy from main.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -55,10 +57,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         
+      # With the class files of the flux-engine package on the class path
+      # (scripts/engine.ts), so that synthdefs/woodbar.scd compiles.
       - name: Compile SynthDefs
         env:
           QT_QPA_PLATFORM: offscreen
-        run: sclang scripts/compile_synthdefs.scd
+        run: pnpm build:synthdefs
         
       - name: Build SvelteKit app
         env:

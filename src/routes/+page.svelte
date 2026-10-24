@@ -80,7 +80,7 @@
 			if (!sc) return;
 
 			// Point the clock at SuperSonic's AudioContext so beatToAudioTime and
-			// sonic.initTime are on the same timeline.
+			// the engine's NTP start time are on the same timeline.
 			const sonicCtx = getInstance()?.audioContext;
 			if (sonicCtx) clock.setContext(sonicCtx);
 

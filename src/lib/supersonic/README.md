@@ -2,7 +2,7 @@
 
 Svelte 5 bindings for [SuperSonic](https://github.com/samaaron/supersonic). The code is in `src/lib/supersonic/`. Import it with the alias `svelte-supersonic`.
 
-The wrapper started as a separate repository. Its history is part of this repository. The MIT license for the wrapper is in `LICENSE` in this folder.
+The wrapper started as a separate repository, `aeskildsen/svelte-supersonic` (archived). Its history is part of this repository. In Flux, the wrapper has the same license as the rest of Flux: AGPL-3.0-or-later. The archived repository and the versions of the wrapper before the move into Flux stay under the MIT license.
 
 ## Usage
 

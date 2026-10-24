@@ -3,7 +3,7 @@
  *
  * The scheduler depends on two external seams:
  *   1. `clock` (from $lib/clock) — provides beatToAudioTime, audioContext
- *   2. `getInstance` (from svelte-supersonic) — provides initTime
+ *   2. `getInstance` (from svelte-supersonic) — provides clock.getNTPStartTime()
  *
  * We mock both so tests run in Node without a real AudioContext or WASM engine.
  * setTimeout is replaced with vitest fake timers so the lookahead tick loop
@@ -44,9 +44,14 @@ const fakeAudioContext = {
 	}
 };
 
-const fakeSonic = {
-	initTime: 1000 // arbitrary NTP epoch offset
-};
+const FAKE_NTP_START = 1000; // arbitrary NTP epoch offset
+
+/** A fake engine whose clock reports `ntpStart` as the NTP start time. */
+function sonicWithNtpStart(ntpStart: number) {
+	return { clock: { getNTPStartTime: () => ntpStart } } as ReturnType<typeof getInstance>;
+}
+
+const fakeSonic = sonicWithNtpStart(FAKE_NTP_START);
 
 // ---------------------------------------------------------------------------
 // Import module under test (after mocks are set up)
@@ -83,7 +88,7 @@ beforeEach(() => {
 	fakeCurrentTime = 0;
 
 	vi.spyOn(clock, 'audioContext', 'get').mockReturnValue(fakeAudioContext as AudioContext);
-	vi.mocked(getInstance).mockReturnValue(fakeSonic as ReturnType<typeof getInstance>);
+	vi.mocked(getInstance).mockReturnValue(fakeSonic);
 });
 
 afterEach(() => {
@@ -146,17 +151,27 @@ describe('run() — engine not ready', () => {
 
 		expect(callback).not.toHaveBeenCalled();
 
-		vi.mocked(getInstance).mockReturnValue(fakeSonic as ReturnType<typeof getInstance>);
+		vi.mocked(getInstance).mockReturnValue(fakeSonic);
 		vi.advanceTimersByTime(TICK_INTERVAL_MS);
 
 		expect(callback).toHaveBeenCalledTimes(1);
 	});
 
-	it('does not emit when sonic.initTime is 0 (NTP sync pending)', () => {
-		// initTime=0 means NTP hasn't synced yet — ntpTime would be computed as
+	it('does not emit when sonic.clock is undefined (before init)', () => {
+		// The engine has no clock until init() resolves.
+		vi.mocked(getInstance).mockReturnValue({ clock: undefined } as ReturnType<typeof getInstance>);
+		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
+
+		const callback = vi.fn();
+		run(finiteGen([1]), callback);
+		expect(callback).not.toHaveBeenCalled();
+	});
+
+	it('does not emit when the NTP start time is 0 (NTP sync pending)', () => {
+		// An NTP start time of 0 means NTP hasn't synced yet — ntpTime would be computed as
 		// 0 + beatToAudioTime(beat), a tiny number far in the past relative to NTP
 		// epoch (1900), causing every bundle to arrive LATE.
-		vi.mocked(getInstance).mockReturnValue({ initTime: 0 } as ReturnType<typeof getInstance>);
+		vi.mocked(getInstance).mockReturnValue(sonicWithNtpStart(0));
 		vi.spyOn(clock, 'beatToAudioTime').mockReturnValue(fakeCurrentTime - 1);
 
 		const callback = vi.fn();
@@ -166,10 +181,10 @@ describe('run() — engine not ready', () => {
 
 	it('snaps nextBeat to currentBeat when engine becomes ready after a wait', () => {
 		// Simulates the LATE scenario: run() is called with startBeat=0, but
-		// initTime=0 delays the first real tick by several ticks. By then
+		// an NTP start time of 0 delays the first real tick by several ticks. By then
 		// currentBeat has advanced; without the snap, beatToAudioTime(0) is in
 		// the past and the bundle arrives LATE.
-		vi.mocked(getInstance).mockReturnValue({ initTime: 0 } as ReturnType<typeof getInstance>);
+		vi.mocked(getInstance).mockReturnValue(sonicWithNtpStart(0));
 
 		// After the wait, currentBeat will be 5 — only beat 5 is in-window
 		const currentBeatSpy = vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(5);
@@ -180,10 +195,10 @@ describe('run() — engine not ready', () => {
 		const callback = vi.fn();
 		run(finiteGen([{ note: 60, duration: 1 }]), callback, 1, 0); // startBeat=0
 
-		expect(callback).not.toHaveBeenCalled(); // still waiting for initTime
+		expect(callback).not.toHaveBeenCalled(); // still waiting for the NTP start time
 
 		// Engine becomes ready
-		vi.mocked(getInstance).mockReturnValue(fakeSonic as ReturnType<typeof getInstance>);
+		vi.mocked(getInstance).mockReturnValue(fakeSonic);
 		vi.advanceTimersByTime(TICK_INTERVAL_MS);
 
 		// nextBeat snapped from 0 to currentBeat(5), so the event at beat 5 fires
@@ -248,17 +263,17 @@ describe('run() — event emission', () => {
 		expect(typeof ntpTime).toBe('number');
 	});
 
-	it('ntpTime includes sonic.initTime as the base', () => {
+	it('ntpTime uses the engine NTP start time as the base', () => {
 		// Emit one event within the lookahead window and verify that
-		// ntpTime is offset from sonic.initTime (not 0 or some other base).
+		// ntpTime is offset from the NTP start time (not 0 or some other base).
 		vi.spyOn(clock, 'beatToAudioTime').mockImplementation(boundedBeatMock(2));
 
 		const callback = vi.fn();
 		run(finiteGen([1]), callback, 1);
 		const ntpTime = callback.mock.calls[0][1] as number;
-		// ntpTime = sonic.initTime + beatToAudioTime(beat)
+		// ntpTime = NTP start time + beatToAudioTime(beat)
 		// beatToAudioTime returns fakeCurrentTime - 1 = -1 for the first call
-		expect(ntpTime).toBe(fakeSonic.initTime + (fakeCurrentTime - 1));
+		expect(ntpTime).toBe(FAKE_NTP_START + (fakeCurrentTime - 1));
 	});
 
 	it('stops emitting after generator is done (finite gen)', () => {
