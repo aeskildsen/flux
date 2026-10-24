@@ -125,7 +125,6 @@ describe("getCompletions — trigger: '", () => {
 		const labels = items.map((i) => i.label);
 		// Check that sorted equals original for the first word of each label
 		const baseLabels = labels.map((l) => l.split('(')[0]);
-		const sorted = [...baseLabels].sort();
 		// Allow grouping by name (same base label adjacent)
 		// Just verify the labels start with ascending letters
 		const firstChars = baseLabels.filter((v, i, a) => a.indexOf(v) === i);

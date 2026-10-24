@@ -12,7 +12,7 @@ export default defineConfig({
 			ignored: ['**/dev-*/**']
 		},
 		fs: {
-			allow: ['svelte-supersonic', 'docs']
+			allow: ['docs']
 		}
 	},
 	test: {

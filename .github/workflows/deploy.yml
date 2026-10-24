@@ -18,10 +18,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -35,20 +33,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Sync SvelteKit submodule
-        run: pnpm --dir svelte-supersonic exec svelte-kit sync
-
       - name: Test with coverage
         run: pnpm test:coverage
+
+      - name: Install Chromium for browser tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Browser specs of the SuperSonic wrapper, including the engine integration spec.
+      - name: Test SuperSonic wrapper in the browser
+        run: pnpm exec vitest run --project client src/lib/supersonic
 
   build:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -67,9 +67,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         
-      - name: Sync SvelteKit submodule
-        run: pnpm --dir svelte-supersonic exec svelte-kit sync
-      
       - name: Compile SynthDefs
         env:
           QT_QPA_PLATFORM: offscreen

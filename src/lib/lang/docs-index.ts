@@ -76,9 +76,9 @@ function extractKeys(heading: string): string[] {
 		//   "'stut(n)"    → "'stut"
 		//   "utf8{word}"  → "utf8"
 		//   "'arp(\\up)"  → "'arp"
-		const key = raw.replace(/[({\[].*[)}\]]$/, '').trim();
+		const key = raw.replace(/[({[].*[)}\]]$/, '').trim();
 		// Skip synthetic forms like `[...]`, `<...>` — not hover targets
-		if (/^[\[<(]/.test(key)) continue;
+		if (/^[[<(]/.test(key)) continue;
 		if (key.length === 0) continue;
 		keys.push(key);
 	}

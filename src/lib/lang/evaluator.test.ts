@@ -35,23 +35,20 @@ import {
 	type CloudEvent
 } from './evaluator.js';
 
+/**
+ * A scheduled event with the optional fields that tests read without narrowing
+ * on `contentType` first.
+ */
+type TestEvent = ScheduledEvent & {
+	note?: number;
+	cent?: number;
+	synthdef?: string;
+	loopId?: string;
+};
+
 /** Cast a ScheduledEvent to a pitched event (NoteEvent | MonoEvent) for test assertions. */
 function pitched(e: ScheduledEvent): NoteEvent | MonoEvent {
 	return e as NoteEvent | MonoEvent;
-}
-
-/**
- * Evaluate a given cycle on an instance, returning events cast to `any[]`.
- * Convenience wrapper for tests that access note/cent/synthdef/loopId directly.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function evalCycle(
-	i: Extract<ReturnType<typeof createInstance>, { ok: true }>,
-	cycleNumber: number
-): any[] {
-	const r = i.evaluate({ cycleNumber });
-	if (!r.ok) throw new Error(`Eval error cycle ${cycleNumber}: ${r.error}`);
-	return r.events;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,8 +63,7 @@ function inst(source: string) {
 }
 
 /** Evaluate cycle 0, throw on error, return events. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function eval0(source: string): any[] {
+function eval0(source: string): TestEvent[] {
 	const i = inst(source);
 	const r = i.evaluate({ cycleNumber: 0 });
 	if (!r.ok) throw new Error(`Eval error: ${r.error}`);
@@ -98,8 +94,7 @@ function collectNotes(source: string, numCycles: number): number[][] {
 	return Array.from({ length: numCycles }, (_, c) => {
 		const r = i.evaluate({ cycleNumber: c });
 		if (!r.ok) throw new Error(`Eval error cycle ${c}: ${r.error}`);
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return r.events.map((e: any) => e.note as number);
+		return r.events.map((e) => pitched(e).note);
 	});
 }
 
@@ -133,7 +128,7 @@ describe('instance.evaluate — per-cycle output', () => {
 		const res = inst('note x [0 2 4]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
 		for (const ev of res.events) {
-			expect(typeof (ev as any).note).toBe('number');
+			expect(typeof pitched(ev).note).toBe('number');
 			expect(typeof ev.beatOffset).toBe('number');
 			expect(typeof ev.duration).toBe('number');
 		}
@@ -171,7 +166,7 @@ describe('default eager(0) — per-source-event polling', () => {
 		const res0a = i.evaluate({ cycleNumber: 0 });
 		const res0b = i.evaluate({ cycleNumber: 0 });
 		if (!res0a.ok || !res0b.ok) throw new Error('eval failed');
-		expect((res0a.events[0] as any).note).toBe((res0b.events[0] as any).note);
+		expect(pitched(res0a.events[0]).note).toBe(pitched(res0b.events[0]).note);
 	});
 });
 
@@ -235,7 +230,7 @@ describe("'eager(0) — per-source-event redraw (new default, issue #57)", () =>
 		for (let c = 0; c < 20; c++) {
 			const r = inst('note x [0rand7!4]').evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			const ns = r.events.map((e) => (e as any).note as number);
+			const ns = r.events.map((e) => pitched(e).note as number);
 			counts.add(new Set(ns).size);
 		}
 		// With eager(0), we expect multiple distinct values within at least one cycle
@@ -250,7 +245,7 @@ describe("'eager(0) — per-source-event redraw (new default, issue #57)", () =>
 			const r = inst("note x [0rand7]'stut(3)").evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
 			expect(r.events).toHaveLength(3);
-			const ns = r.events.map((e) => (e as any).note as number);
+			const ns = r.events.map((e) => pitched(e).note as number);
 			expect(new Set(ns).size).toBe(1); // all 3 share same draw
 		}
 	});
@@ -465,7 +460,7 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has((res.events[0] as any).note)).toBe(true);
+			expect(valid.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -482,8 +477,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(62);
-			expect((res.events[0] as any).note).toBeLessThanOrEqual(72);
+			expect(pitched(res.events[0]).note).toBeGreaterThanOrEqual(62);
+			expect(pitched(res.events[0]).note).toBeLessThanOrEqual(72);
 		}
 	});
 
@@ -492,8 +487,8 @@ describe('numeric generators — degree-to-MIDI in C major / C5', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(60);
-			expect((res.events[0] as any).note).toBeLessThanOrEqual(71);
+			expect(pitched(res.events[0]).note).toBeGreaterThanOrEqual(60);
+			expect(pitched(res.events[0]).note).toBeLessThanOrEqual(71);
 		}
 	});
 
@@ -574,8 +569,8 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(Number.isInteger((res.events[0] as any).note)).toBe(true);
-			expect((res.events[0] as any).cent).toBeUndefined();
+			expect(Number.isInteger(pitched(res.events[0]).note)).toBe(true);
+			expect(pitched(res.events[0]).cent).toBeUndefined();
 		}
 	});
 
@@ -603,7 +598,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has((res.events[0] as any).note)).toBe(true);
+			expect(valid.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -622,7 +617,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has((res.events[0] as any).note)).toBe(true);
+			expect(valid.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -666,7 +661,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has((res.events[0] as any).note)).toBe(true);
+			expect(valid.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -678,7 +673,7 @@ describe('rand / tilde — float bound semantics', () => {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
 			// degree 2.5 rounds to 3 → F5 = MIDI 65
-			expect((res.events[0] as any).note).toBe(65);
+			expect(pitched(res.events[0]).note).toBe(65);
 		}
 	});
 
@@ -688,7 +683,7 @@ describe('rand / tilde — float bound semantics', () => {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
 			// degree 3 → F5 = MIDI 65
-			expect((res.events[0] as any).note).toBe(65);
+			expect(pitched(res.events[0]).note).toBe(65);
 		}
 	});
 
@@ -708,7 +703,7 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(valid.has((res.events[0] as any).note)).toBe(true);
+			expect(valid.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -721,8 +716,8 @@ describe('rand / tilde — float bound semantics', () => {
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validFirst.has((res.events[0] as any).note)).toBe(true);
-			expect(validSecond.has((res.events[1] as any).note)).toBe(true);
+			expect(validFirst.has(pitched(res.events[0]).note)).toBe(true);
+			expect(validSecond.has(pitched(res.events[1]).note)).toBe(true);
 		}
 	});
 });
@@ -868,20 +863,20 @@ describe('@cent — pitch deviation in cents', () => {
 	it('@cent(50) stores a non-zero cent offset on events', () => {
 		const res = inst('@cent(50)\n  note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
-		expect((res.events[0] as any).note).toBe(60);
-		expect((res.events[0] as any).cent).toBe(50);
+		expect(pitched(res.events[0]).note).toBe(60);
+		expect(pitched(res.events[0]).cent).toBe(50);
 	});
 
 	it('@cent(-50) stores a negative cent offset', () => {
 		const res = inst('@cent(-50)\n  note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
-		expect((res.events[0] as any).cent).toBe(-50);
+		expect(pitched(res.events[0]).cent).toBe(-50);
 	});
 
 	it('no @cent decorator → cent defaults to 0', () => {
 		const res = inst('note x [0]').evaluate({ cycleNumber: 0 });
 		if (!res.ok) throw new Error(res.error);
-		expect((res.events[0] as any).cent ?? 0).toBe(0);
+		expect(pitched(res.events[0]).cent ?? 0).toBe(0);
 	});
 });
 
@@ -1068,7 +1063,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return (res.events[0] as any).note;
+			return pitched(res.events[0]).note;
 		});
 		expect(cycleNotes).toEqual([60, 64, 67, 71].map((n) => n + SHIFT));
 	});
@@ -1078,7 +1073,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return (res.events[0] as any).note;
+			return pitched(res.events[0]).note;
 		});
 		expect(cycleNotes).toEqual([62, 64, 67, 74].map((n) => n + SHIFT));
 	});
@@ -1088,7 +1083,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return (res.events[0] as any).note;
+			return pitched(res.events[0]).note;
 		});
 		expect(cycleNotes).toEqual([60, 64, 67].map((n) => n + SHIFT));
 	});
@@ -1098,7 +1093,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2, 3].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return (res.events[0] as any).note;
+			return pitched(res.events[0]).note;
 		});
 		expect(cycleNotes).toEqual([62, 64, 67, 74].map((n) => n + SHIFT));
 	});
@@ -1109,7 +1104,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validInG.has((res.events[0] as any).note)).toBe(true);
+			expect(validInG.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -1119,7 +1114,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			seen.add((res.events[0] as any).note);
+			seen.add(pitched(res.events[0]).note);
 		}
 		expect(seen.size).toBeGreaterThan(1);
 	});
@@ -1130,7 +1125,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validInG.has((res.events[0] as any).note)).toBe(true);
+			expect(validInG.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -1140,7 +1135,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			seen.add((res.events[0] as any).note);
+			seen.add(pitched(res.events[0]).note);
 		}
 		const median = [...seen].sort((a, b) => a - b)[Math.floor(seen.size / 2)];
 		expect(median).toBeLessThan(65); // below C/5 mean (F5)
@@ -1153,8 +1148,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(57);
-			expect((res.events[0] as any).note).toBeLessThanOrEqual(67);
+			expect(pitched(res.events[0]).note).toBeGreaterThanOrEqual(57);
+			expect(pitched(res.events[0]).note).toBeLessThanOrEqual(67);
 		}
 	});
 
@@ -1163,8 +1158,8 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 100; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect((res.events[0] as any).note).toBeGreaterThanOrEqual(55);
-			expect((res.events[0] as any).note).toBeLessThanOrEqual(66);
+			expect(pitched(res.events[0]).note).toBeGreaterThanOrEqual(55);
+			expect(pitched(res.events[0]).note).toBeLessThanOrEqual(66);
 		}
 	});
 
@@ -1175,7 +1170,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return (res.events[0] as any).note;
+			return pitched(res.events[0]).note;
 		});
 		expect(cycleNotes).toEqual([69, 71, 72]);
 	});
@@ -1188,7 +1183,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		for (let cycle = 0; cycle < 50; cycle++) {
 			const res = i.evaluate({ cycleNumber: cycle });
 			if (!res.ok) throw new Error(res.error);
-			expect(validDDorian.has((res.events[0] as any).note)).toBe(true);
+			expect(validDDorian.has(pitched(res.events[0]).note)).toBe(true);
 		}
 	});
 
@@ -1204,7 +1199,7 @@ describe('generators × non-default pitch context (@key(g major 4), shift = -5)'
 		const cycleNotes = [0, 1, 2].map((c) => {
 			const res = i.evaluate({ cycleNumber: c });
 			if (!res.ok) throw new Error(res.error);
-			return (res.events[0] as any).note;
+			return pitched(res.events[0]).note;
 		});
 		expect(cycleNotes).toEqual([69, 71, 73]);
 	});
@@ -1298,7 +1293,7 @@ describe("'pick — random element selection (truth table 4)", () => {
 		for (let c = 0; c < 50; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			r.events.forEach((e) => seen.add((e as any).note));
+			r.events.forEach((e) => seen.add(pitched(e).note));
 		}
 		expect(seen.size).toBeGreaterThanOrEqual(2);
 	});
@@ -1310,7 +1305,7 @@ describe("'pick — random element selection (truth table 4)", () => {
 		for (let c = 0; c < 200; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			const note = (r.events[0] as any).note;
+			const note = pitched(r.events[0]).note;
 			if (note === 60) counts.n0++;
 			else if (note === 67) counts.n4++;
 		}
@@ -1326,7 +1321,7 @@ describe("'pick — random element selection (truth table 4)", () => {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
 			for (const e of r.events) {
-				const note = (e as any).note;
+				const note = pitched(e).note;
 				if (note === 60) counts.n0++;
 				else if (note === 64) counts.n2++;
 				else if (note === 67) counts.n4++;
@@ -1343,7 +1338,7 @@ describe("'pick — random element selection (truth table 4)", () => {
 		for (let c = 0; c < 20; c++) {
 			const r = i.evaluate({ cycleNumber: c });
 			if (!r.ok) throw new Error(r.error);
-			r.events.forEach((e) => seen.add((e as any).note));
+			r.events.forEach((e) => seen.add(pitched(e).note));
 		}
 		expect(seen.has(60)).toBe(false); // degree 0, weight 0
 		expect(seen.has(67)).toBe(true); // degree 4, weight 1
@@ -1365,7 +1360,7 @@ describe("'pick — random element selection (truth table 4)", () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const evs = eval0('note x [0 2?5 4]');
 		// Sequence, not weighted — still emits all three in order
-		expect(evs.map((e) => (e as any).note)).toEqual([60, 64, 67]);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 64, 67]);
 		expect(warnSpy).toHaveBeenCalled();
 		warnSpy.mockRestore();
 	});
@@ -1387,7 +1382,7 @@ describe("'pick — random element selection (truth table 4)", () => {
 		// 'wran is no longer a recognised traversal modifier. The list should
 		// traverse sequentially (default).
 		const evs = eval0("note x [0 2 4]'wran");
-		expect(evs.map((e) => (e as any).note)).toEqual([60, 64, 67]);
+		expect(evs.map((e) => pitched(e).note)).toEqual([60, 64, 67]);
 	});
 });
 
@@ -1399,7 +1394,7 @@ describe("'shuf — shuffle traversal", () => {
 			if (!r.ok) throw new Error(r.error);
 			expect(r.events).toHaveLength(3);
 			// All three degrees must be present (60=C5, 64=E5, 67=G5)
-			const ns = new Set(r.events.map((e) => (e as any).note));
+			const ns = new Set(r.events.map((e) => pitched(e).note));
 			expect(ns.has(60)).toBe(true);
 			expect(ns.has(64)).toBe(true);
 			expect(ns.has(67)).toBe(true);
@@ -1604,8 +1599,8 @@ describe('transposition (truth table 10)', () => {
 		const r1 = i.evaluate({ cycleNumber: 1 });
 		const r2 = i.evaluate({ cycleNumber: 2 });
 		if (!r0.ok || !r1.ok || !r2.ok) throw new Error('eval failed');
-		expect((r0.events[0] as any).note).toBe((r1.events[0] as any).note);
-		expect((r0.events[0] as any).note).toBe((r2.events[0] as any).note);
+		expect(pitched(r0.events[0]).note).toBe(pitched(r1.events[0]).note);
+		expect(pitched(r0.events[0]).note).toBe(pitched(r2.events[0]).note);
 	});
 
 	it('transposition participates in full pitch chain', () => {
@@ -2528,12 +2523,12 @@ describe('generator naming — reinit()', () => {
 		if (!i.ok) throw new Error(i.error);
 		const before = i.evaluate({ cycleNumber: 0 });
 		if (!before.ok) throw new Error(before.error);
-		expect((before.events[0] as any).note).toBe(60); // degree 0 = C5
+		expect(pitched(before.events[0]).note).toBe(60); // degree 0 = C5
 
 		i.reinit('note lead [4]'); // degree 4 = G5
 		const after = i.evaluate({ cycleNumber: 1 });
 		if (!after.ok) throw new Error(after.error);
-		expect((after.events[0] as any).note).toBe(67); // G5
+		expect(pitched(after.events[0]).note).toBe(67); // G5
 	});
 
 	it('reinit preserves runner state for unchanged named generators (lock survives reinit)', () => {
@@ -2543,13 +2538,13 @@ describe('generator naming — reinit()', () => {
 		if (!i.ok) throw new Error(i.error);
 		const r1 = i.evaluate({ cycleNumber: 0 });
 		if (!r1.ok) throw new Error(r1.error);
-		const noteBefore = (r1.events[0] as any).note;
+		const noteBefore = pitched(r1.events[0]).note;
 
 		i.reinit("note lead [0rand7]'lock");
 		const r2 = i.evaluate({ cycleNumber: 1 });
 		if (!r2.ok) throw new Error(r2.error);
 		// Same locked value should be used
-		expect((r2.events[0] as any).note).toBe(noteBefore);
+		expect(pitched(r2.events[0]).note).toBe(noteBefore);
 	});
 });
 
@@ -2561,7 +2556,7 @@ describe('derived generator — produces parallel events', () => {
 		// lead: degrees 0,1,2,3 → C5,D5,E5,F5 = 60,62,64,65
 		// over: same degrees + 2 → 2,3,4,5 → E5,F5,G5,A5 = 64,65,67,69
 		expect(r.events).toHaveLength(8);
-		const sorted = r.events.map((e) => (e as any).note).sort((a, b) => a - b);
+		const sorted = r.events.map((e) => pitched(e).note).sort((a, b) => a - b);
 		expect(sorted).toEqual([60, 62, 64, 64, 65, 65, 67, 69]);
 	});
 });

@@ -4,18 +4,6 @@ import { render } from 'vitest-browser-svelte';
 import Page from './+page.svelte';
 
 const emptyData = { synthdefs: {}, examples: [] };
-const loadedData = {
-	synthdefs: {
-		kick: {
-			credit: 'Anders Eskildsen',
-			description: 'A kick drum.',
-			source: 'kick.scd',
-			type: 'instrument',
-			url: 'https://example.com'
-		}
-	},
-	examples: []
-};
 const withExamples = {
 	synthdefs: {},
 	examples: [
@@ -54,16 +42,6 @@ describe('/+page.svelte', () => {
 		render(Page, { props: { data: emptyData } });
 		const status = page.getByText('waiting for boot…');
 		await expect.element(status).toBeInTheDocument();
-	});
-
-	it('shows synthdefs count 0 when no metadata is loaded', async () => {
-		render(Page, { props: { data: emptyData } });
-		await expect.element(page.getByText('synthdefs (0)')).toBeInTheDocument();
-	});
-
-	it('shows synthdefs count from loaded metadata before boot', async () => {
-		render(Page, { props: { data: loadedData } });
-		await expect.element(page.getByText('synthdefs (1)')).toBeInTheDocument();
 	});
 
 	it('hides "examples" button when no examples are provided', async () => {

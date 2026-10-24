@@ -47,6 +47,8 @@
 		"prettier": "^3.8.1",
 		"prettier-plugin-svelte": "^3.5.1",
 		"simple-git-hooks": "^2.13.1",
+		"supersonic-scsynth": "^0.61.0",
+		"supersonic-scsynth-core": "^0.61.0",
 		"svelte": "^5.55.0",
 		"svelte-check": "^4.4.5",
 		"tsx": "^4.21.0",

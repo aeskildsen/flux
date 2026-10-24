@@ -2,6 +2,7 @@
 	import { asset } from '$app/paths';
 	import { onDestroy } from 'svelte';
 	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
+	import { engineLocation } from '$lib/engine-location.js';
 	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
 	import { createInstance } from '$lib/lang/evaluator';
 	import { buildOscParams } from '$lib/dispatch';
@@ -75,7 +76,7 @@
 	async function handleBoot() {
 		// Must be called from a user interaction — satisfies browser autoplay policy
 		try {
-			await boot({ debug: true });
+			await boot({ ...engineLocation, debug: true });
 			if (!sc) return;
 
 			// Point the clock at SuperSonic's AudioContext so beatToAudioTime and
@@ -211,7 +212,8 @@
 		} catch (e) {
 			console.error(`[handleFxDisable] Failed to free node ${nodeId} for ${synthdef}:`, e);
 		}
-		const { [synthdef]: _, ...rest } = fxNodeIds;
+		const rest = { ...fxNodeIds };
+		delete rest[synthdef];
 		fxNodeIds = rest;
 	}
 
@@ -427,6 +429,8 @@
 		// Scoped to a single run() invocation — a fresh map is created each time the
 		// user triggers playback. Stale entries (from stopped patterns) are cleared
 		// when the pattern stops producing events; full lifecycle cleanup deferred to #19.
+		// Plain Map on purpose: the map is not rendered, so it needs no reactivity.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const monoNodes = new Map<string, number>();
 
 		handle = run(

@@ -12,7 +12,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createGen } from './gen.js';
 import type { GenDeps, GenEvent } from './gen.js';
-import type { EvalInstance, EvalCycleResult, ScheduledEvent } from './lang/evaluator.js';
+import type { EvalInstance, EvalCycleResult, ScheduledEvent, NoteEvent } from './lang/evaluator.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,7 +153,7 @@ describe('createGen() — basic emission', () => {
 		const gen = createGen(makeDeps(inst));
 		const events = take(gen, 5);
 		const real = realEvents(events);
-		expect((real[0].ev as any).note).toBe(64);
+		expect((real[0].ev as NoteEvent).note).toBe(64);
 	});
 
 	it('gateDurationSeconds = ev.duration * cycleBeatCount * beatsToSeconds', () => {

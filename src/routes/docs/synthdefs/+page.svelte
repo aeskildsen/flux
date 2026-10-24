@@ -25,7 +25,7 @@
 
 			{#if entries.length > 0}
 				<h2>Loaded SynthDefs</h2>
-				{#each entries as [name, meta]}
+				{#each entries as [name, meta] (name)}
 					<div class="synthdef-card">
 						<h3 class="synthdef-name"><code>{name}</code></h3>
 
@@ -36,8 +36,8 @@
 						{#if meta.contentTypes && meta.contentTypes.length > 0}
 							<p class="synthdef-meta">
 								Content types:
-								{#each meta.contentTypes as ct, i}
-									<code>{ct}</code>{#if i < meta.contentTypes.length - 1}{', '}{/if}
+								{#each meta.contentTypes as ct, i (ct)}
+									<code>{ct}</code>{#if i < meta.contentTypes.length - 1},&#32;{/if}
 								{/each}
 							</p>
 						{/if}
@@ -53,7 +53,7 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each Object.entries(meta.specs) as [param, spec]}
+									{#each Object.entries(meta.specs) as [param, spec] (param)}
 										<tr>
 											<td><code>{param}</code></td>
 											<td>{spec.default ?? ''}</td>
@@ -68,6 +68,7 @@
 						{#if meta.credit || meta.url}
 							<p class="synthdef-credit">
 								{#if meta.url}
+									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL -->
 									<a href={meta.url} target="_blank" rel="noopener">{meta.credit || meta.url}</a>
 								{:else}
 									{meta.credit}

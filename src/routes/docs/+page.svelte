@@ -5,51 +5,51 @@
 
 	const sections = [
 		{
-			href: resolve('/docs/get-started'),
+			href: '/docs/get-started',
 			label: 'Get Started',
 			description: 'Boot the engine, evaluate your first pattern, and learn the keyboard shortcuts.'
 		},
 		{
-			href: resolve('/docs/content-types'),
+			href: '/docs/content-types',
 			label: 'Content Types',
 			description:
 				'note, mono, sample, slice, cloud — what kind of events each type generates and how timing works.'
 		},
 		{
-			href: resolve('/docs/generators'),
+			href: '/docs/generators',
 			label: 'Generators',
 			description:
 				'Sequence lists, random noise, deterministic series, UTF-8 byte encoding, and arithmetic operators.'
 		},
 		{
-			href: resolve('/docs/modifiers'),
+			href: '/docs/modifiers',
 			label: 'Modifiers',
 			description:
 				"'stut, 'pick, 'shuf, 'arp, 'rev, 'mirror, 'bounce, 'spread, 'legato, 'lock, 'eager — shape and control your event stream."
 		},
 		{
-			href: resolve('/docs/params'),
+			href: '/docs/params',
 			label: 'Params',
 			description: '"param — direct SynthDef argument access, bypassing musical abstractions.'
 		},
 		{
-			href: resolve('/docs/decorators'),
+			href: '/docs/decorators',
 			label: 'Decorators',
 			description:
 				'@key, @scale, @root, @octave, @cent, @buf — pitch context and buffer selection for scoped blocks.'
 		},
 		{
-			href: resolve('/docs/synthdefs'),
+			href: '/docs/synthdefs',
 			label: 'SynthDefs',
 			description:
 				'Selecting synthesis engines, insert FX, master bus FX, and writing custom SynthDefs.'
 		},
 		{
-			href: resolve('/docs/buffers'),
+			href: '/docs/buffers',
 			label: 'Buffers',
 			description: 'Loading audio files, referencing by name, beat slicing, and granular synthesis.'
 		}
-	];
+	] as const;
 </script>
 
 <div class="docs-page">
@@ -65,7 +65,7 @@
 
 			<div class="toc-grid">
 				{#each sections as section (section.href)}
-					<a class="toc-card" href={section.href}>
+					<a class="toc-card" href={resolve(section.href)}>
 						<h2>{section.label}</h2>
 						<p>{section.description}</p>
 					</a>
@@ -197,8 +197,8 @@
 						></tr
 					>
 					<tr
-						><td><code>utf8{'{'}word{'}'}</code></td><td>UTF-8 bytes, cycling</td><td
-							><code>utf8{'{'}coffee{'}'} % 14</code></td
+						><td><code>utf8&#123;word&#125;</code></td><td>UTF-8 bytes, cycling</td><td
+							><code>utf8&#123;coffee&#125; % 14</code></td
 						></tr
 					>
 				</tbody>

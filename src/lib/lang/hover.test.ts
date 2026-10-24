@@ -8,7 +8,6 @@
  * calling getHover with specific tokens from the result.
  *
  * Helper `firstToken(src)` returns the first token from a snippet.
- * Helper `tokenAt(src, index)` returns the nth token.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -40,12 +39,6 @@ function firstToken(src: string): IToken {
 	const toks = tokens(src);
 	if (toks.length === 0) throw new Error(`No tokens in: ${src}`);
 	return toks[0];
-}
-
-function tokenAt(src: string, index: number): IToken {
-	const toks = tokens(src);
-	if (index >= toks.length) throw new Error(`Token index ${index} out of range in: ${src}`);
-	return toks[index];
 }
 
 // ---------------------------------------------------------------------------

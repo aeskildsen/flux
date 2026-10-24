@@ -10,7 +10,7 @@ const config: Config = {
 			base: process.env.BASE_PATH ?? ''
 		},
 		alias: {
-			'svelte-supersonic': './svelte-supersonic/src/lib/index.ts',
+			'svelte-supersonic': './src/lib/supersonic/index.ts',
 			$docs: './docs'
 		}
 	},

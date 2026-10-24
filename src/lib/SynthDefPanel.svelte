@@ -35,7 +35,7 @@
 <details>
 	<summary><ChevronRight class="chevron" size={12} />synthdefs ({count})</summary>
 
-	{#each entries as [name, meta]}
+	{#each entries as [name, meta] (name)}
 		<div class="card">
 			<div class="card-name">{name}</div>
 
@@ -54,7 +54,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each Object.entries(meta.specs) as [param, spec]}
+						{#each Object.entries(meta.specs) as [param, spec] (param)}
 							<tr>
 								<td class="param-name">{param}</td>
 								<td>{spec.default ?? ''}</td>
@@ -69,6 +69,7 @@
 			{#if meta.credit || meta.url}
 				<div class="credit">
 					{#if meta.url}
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL -->
 						<a href={meta.url} target="_blank" rel="noopener">{meta.credit || meta.url}</a>
 					{:else}
 						{meta.credit}

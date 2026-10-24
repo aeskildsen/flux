@@ -8,15 +8,15 @@
 	const { active = '' }: Props = $props();
 
 	const sections = [
-		{ id: 'get-started', label: 'Get Started', href: resolve('/docs/get-started') },
-		{ id: 'content-types', label: 'Content Types', href: resolve('/docs/content-types') },
-		{ id: 'generators', label: 'Generators', href: resolve('/docs/generators') },
-		{ id: 'modifiers', label: 'Modifiers', href: resolve('/docs/modifiers') },
-		{ id: 'params', label: 'Params', href: resolve('/docs/params') },
-		{ id: 'decorators', label: 'Decorators', href: resolve('/docs/decorators') },
-		{ id: 'synthdefs', label: 'SynthDefs', href: resolve('/docs/synthdefs') },
-		{ id: 'buffers', label: 'Buffers', href: resolve('/docs/buffers') }
-	];
+		{ id: 'get-started', label: 'Get Started', href: '/docs/get-started' },
+		{ id: 'content-types', label: 'Content Types', href: '/docs/content-types' },
+		{ id: 'generators', label: 'Generators', href: '/docs/generators' },
+		{ id: 'modifiers', label: 'Modifiers', href: '/docs/modifiers' },
+		{ id: 'params', label: 'Params', href: '/docs/params' },
+		{ id: 'decorators', label: 'Decorators', href: '/docs/decorators' },
+		{ id: 'synthdefs', label: 'SynthDefs', href: '/docs/synthdefs' },
+		{ id: 'buffers', label: 'Buffers', href: '/docs/buffers' }
+	] as const;
 </script>
 
 <nav class="docs-sidebar">
@@ -24,7 +24,7 @@
 	<ul>
 		{#each sections as section (section.id)}
 			<li>
-				<a href={section.href} class:active={active === section.id}>
+				<a href={resolve(section.href)} class:active={active === section.id}>
 					{section.label}
 				</a>
 			</li>

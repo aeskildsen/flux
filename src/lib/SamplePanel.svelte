@@ -35,7 +35,6 @@
 	const { onLoad, onRemove }: Props = $props();
 
 	const entries = $derived(bufferRegistry.entries);
-	const count = $derived(entries.length);
 
 	// -------------------------------------------------------------------------
 	// Inline rename state
