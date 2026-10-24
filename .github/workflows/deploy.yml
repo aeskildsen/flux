@@ -15,37 +15,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The image tag must equal the installed Playwright version. scripts/toolchain.test.ts
+  # checks this, and scripts/test-container.sh reads the tag from this line.
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+      # Lint, type-check, server tests with coverage, browser tests.
+      - name: Test
+        run: scripts/ci-test.sh
 
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Test with coverage
-        run: pnpm test:coverage
-
-      - name: Install Chromium for browser tests
-        run: pnpm exec playwright install --with-deps chromium
-
-      # Browser specs of the SuperSonic wrapper, including the engine integration spec.
-      - name: Test SuperSonic wrapper in the browser
-        run: pnpm exec vitest run --project client src/lib/supersonic
-
+  # The runner release is pinned, because the SynthDefs are compiled with the
+  # sclang from its apt archive. A new release can change the sclang version.
   build:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -56,9 +44,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
-      
+
       - name: Setup sclang
         env:
           QT_QPA_PLATFORM: offscreen
@@ -85,7 +73,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages

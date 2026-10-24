@@ -28,7 +28,10 @@ pnpm format       # Auto-format with prettier
 pnpm test:unit    # Run vitest unit/component tests (watch mode)
 pnpm test:e2e     # Run Playwright e2e tests (builds first)
 pnpm test         # Run all tests (unit + e2e, non-watch)
+pnpm test:container  # Run the CI test job (lint, check, all tests) in the CI container image
 ```
+
+`pnpm test` is the fast loop. `pnpm test:container` runs `scripts/ci-test.sh` in the same Playwright image as CI; a pass there is what counts as green. The Node major version is pinned in `.node-version`. `scripts/toolchain.test.ts` fails when the Playwright image tag in `.github/workflows/deploy.yml` or the Node version drifts.
 
 To run a single unit test file:
 

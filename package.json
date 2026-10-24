@@ -18,7 +18,8 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test:coverage": "vitest run --project server --coverage",
-		"test": "npm run test:unit -- --run"
+		"test": "npm run test:unit -- --run",
+		"test:container": "scripts/test-container.sh"
 	},
 	"simple-git-hooks": {
 		"pre-commit": "pnpm lint-staged"
@@ -34,7 +35,7 @@
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.55.0",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
-		"@types/node": "^22.19.15",
+		"@types/node": "^24.19.2",
 		"@vitest/browser-playwright": "^4.1.2",
 		"@vitest/coverage-v8": "^4.1.2",
 		"eslint": "^9.39.4",
