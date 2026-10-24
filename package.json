@@ -3,6 +3,7 @@
 	"private": true,
 	"version": "0.1.0",
 	"type": "module",
+	"packageManager": "pnpm@11.16.0",
 	"scripts": {
 		"dev": "tsx scripts/check_synthdefs.ts && NODE_OPTIONS=\"--import tsx\" vite dev",
 		"build": "NODE_OPTIONS=\"--import tsx\" vite build",
