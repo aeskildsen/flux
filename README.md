@@ -67,6 +67,10 @@ pnpm build
 pnpm preview
 ```
 
+The page shows which build it is: the Flux version, the commit, the engine version, a link to the source of that commit, and a link to the engine notice (`scripts/build-info.ts`). A commit with `-dirty` was built from a tree with changes. A version with `-dev` comes from the dev server.
+
+Every push to `main` deploys. A `v0.x.y` git tag marks a milestone only; set the same version in `package.json` before you tag.
+
 ## License
 
 Flux is licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). See `LICENSE`.

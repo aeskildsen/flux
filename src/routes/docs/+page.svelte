@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import SiteHeader from '$lib/SiteHeader.svelte';
+	import BuildInfo from '$lib/BuildInfo.svelte';
 	import DocsSidebar from '$lib/DocsSidebar.svelte';
 
 	const sections = [
@@ -205,6 +206,7 @@
 			</table>
 		</main>
 	</div>
+	<footer class="docs-footer"><BuildInfo /></footer>
 </div>
 
 <style>
@@ -212,6 +214,10 @@
 		max-width: 1100px;
 		margin: 0 auto;
 		padding: 20px;
+	}
+
+	.docs-footer {
+		margin-top: var(--space-8);
 	}
 
 	.docs-layout {

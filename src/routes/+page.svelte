@@ -9,6 +9,7 @@
 	import { createGen } from '$lib/gen';
 	import FluxEditor from '$lib/FluxEditor.svelte';
 	import SiteHeader from '$lib/SiteHeader.svelte';
+	import BuildInfo from '$lib/BuildInfo.svelte';
 	import FxPanel from '$lib/FxPanel.svelte';
 	import SamplePanel from '$lib/SamplePanel.svelte';
 	import ExamplesMenu from '$lib/ExamplesMenu.svelte';
@@ -580,5 +581,7 @@
 				</div>
 			{/each}
 		</div>
+
+		<BuildInfo />
 	</aside>
 </div>

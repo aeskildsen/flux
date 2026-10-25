@@ -1,13 +1,18 @@
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { readBuildInfo } from './scripts/build-info.ts';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
 	plugins: [sveltekit()],
 	// src/lib/engine-location.ts builds the engine URLs from the base path.
 	// The same value as kit.paths.base in svelte.config.ts.
 	define: {
-		__FLUX_BASE_PATH__: JSON.stringify(process.env.BASE_PATH ?? '')
+		__FLUX_BASE_PATH__: JSON.stringify(process.env.BASE_PATH ?? ''),
+		// src/lib/build-info.ts: the version, the commit and the engine version.
+		__FLUX_BUILD__: JSON.stringify(
+			readBuildInfo({ env: process.env, root: process.cwd(), dev: command === 'serve' })
+		)
 	},
 	optimizeDeps: {
 		include: ['chevrotain']
@@ -61,4 +66,4 @@ export default defineConfig({
 			}
 		]
 	}
-});
+}));
