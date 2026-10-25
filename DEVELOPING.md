@@ -51,7 +51,7 @@ The engine is [flux-engine](https://github.com/aeskildsen/flux-engine): SuperSon
 To use a local flux-engine build instead, set `FLUX_ENGINE_DIR` to an unpacked engine package, a folder with `dist/` and `classes/`:
 
 ```sh
-FLUX_ENGINE_DIR=~/gp/audio/flux-engine/build/package/latest pnpm dev
+FLUX_ENGINE_DIR=/somwhere-on-your-computer/flux-engine/build/package/latest pnpm dev
 ```
 
 After a new local engine build, start `pnpm dev` again; it copies the engine at start.
