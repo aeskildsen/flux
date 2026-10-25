@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import SiteHeader from '$lib/SiteHeader.svelte';
-	import BuildInfo from '$lib/BuildInfo.svelte';
-	import DocsSidebar from '$lib/DocsSidebar.svelte';
+	import SiteHeader from '#lib/SiteHeader.svelte';
+	import BuildInfo from '#lib/BuildInfo.svelte';
+	import DocsSidebar from '#lib/DocsSidebar.svelte';
 
 	const sections = [
 		{

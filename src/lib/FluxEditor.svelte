@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type * as Monaco from 'monaco-editor';
-	import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-	import { registerFluxLanguage, chooseCommentAction } from '$lib/monaco-adapter.js';
+	import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
+	import { registerFluxLanguage, chooseCommentAction } from '#lib/monaco-adapter.js';
 
 	interface Props {
 		value?: string;

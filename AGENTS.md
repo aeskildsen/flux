@@ -11,47 +11,29 @@ Key SuperSonic concepts:
 - `supersonic-scsynth` — Client API, workers, and metrics web component (AGPL-3.0-or-later)
 - `supersonic-scsynth-core` — WASM engine + AudioWorklet (AGPL-3.0-or-later)
 - Flux ships its own synth definitions from `synthdefs/*.scd`, compiled to `static/compiled_synthdefs/` by `scripts/compile_synthdefs.scd`. The Sonic Pi synthdef CDN bundle is not used.
-- The Svelte bindings for SuperSonic are plain code in `src/lib/supersonic/` (alias `svelte-supersonic`), not a submodule or package. `boot()` has no default engine location; Flux supplies it from `src/lib/engine-location.ts`.
+- The Svelte bindings for SuperSonic are plain code in `src/lib/supersonic/` (import `#svelte-supersonic`), not a submodule or package. `boot()` has no default engine location; Flux supplies it from `src/lib/engine-location.ts`.
 - Audio can only start after a user interaction (browser autoplay policy); always call `supersonic.init()` from a click/keypress handler.
 
 ## Commands
 
-```bash
-pnpm dev          # Start dev server
-pnpm build        # Production build
-pnpm preview      # Preview production build
+`DEVELOPING.md` lists all commands, the prerequisites and the CI layout. Read it before you change scripts, tests or CI. The rules below are for agents only.
 
-pnpm check        # Type-check with svelte-check
-pnpm lint         # prettier + eslint check
-pnpm format       # Auto-format with prettier
-
-pnpm test:unit    # Run vitest unit/component tests (watch mode)
-pnpm test:e2e     # Run Playwright e2e tests (builds first)
-pnpm test         # Run all tests (unit + e2e, non-watch)
-pnpm test:container  # Run the CI test job (lint, check, all tests) in the CI container image
-```
-
-`pnpm test` is the fast loop. `pnpm test:container` runs `scripts/ci-test.sh` in the same Playwright image as CI; a pass there is what counts as green. The Node major version is pinned in `.node-version`. `scripts/toolchain.test.ts` fails when the Playwright image tag in `.github/workflows/deploy.yml` or the Node version drifts.
-
-To run a single unit test file:
-
-```bash
-pnpm vitest run src/routes/page.svelte.spec.ts
-```
+- `pnpm test` is the fast loop. Run it often.
+- `pnpm test:container` runs the CI test job in the CI image. A pass there is what counts as green; run it before you hand off.
+- To run one test file: `pnpm vitest run <file>`.
+- `scripts/toolchain.test.ts` fails when the Playwright image tag in `.github/workflows/deploy.yml` or the Node version drifts.
 
 ## Test Architecture
 
 Two vitest projects are configured in `vite.config.ts`:
 
 - **client** — browser tests using `vitest-browser-svelte` + Playwright/Chromium. Files matching `src/**/*.svelte.{test,spec}.{js,ts}` (excluding `src/lib/server/**`). Use `render()` from `vitest-browser-svelte` and `page` from `vitest/browser`.
-- **server** — node environment. Files matching `src/**/*.{test,spec}.{js,ts}` excluding `.svelte.` tests.
+- **server** — node environment. Files matching `src/**/*.{test,spec}.{js,ts}` and `scripts/**/*.{test,spec}.{js,ts}`, excluding `.svelte.` tests.
 
 File naming convention:
 
 - `*.test.ts` — server/Node tests (no Svelte)
 - `*.svelte.spec.ts` — browser/component tests (Svelte + vitest-browser)
-
-E2e tests live in `e2e/` and use Playwright directly (builds the app before running).
 
 ## Code Conventions
 

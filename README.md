@@ -14,16 +14,15 @@ Boot the engine first (browser autoplay policy requires a user interaction), the
 
 - A DSL for describing musical patterns and loops, interpreted in the browser
 - Sends OSC messages to scsynth running in a Web Audio AudioWorklet
-- Uses 127 Sonic Pi synth definitions bundled with SuperSonic
+- Plays its own synth definitions, written for Flux
 - Language spec: [`docs/DSL-spec.md`](docs/DSL-spec.md) — subject to change
 
 ## Stack
 
 - [SvelteKit](https://kit.svelte.dev) + Svelte 5 (runes)
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/) with a custom Flux language mode
-- [SuperSonic](https://github.com/samaaron/supersonic) loaded from CDN at runtime
-  - `supersonic-scsynth` — client API (AGPL-3.0-or-later)
-  - `supersonic-scsynth-core` — WASM engine + AudioWorklet (AGPL-3.0-or-later)
+- [flux-engine](https://github.com/aeskildsen/flux-engine): [SuperSonic](https://github.com/samaaron/supersonic) with extra UGens (for example `PhysWoodbar`), served by Flux itself from the same origin, not from a CDN (AGPL-3.0-or-later)
+  - Svelte bindings for SuperSonic in `src/lib/supersonic/`
 - Flux-authored synthdefs in `synthdefs/*.scd`, compiled to `static/compiled_synthdefs/`
 
 ## Developing
@@ -33,46 +32,12 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5173`. Click **boot engine**, write some Flux code, then hit **Ctrl+Enter**.
+Open `http://localhost:5173`, click **boot engine**, write some Flux code, then press **Ctrl+Enter**. The SynthDefs need sclang to compile.
 
-> Browsers require a user interaction before audio can start — always boot from a button click.
-
-### The engine
-
-The engine is [flux-engine](https://github.com/aeskildsen/flux-engine): SuperSonic with more UGens, for example `PhysWoodbar`. It is the `flux-engine` dependency in `package.json`, a GitHub release tarball (the lockfile has its hash). Flux serves it itself, from the same origin, not from a CDN:
-
-- `scripts/engine.ts` copies the engine into `static/flux-engine/` (not in git). `pnpm dev` and `pnpm build` run it first.
-- The SynthDef compile (`pnpm dev`, `pnpm build:synthdefs`) puts the package's SuperCollider classes on the sclang class path, so that SynthDefs can use the flux-engine UGens. sclang then uses a configuration with only its class library, the JSONlib quark and the package classes; installed extensions are not compiled. Install JSONlib once with `sclang scripts/install_sclang_dependencies.scd`.
-
-To use a local flux-engine build instead, set `FLUX_ENGINE_DIR` to an unpacked engine package, a folder with `dist/` and `classes/`:
-
-```sh
-FLUX_ENGINE_DIR=~/gp/audio/flux-engine/build/package/latest pnpm dev
-```
-
-After a new local engine build, start `pnpm dev` again; it copies the engine at start.
-
-## Testing
-
-```sh
-pnpm test:unit   # vitest unit + component tests
-pnpm test:e2e    # Playwright end-to-end tests
-pnpm test        # both
-```
-
-## Building
-
-```sh
-pnpm build
-pnpm preview
-```
-
-The page shows which build it is: the Flux version, the commit, the engine version, a link to the source of that commit, and a link to the engine notice (`scripts/build-info.ts`). A commit with `-dirty` was built from a tree with changes. A version with `-dev` comes from the dev server.
-
-Every push to `main` deploys. A `v0.x.y` git tag marks a milestone only; set the same version in `package.json` before you tag.
+See [`DEVELOPING.md`](DEVELOPING.md) for the prerequisites, the engine and SynthDef setup, the tests, the CI container and the build.
 
 ## License
 
 Flux is licensed under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later). See `LICENSE`.
 
-The SuperSonic engine that Flux loads is also AGPL-3.0-or-later. The built-in samples are CC0 (see `static/samples/PROVENANCE.md`).
+The engine that Flux loads (flux-engine, based on SuperSonic) is also AGPL-3.0-or-later; the page links to its notice. The built-in samples are CC0 (see `static/samples/PROVENANCE.md`).

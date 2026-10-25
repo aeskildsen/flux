@@ -10,8 +10,8 @@
  * context, or Svelte component.
  */
 
-import type { EvalInstance, ScheduledEvent } from '$lib/lang/evaluator.js';
-import { eventBeatPosition, genEventStrides } from '$lib/dispatch.js';
+import type { EvalInstance, ScheduledEvent } from '#lib/lang/evaluator.js';
+import { eventBeatPosition, genEventStrides } from '#lib/dispatch.js';
 
 export type GenEvent =
 	| { skip: true; duration: number }

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import SiteHeader from '$lib/SiteHeader.svelte';
-	import DocsSidebar from '$lib/DocsSidebar.svelte';
-	import Content from '$docs/modifiers.md';
+	import SiteHeader from '#lib/SiteHeader.svelte';
+	import DocsSidebar from '#lib/DocsSidebar.svelte';
+	import Content from '#docs/modifiers.md';
 </script>
 
 <div class="docs-page">

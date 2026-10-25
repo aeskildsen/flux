@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { asset } from '$app/paths';
-	import { buildInfo, buildLabel, sourceURL } from '$lib/build-info';
+	import { staticAsset } from '#lib/static-asset.js';
+	import { buildInfo, buildLabel, sourceURL } from '#lib/build-info.js';
 
 	// Svelte removes white space at the end of an each block, so the
 	// separator with its spaces is an expression.
@@ -12,7 +12,8 @@
 	{#each buildLabel(buildInfo).split(separator) as part, i (i)}<span>{part}</span>{separator}{/each}
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL -->
 	<a href={sourceURL(buildInfo)}>source</a> ·
-	<a href={asset('/flux-engine/NOTICE.md')}>engine notice</a>
+	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- static asset, not a route -->
+	<a href={staticAsset('flux-engine/NOTICE.md')}>engine notice</a>
 </p>
 
 <style>

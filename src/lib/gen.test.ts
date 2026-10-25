@@ -41,13 +41,7 @@ function makeEvent(overrides: Partial<ScheduledEvent> & { type?: string } = {}):
 	const { type, ...rest } = overrides;
 	// Map legacy 'type' field to 'contentType' for backwards compat in tests
 	const contentType = (type ?? 'note') as
-		| 'note'
-		| 'mono'
-		| 'sample'
-		| 'slice'
-		| 'cloud'
-		| 'rest'
-		| 'fx';
+		'note' | 'mono' | 'sample' | 'slice' | 'cloud' | 'rest' | 'fx';
 	if (contentType === 'rest') {
 		return { contentType: 'rest', beatOffset: 0, duration: 0.25, ...rest } as ScheduledEvent;
 	}

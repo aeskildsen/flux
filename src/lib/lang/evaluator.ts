@@ -145,17 +145,10 @@ export type FxEvent = BaseEvent & {
 };
 
 export type ScheduledEvent =
-	| NoteEvent
-	| MonoEvent
-	| SampleEvent
-	| SliceEvent
-	| CloudEvent
-	| RestEvent
-	| FxEvent;
+	NoteEvent | MonoEvent | SampleEvent | SliceEvent | CloudEvent | RestEvent | FxEvent;
 
 export type EvalCycleResult =
-	| { ok: true; events: ScheduledEvent[]; done: boolean }
-	| { ok: false; error: string };
+	{ ok: true; events: ScheduledEvent[]; done: boolean } | { ok: false; error: string };
 
 export type ReinitResult = { ok: true } | { ok: false; error: string };
 
@@ -736,11 +729,7 @@ type CompiledChord = {
 };
 
 type CompiledElement =
-	| CompiledScalar
-	| CompiledSubsequence
-	| CompiledRest
-	| CompiledSymbol
-	| CompiledChord;
+	CompiledScalar | CompiledSubsequence | CompiledRest | CompiledSymbol | CompiledChord;
 
 /**
  * Read the `!n` inline-repetition count from a sequenceElement CST node.
@@ -2087,8 +2076,7 @@ function compilePattern(
 ): CompiledPattern | string {
 	const seqNode = (
 		(patternNode.children.sequenceExpr ?? patternNode.children.sequenceGenerator) as
-			| CstNode[]
-			| undefined
+			CstNode[] | undefined
 	)?.[0];
 	const relNode = ((patternNode.children.relTimedList as CstNode[]) ?? [])[0];
 	const utf8Node = ((patternNode.children.utf8Generator as CstNode[]) ?? [])[0];
@@ -2905,8 +2893,7 @@ function evaluateCompiledPattern(
 	// For list RHS, values are sampled per slot (with wrap-around).
 	// arithmetic.applyToSlot(rawDegree, srcIdx, slotIndex) → number | null (null = skip event).
 	let arithmeticApply:
-		| ((rawDegree: number, srcIdx: number, slotIndex: number) => number | null)
-		| null = null;
+		((rawDegree: number, srcIdx: number, slotIndex: number) => number | null) | null = null;
 	if (compiled.transposition) {
 		const arith = compiled.transposition;
 		if (arith.listPolls) {
@@ -3084,8 +3071,7 @@ type PatternEntry =
 	| { kind: 'decorated'; compiled: CompiledPattern; decoratorLayers: CstNode[][] };
 
 type CompileResult =
-	| { ok: true; setNodes: CstNode[]; patternEntries: PatternEntry[] }
-	| { ok: false; error: string };
+	{ ok: true; setNodes: CstNode[]; patternEntries: PatternEntry[] } | { ok: false; error: string };
 
 /** Parse and compile a source string into setNodes and patternEntries. */
 function compileSource(source: string): CompileResult {

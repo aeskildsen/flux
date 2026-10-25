@@ -1,7 +1,7 @@
 <script lang="ts">
-	import SiteHeader from '$lib/SiteHeader.svelte';
-	import DocsSidebar from '$lib/DocsSidebar.svelte';
-	import Content from '$docs/synthdefs.md';
+	import SiteHeader from '#lib/SiteHeader.svelte';
+	import DocsSidebar from '#lib/DocsSidebar.svelte';
+	import Content from '#docs/synthdefs.md';
 	import type { PageData } from './$types';
 
 	const { data }: { data: PageData } = $props();

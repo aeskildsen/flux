@@ -5,8 +5,8 @@
  * audio engine. All functions are stateless.
  */
 
-import { midiToFreq } from '$lib/scales';
-import type { ScheduledEvent, NoteEvent, MonoEvent } from '$lib/lang/evaluator';
+import { midiToFreq } from '#lib/scales.js';
+import type { ScheduledEvent, NoteEvent, MonoEvent } from '#lib/lang/evaluator.js';
 
 export type ParamSpec = {
 	min?: number;

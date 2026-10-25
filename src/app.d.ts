@@ -2,10 +2,10 @@
 // for information about these interfaces
 /// <reference types="vite/client" />
 declare global {
-	// The base path of the site, from svelte.config.ts (vite.config.ts).
+	// The base path of the site, from vite.config.ts.
 	const __FLUX_BASE_PATH__: string;
 	// The build identity, from scripts/build-info.ts (vite.config.ts).
-	const __FLUX_BUILD__: import('$lib/build-info').BuildInfo;
+	const __FLUX_BUILD__: import('#lib/build-info.js').BuildInfo;
 
 	namespace App {
 		// interface Error {}

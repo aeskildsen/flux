@@ -9,7 +9,7 @@
  *
  * In FluxEditor.svelte, inside the import('monaco-editor').then(...) block:
  *
- *   import { registerFluxLanguage } from '$lib/monaco-adapter.js';
+ *   import { registerFluxLanguage } from '#lib/monaco-adapter.js';
  *   // ...
  *   import('monaco-editor').then((monaco) => {
  *     registerFluxLanguage(monaco);
@@ -22,13 +22,13 @@
  */
 
 import type * as Monaco from 'monaco-editor';
-import { FluxLexer } from '$lib/lang/lexer.js';
+import { FluxLexer } from '#lib/lang/lexer.js';
 import {
 	getCompletions,
 	type CompletionItemKind,
 	type SynthDefMetadata
-} from '$lib/lang/completions.js';
-import { getHover } from '$lib/lang/hover.js';
+} from '#lib/lang/completions.js';
+import { getHover } from '#lib/lang/hover.js';
 
 // ---------------------------------------------------------------------------
 // Monaco theme — reads CSS variables from :root at registration time so there

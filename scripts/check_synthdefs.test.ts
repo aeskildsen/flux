@@ -14,7 +14,7 @@ import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { needsRecompile } from './check_synthdefs.js';
+import { needsRecompile, sclangMissingReport } from './check_synthdefs.js';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -103,5 +103,44 @@ describe('needsRecompile', () => {
 		// Entries without a source field are skipped (no recompile triggered)
 		writeMetadata(targetDir, { kick: { category: 'percussion' } }); // no source key
 		expect(needsRecompile({ sourceDir, targetDir, metadataPath })).toBe(false);
+	});
+});
+
+describe('sclangMissingReport', () => {
+	let sourceDir: string;
+	let targetDir: string;
+	let metadataPath: string;
+
+	beforeEach(() => {
+		const tmpDir = path.join(os.tmpdir(), `flux-synthdef-test-${randomUUID()}`);
+		sourceDir = path.join(tmpDir, 'synthdefs');
+		targetDir = path.join(tmpDir, 'compiled');
+		metadataPath = path.join(targetDir, 'metadata.json');
+		mkdirSync(sourceDir, { recursive: true });
+		mkdirSync(targetDir, { recursive: true });
+	});
+
+	it('warns that Flux makes no sound when no SynthDefs are compiled', () => {
+		const report = sclangMissingReport({ sourceDir, targetDir, metadataPath });
+		expect(report.warn).toBe(true);
+		expect(report.message).toMatch(/no sound/);
+	});
+
+	it('warns that the compiled SynthDefs are out of date', () => {
+		touch(path.join(targetDir, 'kick.scsyndef'), new Date('2020-01-01'));
+		touch(path.join(sourceDir, 'kick.scd'), new Date('2024-01-01'));
+		writeMetadata(targetDir, { kick: { source: 'kick.scd' } });
+
+		const report = sclangMissingReport({ sourceDir, targetDir, metadataPath });
+		expect(report.warn).toBe(true);
+		expect(report.message).toMatch(/out of date/);
+	});
+
+	it('does not warn when the compiled SynthDefs are up to date', () => {
+		touch(path.join(sourceDir, 'kick.scd'), new Date('2020-01-01'));
+		touch(path.join(targetDir, 'kick.scsyndef'), new Date('2024-01-01'));
+		writeMetadata(targetDir, { kick: { source: 'kick.scd' } });
+
+		expect(sclangMissingReport({ sourceDir, targetDir, metadataPath }).warn).toBe(false);
 	});
 });

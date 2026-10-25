@@ -2,8 +2,8 @@
  * scheduler.ts unit tests.
  *
  * The scheduler depends on two external seams:
- *   1. `clock` (from $lib/clock) — provides beatToAudioTime, audioContext
- *   2. `getInstance` (from svelte-supersonic) — provides clock.getNTPStartTime()
+ *   1. `clock` (from #lib/clock.js) — provides beatToAudioTime, audioContext
+ *   2. `getInstance` (from #svelte-supersonic) — provides clock.getNTPStartTime()
  *
  * We mock both so tests run in Node without a real AudioContext or WASM engine.
  * setTimeout is replaced with vitest fake timers so the lookahead tick loop
@@ -20,17 +20,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Mock svelte-supersonic BEFORE importing the scheduler
+// Mock #svelte-supersonic BEFORE importing the scheduler
 // ---------------------------------------------------------------------------
 
-vi.mock('svelte-supersonic', () => ({
+vi.mock('#svelte-supersonic', () => ({
 	getInstance: vi.fn(),
 	getOsc: vi.fn(),
 	getServer: vi.fn(),
 	GROUPS: { source: 1, master: 2 }
 }));
 
-import { getInstance, getOsc } from 'svelte-supersonic';
+import { getInstance, getOsc } from '#svelte-supersonic';
 
 // ---------------------------------------------------------------------------
 // Shared fake state

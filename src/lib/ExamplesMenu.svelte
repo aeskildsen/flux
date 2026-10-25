@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ExampleEntry } from '$lib/examples.js';
+	import type { ExampleEntry } from '#lib/examples.js';
 
 	interface Props {
 		examples: ExampleEntry[];

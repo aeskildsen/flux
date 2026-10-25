@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Master bus FX panel — UI-only, not DSL-accessible.
 	// The DSL uses | fx(\name) for insert FX; the master chain is configured here.
-	import { ChevronRight } from 'lucide-svelte';
+	import { ChevronRight } from '@lucide/svelte';
 
 	type ParamSpec = {
 		min?: number;

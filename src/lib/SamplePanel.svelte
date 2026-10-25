@@ -7,7 +7,7 @@
 	 * language: <details>/<summary> pattern, tokens.css variables throughout.
 	 */
 
-	import { ChevronRight } from 'lucide-svelte';
+	import { ChevronRight } from '@lucide/svelte';
 	import {
 		bufferRegistry,
 		registerBuffer,
@@ -15,8 +15,8 @@
 		unregisterBuffer,
 		deriveNameFromFilename,
 		isValidIdentifier
-	} from '$lib/bufferRegistry.svelte.js';
-	import type { BufferEntry } from '$lib/bufferRegistry.svelte.js';
+	} from '#lib/bufferRegistry.svelte.js';
+	import type { BufferEntry } from '#lib/bufferRegistry.svelte.js';
 
 	type Props = {
 		/**

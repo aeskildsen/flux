@@ -1,14 +1,14 @@
 # SuperSonic wrapper
 
-Svelte 5 bindings for [SuperSonic](https://github.com/samaaron/supersonic). The code is in `src/lib/supersonic/`. Import it with the alias `svelte-supersonic`.
+Svelte 5 bindings for [SuperSonic](https://github.com/samaaron/supersonic). The code is in `src/lib/supersonic/`. Import it with the subpath import `#svelte-supersonic` (`imports` in `package.json`).
 
 The wrapper started as a separate repository, `aeskildsen/svelte-supersonic` (archived). Its history is part of this repository. In Flux, the wrapper has the same license as the rest of Flux: AGPL-3.0-or-later. The archived repository and the versions of the wrapper before the move into Flux stay under the MIT license.
 
 ## Usage
 
 ```ts
-import { boot, serverState, getServer, GROUPS } from 'svelte-supersonic';
-import { engineLocation } from '$lib/engine-location.js';
+import { boot, serverState, getServer, GROUPS } from '#svelte-supersonic';
+import { engineLocation } from '#lib/engine-location.js';
 
 // Call from a user gesture (click or key press). The browser autoplay policy needs it.
 await boot(engineLocation);

@@ -1,12 +1,34 @@
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
-import { sveltekit } from '@sveltejs/kit/vite';
+import { sveltekit, type Config } from '@sveltejs/kit/vite';
+import adapter from '@sveltejs/adapter-static';
+import { mdsvex } from 'mdsvex';
 import { readBuildInfo } from './scripts/build-info.ts';
+import { escapeHtml, highlightFlux } from './src/lib/lang/highlighter.ts';
+
+// The SvelteKit configuration. eslint.config.js also uses it.
+export const svelteConfig: Config = {
+	adapter: adapter({ pages: 'build', assets: 'build', fallback: undefined }),
+	paths: {
+		// BASE_PATH is empty or starts with a slash, for example /flux in CI.
+		base: (process.env.BASE_PATH ?? '') as '' | `/${string}`
+	},
+	preprocess: [
+		mdsvex({
+			extensions: ['.svx', '.md'],
+			highlight: {
+				highlighter: (code, lang) =>
+					lang === 'flux' ? highlightFlux(code) : `<pre><code>${escapeHtml(code)}</code></pre>`
+			}
+		})
+	],
+	extensions: ['.svelte', '.svx', '.md']
+};
 
 export default defineConfig(({ command }) => ({
-	plugins: [sveltekit()],
+	plugins: [sveltekit(svelteConfig)],
 	// src/lib/engine-location.ts builds the engine URLs from the base path.
-	// The same value as kit.paths.base in svelte.config.ts.
+	// The same value as paths.base in svelteConfig.
 	define: {
 		__FLUX_BASE_PATH__: JSON.stringify(process.env.BASE_PATH ?? ''),
 		// src/lib/build-info.ts: the version, the commit and the engine version.

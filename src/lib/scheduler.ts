@@ -17,9 +17,9 @@
  * backward compatibility with existing sketches.
  */
 
-import { clock } from '$lib/clock';
-import { getInstance, getServer, getOsc, GROUPS } from 'svelte-supersonic';
-import type { SynthParams, GroupName } from 'svelte-supersonic';
+import { clock } from '#lib/clock.js';
+import { getInstance, getServer, getOsc, GROUPS } from '#svelte-supersonic';
+import type { SynthParams, GroupName } from '#svelte-supersonic';
 
 /** How often the scheduler wakes to top up the OSC queue (milliseconds). */
 export const TICK_INTERVAL_MS = 25;

@@ -1,6 +1,7 @@
 import { asset } from '$app/paths';
+import { staticAsset } from '#lib/static-asset.js';
 import type { PageLoad } from './$types';
-import type { ExampleEntry } from '$lib/examples.js';
+import type { ExampleEntry } from '#lib/examples.js';
 
 export type ParamSpec = {
 	min?: number;
@@ -31,7 +32,7 @@ async function fetchSynthdefs(
 	fetch: typeof globalThis.fetch
 ): Promise<Record<string, SynthDefMeta>> {
 	try {
-		const res = await fetch(asset('/compiled_synthdefs/metadata.json'));
+		const res = await fetch(staticAsset('compiled_synthdefs/metadata.json'));
 		if (res.ok) {
 			return (await res.json()) as Record<string, SynthDefMeta>;
 		}
@@ -43,7 +44,7 @@ async function fetchSynthdefs(
 
 async function fetchExamples(fetch: typeof globalThis.fetch): Promise<ExampleEntry[]> {
 	try {
-		const res = await fetch(asset('/examples/index.json'));
+		const res = await fetch(asset('examples/index.json'));
 		if (res.ok) {
 			return (await res.json()) as ExampleEntry[];
 		}

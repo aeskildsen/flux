@@ -1,4 +1,4 @@
-import type { SuperSonicConfig } from 'svelte-supersonic';
+import type { SuperSonicConfig } from '#svelte-supersonic';
 
 // SuperSonic version of the engine. Must equal the supersonic-scsynth and
 // supersonic-scsynth-core versions in package.json devDependencies (the

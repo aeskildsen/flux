@@ -1,24 +1,25 @@
 <script lang="ts">
 	import { asset } from '$app/paths';
+	import { staticAsset } from '#lib/static-asset.js';
 	import { onDestroy } from 'svelte';
-	import { boot, serverState, getServer, getInstance } from 'svelte-supersonic';
-	import { engineLocation } from '$lib/engine-location.js';
-	import { run, sc as scProxy, clock, type SchedulerHandle } from '$lib/scheduler';
-	import { createInstance } from '$lib/lang/evaluator';
-	import { buildOscParams } from '$lib/dispatch';
-	import { createGen } from '$lib/gen';
-	import FluxEditor from '$lib/FluxEditor.svelte';
-	import SiteHeader from '$lib/SiteHeader.svelte';
-	import BuildInfo from '$lib/BuildInfo.svelte';
-	import FxPanel from '$lib/FxPanel.svelte';
-	import SamplePanel from '$lib/SamplePanel.svelte';
-	import ExamplesMenu from '$lib/ExamplesMenu.svelte';
-	import { bufferRegistry, registerBuffer } from '$lib/bufferRegistry.svelte.js';
-	import { setBufferNamesGetter, setSynthDefMetadata } from '$lib/monaco-adapter.js';
-	import type { SynthDefMetadata } from '$lib/lang/completions.js';
+	import { boot, serverState, getServer, getInstance } from '#svelte-supersonic';
+	import { engineLocation } from '#lib/engine-location.js';
+	import { run, sc as scProxy, clock, type SchedulerHandle } from '#lib/scheduler.js';
+	import { createInstance } from '#lib/lang/evaluator.js';
+	import { buildOscParams } from '#lib/dispatch.js';
+	import { createGen } from '#lib/gen.js';
+	import FluxEditor from '#lib/FluxEditor.svelte';
+	import SiteHeader from '#lib/SiteHeader.svelte';
+	import BuildInfo from '#lib/BuildInfo.svelte';
+	import FxPanel from '#lib/FxPanel.svelte';
+	import SamplePanel from '#lib/SamplePanel.svelte';
+	import ExamplesMenu from '#lib/ExamplesMenu.svelte';
+	import { bufferRegistry, registerBuffer } from '#lib/bufferRegistry.svelte.js';
+	import { setBufferNamesGetter, setSynthDefMetadata } from '#lib/monaco-adapter.js';
+	import type { SynthDefMetadata } from '#lib/lang/completions.js';
 	import type { PageData } from './$types';
 	import type { ParamSpec } from './+page';
-	import { appendToLog, type LogEntry } from '$lib/log';
+	import { appendToLog, type LogEntry } from '#lib/log.js';
 
 	const { data }: { data: PageData } = $props();
 
@@ -85,13 +86,22 @@
 			const sonicCtx = getInstance()?.audioContext;
 			if (sonicCtx) clock.setContext(sonicCtx);
 
+			// Without compiled SynthDefs, no synth can play. Tell the user, because
+			// the page load returns empty metadata and shows no error.
+			if (Object.keys(data.synthdefs).length === 0) {
+				appendLog(
+					'No compiled SynthDefs found — Flux cannot make sound. Run `pnpm build:synthdefs` (needs sclang).',
+					'error'
+				);
+			}
+
 			// Load compiled synthdefs — metadata already available via page load.
 			// Each synthdef is loaded individually so a missing .scsyndef file (e.g.
 			// not yet compiled) does not block the other defs from loading.
 			await Promise.allSettled(
 				Object.keys(data.synthdefs).map(async (name) => {
 					try {
-						await sc!.loadSynthDef(asset(`/compiled_synthdefs/${name}.scsyndef`));
+						await sc!.loadSynthDef(staticAsset(`compiled_synthdefs/${name}.scsyndef`));
 					} catch (e) {
 						console.warn(`Could not load synthdef "${name}":`, e);
 						appendLog(`SynthDef "${name}" could not be loaded — see console for details`, 'error');
@@ -287,7 +297,7 @@
 		const BUILT_IN_SAMPLES = [
 			{
 				name: 'kick',
-				path: asset('/samples/kick-soneproject-bd1_electro-drums_cc0.wav')
+				path: asset('samples/kick-soneproject-bd1_electro-drums_cc0.wav')
 			}
 		];
 
@@ -346,7 +356,7 @@
 		const entry = data.examples.find((e) => e.id === id);
 		if (!entry) return;
 		try {
-			const res = await fetch(asset(`/examples/${entry.file}`));
+			const res = await fetch(staticAsset(`examples/${entry.file}`));
 			if (!res.ok) {
 				appendLog(`Could not load example "${entry.label}"`, 'error');
 				return;
