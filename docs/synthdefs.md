@@ -45,6 +45,16 @@ Key params: `amp`, `pan`, `freq`, `velocity` (strike velocity: louder and bright
 note(\woodbar) bars [0 2 4 7]
 ```
 
+### `plaits` — Mutable Instruments Plaits
+
+Mutable Instruments Plaits as a sustained oscillator, with the `MiPlaits` UGen of [mi-UGens](https://github.com/v7b1/mi-UGens). An ADSR envelope on `gate` shapes the sound, so it works with `note` and `mono`. `engine` (0 to 17) selects the synthesis model: 0 virtual analog, 1 waveshaping, 2 two-operator FM, 3 granular formant, 4 additive, 5 wavetable, 6 chords, 7 speech, 8 swarm of sawtooth waves, 9 filtered noise, 10 virtual analog with filter, 11 phase distortion, 12 to 14 six-operator FM (`harm` selects the patch), 15 wave terrain, 16 string machine, 17 chiptune. Plaits' noise and percussion models that need a trigger are not in this SynthDef.
+
+Key params: `amp`, `pan`, `freq`, `engine`, `harm`, `timbre`, `morph` (the three main controls of each model, 0 to 1), `atk`, `dec`, `sus`, `rel` (the envelope).
+
+```flux
+mono(\plaits) lead [0 2 4 7]"engine(10)"timbre(0.2rand0.8)
+```
+
 ### `samplePlayer` — one-shot sample playback
 
 Used by the `sample` content type. The runtime selects `samplePlayer_mono` or `samplePlayer_stereo` based on the loaded buffer's channel count.
