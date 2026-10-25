@@ -64,8 +64,8 @@ importers:
         specifier: ^3.16.0
         version: 3.16.0(eslint@9.39.4(supports-color@7.2.0))(svelte@5.55.0)
       flux-engine:
-        specifier: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz
-        version: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz
+        specifier: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.2/flux-engine-0.91.0-flux.2.tgz
+        version: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.2/flux-engine-0.91.0-flux.2.tgz
       globals:
         specifier: ^17.4.0
         version: 17.4.0
@@ -1039,9 +1039,9 @@ packages:
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
 
-  flux-engine@https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz:
-    resolution: {integrity: sha512-crHi0a6qPnEsRXlg0DqoO9Q+9aFUsBbqhnv5lGVWl2p7/zMkt/O+cWMfV3vz7betlk1wA+9Yrz5PK49zOxgCnw==, tarball: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz}
-    version: 0.91.0-flux.1
+  flux-engine@https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.2/flux-engine-0.91.0-flux.2.tgz:
+    resolution: {integrity: sha512-vlkTbT7Y9X8tNj0+s/OcVe8pYLm9HENkRgR3yau16TAXw7MotB291C/S+Z3GWqxbRikQ2zgr0N1cJ39/7d4+bg==, tarball: https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.2/flux-engine-0.91.0-flux.2.tgz}
+    version: 0.91.0-flux.2
 
   fsevents@2.3.2:
     resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
@@ -2541,7 +2541,7 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  flux-engine@https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.1/flux-engine-0.91.0-flux.1.tgz: {}
+  flux-engine@https://github.com/aeskildsen/flux-engine/releases/download/v0.91.0-flux.2/flux-engine-0.91.0-flux.2.tgz: {}
 
   fsevents@2.3.2:
     optional: true
