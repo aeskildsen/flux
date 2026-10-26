@@ -91,7 +91,7 @@ To run only one project, add `--project server` or `--project client`.
 
 ### The CI container
 
-`pnpm test:container` runs `scripts/ci-test.sh` in the same Playwright image as the CI test job. The script reads the image tag from `.github/workflows/deploy.yml`, so the two are always the same. `ci-test.sh` installs the pinned pnpm, then runs lint, the type-check, the server tests with coverage and the browser tests.
+`pnpm test:container` runs `scripts/ci-test.sh` in the same Playwright image as the CI test job. The script reads the image tag from `.github/workflows/deploy.yml`, so the two are always the same. `ci-test.sh` installs the pinned pnpm, compiles the SynthDefs (it installs `sclang` from the Ubuntu archive when it runs as root), then runs lint, the type-check, the server tests with coverage and the browser tests. The compile replaces the files in `static/compiled_synthdefs`. One browser test (`src/lib/supersonic/engine-synthdefs.integration.svelte.spec.ts`) loads and plays each compiled SynthDef in the flux-engine package from `node_modules`; it fails when a SynthDef uses a UGen that the engine does not have, and it is skipped when there are no compiled SynthDefs.
 
 A pass in the container is what counts as green. `pnpm test` on your machine is faster, but it uses your own Node, browser and system libraries. If the two give different results, the container is correct.
 
