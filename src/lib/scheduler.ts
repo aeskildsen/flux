@@ -5,9 +5,9 @@
  * plus SuperSonic's NTP prescheduler for sample-accurate OSC dispatch:
  *
  * 1. A JS timer wakes every TICK_INTERVAL_MS (~25ms).
- * 2. On each tick, events within LOOKAHEAD_SECONDS of AudioContext.currentTime
+ * 2. On each tick, events within LOOKAHEAD_SECONDS of the engine clock's time
  *    are pulled from the generator and passed to the callback with a precise
- *    NTP timestamp.
+ *    NTP timestamp on that clock.
  * 3. The callback (typically sc.synthAt) encodes a timed OSC bundle and hands
  *    it to SuperSonic's prescheduler — which dispatches at sample accuracy
  *    regardless of JS thread jitter or background-tab throttling.
@@ -24,7 +24,7 @@ import type { SynthParams, GroupName } from '#svelte-supersonic';
 /** How often the scheduler wakes to top up the OSC queue (milliseconds). */
 export const TICK_INTERVAL_MS = 25;
 
-/** How far ahead of AudioContext.currentTime to schedule OSC bundles (seconds). */
+/** How far ahead of the engine clock's time to schedule OSC bundles (seconds). */
 export const LOOKAHEAD_SECONDS = 0.1;
 
 /**
@@ -61,30 +61,28 @@ export function run<T>(
 	function tick() {
 		if (!active) return;
 
-		const sonic = getInstance();
-		const ctx = clock.audioContext;
+		// The clock counts on the engine clock. It gives 0 until the engine has rendered its first block.
+		const now = clock.now();
 
-		const ntpStartTime = sonic?.clock?.getNTPStartTime() ?? 0;
-
-		if (!sonic || !ctx || !ntpStartTime) {
-			// Engine not ready yet (or NTP sync pending) — retry next tick
+		if (!now) {
+			// Engine not ready yet — retry next tick
 			waitedForEngine = true;
 			timerId = setTimeout(tick, TICK_INTERVAL_MS);
 			return;
 		}
 
 		if (waitedForEngine) {
-			// Time passed while waiting for NTP sync: snap nextBeat forward so we
-			// don't try to schedule beats whose AudioContext time is already in the past.
+			// Time passed while waiting for the engine: snap nextBeat forward so we
+			// don't try to schedule beats whose time is already in the past.
 			waitedForEngine = false;
 			nextBeat = Math.max(nextBeat, clock.currentBeat);
 		}
 
-		const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
+		const horizon = now + LOOKAHEAD_SECONDS;
 
 		let beatTime: number;
 		try {
-			beatTime = clock.beatToAudioTime(nextBeat);
+			beatTime = clock.beatToNtp(nextBeat);
 		} catch {
 			// Clock was stopped while the scheduler was running — stop cleanly.
 			active = false;
@@ -126,14 +124,10 @@ export function run<T>(
 			} else {
 				coincidentCount = 0;
 			}
-			// clock.beatToAudioTime returns an absolute AudioContext.currentTime value anchored
-			// to when clock.start() was called (same timeline as ctx.currentTime).
-			// ntpStartTime is the NTP base timestamp (seconds since 1900-01-01) at the moment
-			// the AudioContext was created. Adding them converts a scheduled beat to the absolute
-			// NTP timestamp required by SuperSonic's OSC bundle prescheduler.
-			const ntpTime = ntpStartTime + clock.beatToAudioTime(nextBeat);
+			// The beat time is an NTP time (seconds since 1900-01-01) on the engine clock, the
+			// clock that the engine compares time tags with. Thus it is the time tag of the event.
 			try {
-				callback(value, ntpTime);
+				callback(value, beatTime);
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : String(e);
 				const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
@@ -143,7 +137,7 @@ export function run<T>(
 			}
 			nextBeat += dur;
 			try {
-				beatTime = clock.beatToAudioTime(nextBeat);
+				beatTime = clock.beatToNtp(nextBeat);
 			} catch {
 				active = false;
 				const msg = `Scheduler: clock not started at beat ${nextBeat} — stopping`;

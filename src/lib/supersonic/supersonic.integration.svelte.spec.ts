@@ -120,10 +120,13 @@ describe('health metrics', () => {
 });
 
 describe('engine clock', () => {
-	it('gives an NTP start time after boot', () => {
-		// The scheduler adds this value to AudioContext times to make OSC bundle time tags.
-		// 3_900_000_000 s after 1900 is in 2023.
-		const ntpStart = getInstance()?.clock?.getNTPStartTime() ?? 0;
-		expect(ntpStart).toBeGreaterThan(3_900_000_000);
+	it('gives the NTP time of the engine after boot, and the time goes on', async () => {
+		// The Flux clock counts beats on this time, and the scheduler makes the OSC bundle
+		// time tags from it. 3_900_000_000 s after 1900 is in 2023.
+		const engineClock = getInstance()!.clock!;
+		const t0 = engineClock.now();
+		expect(t0).toBeGreaterThan(3_900_000_000);
+		await new Promise((r) => setTimeout(r, 100));
+		expect(engineClock.now()).toBeGreaterThan(t0);
 	});
 });

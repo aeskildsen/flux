@@ -15,8 +15,10 @@ export interface SuperSonicInstance {
 
 // The part of the engine clock that this wrapper and its users read.
 export interface SuperSonicClock {
-	// NTP time (seconds since 1900) when the AudioContext started. 0 until NTP sync.
-	getNTPStartTime(): number;
+	// The engine's clock: the NTP time (seconds since 1900) that its audio thread
+	// has reached. The engine plays a timed bundle when this clock reaches its
+	// time tag. 0 until the engine has rendered its first block.
+	now(): number;
 }
 
 export interface SuperSonicConfig {
