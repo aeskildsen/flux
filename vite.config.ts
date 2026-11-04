@@ -67,6 +67,10 @@ export default defineConfig(({ command }) => ({
 				extends: './vite.config.ts',
 				test: {
 					name: 'client',
+					// The integration specs each boot a SuperSonic engine. Two engines
+					// that boot at the same time on the same origin interfere: the
+					// AudioContext of one stays suspended. Thus run the files one by one.
+					fileParallelism: false,
 					browser: {
 						enabled: true,
 						provider: playwright(),

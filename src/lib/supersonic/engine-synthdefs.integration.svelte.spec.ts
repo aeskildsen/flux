@@ -4,8 +4,7 @@ import { userEvent } from 'vitest/browser';
 import { boot, serverState, getInstance, getServer } from './supersonic.svelte.js';
 
 // Flux's compiled SynthDefs in the engine that Flux deploys: the flux-engine
-// package (node_modules/flux-engine), not the stock SuperSonic engine of the
-// other integration tests. Each SynthDef must load with /done and play in
+// package (node_modules/flux-engine). Each SynthDef must load with /done and play in
 // that engine with no /fail reply. The engine sends /fail, for example, when
 // a SynthDef uses a UGen that the engine does not have. Thus this test finds
 // a SynthDef that does not fit the engine when either of them changes.

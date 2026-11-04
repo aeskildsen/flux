@@ -8,8 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Key SuperSonic concepts:
 
-- `supersonic-scsynth` — Client API, workers, and metrics web component (AGPL-3.0-or-later)
-- `supersonic-scsynth-core` — WASM engine + AudioWorklet (AGPL-3.0-or-later)
+- The engine is the `flux-engine` package (a GitHub release tarball in `package.json`): SuperSonic with extra UGens. Its `dist/` folder holds the client API, workers and metrics web component, and the WASM engine + AudioWorklet (AGPL-3.0-or-later). The app and the integration tests use only this package, not the `supersonic-scsynth` npm packages.
 - Flux ships its own synth definitions from `synthdefs/*.scd`, compiled to `static/compiled_synthdefs/` by `scripts/compile_synthdefs.scd`. The Sonic Pi synthdef CDN bundle is not used.
 - The Svelte bindings for SuperSonic are plain code in `src/lib/supersonic/` (import `#svelte-supersonic`), not a submodule or package. `boot()` has no default engine location; Flux supplies it from `src/lib/engine-location.ts`.
 - Audio can only start after a user interaction (browser autoplay policy); always call `supersonic.init()` from a click/keypress handler.

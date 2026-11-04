@@ -30,7 +30,7 @@ sc.free(nodeId);
 
 ## Testing
 
-Unit specs run in Node. The integration spec boots the real WASM engine in Chromium. It uses `localConfig` from `test-utils.ts`. This config loads the engine from `node_modules` and the test synthdef from `static/synthdefs/`.
+Unit specs run in Node. The integration spec boots the real WASM engine in Chromium. It uses `localConfig` from `test-utils.ts`. This config loads the engine that Flux deploys (the flux-engine package in `node_modules`) and the test synthdef from `src/lib/supersonic/fixtures/`.
 
 ```ts
 import { boot } from './supersonic.svelte.js';
