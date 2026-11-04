@@ -10,7 +10,9 @@ function makeMockInstance(): { instance: SuperSonicInstance; calls: (string | nu
 		nextNodeId: vi.fn(() => nodeIdCounter++),
 		loadSynthDef: vi.fn().mockResolvedValue(undefined),
 		loadSample: vi.fn().mockResolvedValue(undefined),
-		send: vi.fn((...args: (string | number)[]) => calls.push(args)),
+		send: vi.fn((...args) => {
+			calls.push(args as (string | number)[]);
+		}),
 		sendOSC: vi.fn(),
 		audioContext: null,
 		clock: undefined

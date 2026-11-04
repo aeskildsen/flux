@@ -1,25 +1,28 @@
-export interface SuperSonicInstance {
-	init(): Promise<void>;
-	nextNodeId(): number;
-	loadSynthDef(name: string): Promise<void>;
-	loadSample(
-		bufnum: number,
-		source: string | ArrayBuffer | ArrayBufferView | Blob
-	): Promise<unknown>;
-	send(...args: (string | number)[]): void;
-	sendOSC(oscData: Uint8Array | ArrayBuffer): void;
-	readonly audioContext: AudioContext | null;
-	// The engine clock. It is undefined until init() resolves.
-	readonly clock: SuperSonicClock | undefined;
-}
+import type { SuperSonic, ClockworkClock } from 'flux-engine';
 
-// The part of the engine clock that this wrapper and its users read.
-export interface SuperSonicClock {
-	// The engine's clock: the NTP time (seconds since 1900) that its audio thread
-	// has reached. The engine plays a timed bundle when this clock reaches its
-	// time tag. 0 until the engine has rendered its first block.
-	now(): number;
-}
+// The types come from the declarations in the flux-engine package: the
+// SuperSonic client API of the engine that Flux loads. Thus a type check finds
+// a member that the engine no longer has.
+
+// The part of the SuperSonic client that this wrapper and its users call.
+// clock is undefined until init() resolves.
+export type SuperSonicInstance = Pick<
+	SuperSonic,
+	| 'init'
+	| 'nextNodeId'
+	| 'loadSynthDef'
+	| 'loadSample'
+	| 'send'
+	| 'sendOSC'
+	| 'audioContext'
+	| 'clock'
+>;
+
+// The part of the engine clock that this wrapper and its users read. now() is
+// the NTP time (seconds since 1900) that the audio thread has reached: the
+// engine plays a timed bundle when this clock reaches its time tag. It is 0
+// until the engine has rendered its first block.
+export type SuperSonicClock = Pick<ClockworkClock, 'now'>;
 
 export interface SuperSonicConfig {
 	baseURL: string;

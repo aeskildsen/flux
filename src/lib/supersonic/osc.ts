@@ -1,3 +1,4 @@
+import type { OscArg } from 'flux-engine';
 import type { SuperSonicInstance, AddAction } from './types.js';
 import { GROUPS, type GroupName } from './groups.js';
 
@@ -55,8 +56,8 @@ export function createServer(instance: SuperSonicInstance) {
 		},
 
 		// Load a synthdef by name
-		loadSynthDef(name: string): Promise<void> {
-			return instance.loadSynthDef(name);
+		async loadSynthDef(name: string): Promise<void> {
+			await instance.loadSynthDef(name);
 		},
 
 		// Query server status
@@ -65,8 +66,8 @@ export function createServer(instance: SuperSonicInstance) {
 		},
 
 		// Raw passthrough — always available when wrappers aren't enough
-		send(...args: (string | number)[]): void {
-			instance.send(...args);
+		send(address: string, ...args: OscArg[]): void {
+			instance.send(address, ...args);
 		}
 	};
 }
