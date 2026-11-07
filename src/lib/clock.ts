@@ -1,6 +1,6 @@
 /**
  * Clock module — BPM tracking and beats-to-NTP time conversion.
- * Consumed by the Phase 4 lookahead scheduler.
+ * The lookahead scheduler (scheduler.ts) uses this clock.
  *
  * The clock counts beats on the engine's own clock: the time source is the
  * engine clock (`sonic.clock`), whose now() is the NTP time (seconds since
@@ -46,9 +46,17 @@ export const clock = {
 		return _source?.now() ?? 0;
 	},
 
+	/** True when the time source gives a time after 0. The engine clock gives 0 until it runs. */
+	get running(): boolean {
+		return (_source?.now() ?? 0) > 0;
+	},
+
+	/** The current beat, or 0 when the clock is stopped or the time source does not run. */
 	get currentBeat(): number {
 		if (_startTime === null || _source === null) return 0;
-		return (_source.now() - _startTime) / (60 / _bpm);
+		const now = _source.now();
+		if (!(now > 0)) return 0;
+		return (now - _startTime) / (60 / _bpm);
 	},
 
 	/** Set the time source to use. Must be called before start(). */

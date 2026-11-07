@@ -67,6 +67,20 @@ export default defineConfig(({ command }) => ({
 				extends: './vite.config.ts',
 				test: {
 					name: 'client',
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium', headless: true }]
+					},
+					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+					exclude: ['src/lib/server/**', 'src/**/*.integration.svelte.{test,spec}.{js,ts}']
+				}
+			},
+
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'client-integration',
 					// The integration specs each boot a SuperSonic engine. Two engines
 					// that boot at the same time on the same origin interfere: the
 					// AudioContext of one stays suspended. Thus run the files one by one.
@@ -76,8 +90,7 @@ export default defineConfig(({ command }) => ({
 						provider: playwright(),
 						instances: [{ browser: 'chromium', headless: true }]
 					},
-					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					exclude: ['src/lib/server/**']
+					include: ['src/**/*.integration.svelte.{test,spec}.{js,ts}']
 				}
 			},
 

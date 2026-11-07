@@ -43,4 +43,4 @@ fi
 pnpm lint
 pnpm check
 pnpm test:coverage
-pnpm exec vitest run --project client
+pnpm exec vitest run --project client --project client-integration

@@ -82,12 +82,13 @@ To run one test file:
 pnpm vitest run src/routes/page.svelte.spec.ts
 ```
 
-Vitest has two projects, which `vite.config.ts` configures:
+Vitest has three projects, which `vite.config.ts` configures:
 
 - **server** runs in Node. It runs `src/**/*.{test,spec}.{js,ts}` and `scripts/**/*.test.ts`, but not `.svelte.` files.
-- **client** runs in headless Chromium through Playwright. It runs `src/**/*.svelte.{test,spec}.{js,ts}`.
+- **client** runs in headless Chromium through Playwright. It runs `src/**/*.svelte.{test,spec}.{js,ts}`, but not the integration specs.
+- **client-integration** runs `src/**/*.integration.svelte.{test,spec}.{js,ts}` in headless Chromium. Each of these specs boots a SuperSonic engine. Two engines that boot at the same time interfere, so this project runs its files one by one.
 
-To run only one project, add `--project server` or `--project client`.
+To run only one project, add `--project server`, `--project client` or `--project client-integration`.
 
 ### The CI container
 

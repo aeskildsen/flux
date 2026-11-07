@@ -302,4 +302,18 @@ describe('clock time source', () => {
 		expect(() => clock.reset()).toThrow('does not run yet');
 		expect(clock.startTime).toBeNull();
 	});
+
+	it('running is true only while the time source gives a time after 0', () => {
+		expect(clock.running).toBe(true);
+		clock.setTimeSource({ now: () => 0 });
+		expect(clock.running).toBe(false);
+	});
+
+	it('currentBeat is 0 while the time source gives 0, also when a start time is set', () => {
+		setTime(10);
+		clock.start();
+		// For example, the engine stops its clock while a loop runs.
+		clock.setTimeSource({ now: () => 0 });
+		expect(clock.currentBeat).toBe(0);
+	});
 });

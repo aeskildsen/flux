@@ -52,7 +52,8 @@ import {
 	sc,
 	TICK_INTERVAL_MS,
 	LOOKAHEAD_SECONDS,
-	LATE_TOLERANCE_SECONDS
+	LATE_TOLERANCE_SECONDS,
+	MAX_SKIPPED_EVENTS_PER_TICK
 } from './scheduler.js';
 import { clock } from './clock.js';
 
@@ -524,14 +525,71 @@ describe('run() — late events after a gap', () => {
 		expect(callback.mock.calls.map((c) => c[0])).toEqual([0, 20, 21]);
 	});
 
-	it('writes one warning for each tick that did not send events', () => {
+	it('reports the late events once, through onError and console.warn', () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		run(counter(), vi.fn(), 1, 0);
+		const onError = vi.fn();
+		run(counter(), vi.fn(), 1, 0, onError);
 		fakeCurrentTime += 20;
-		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+		vi.advanceTimersByTime(TICK_INTERVAL_MS * 4);
 
 		expect(warn).toHaveBeenCalledTimes(1);
 		expect(warn.mock.calls[0][0]).toMatch(/did not send 19 late events/);
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toMatch(/did not send 19 late events/);
+	});
+
+	it('reports the late events also when the loop stops in the same tick', () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const onError = vi.fn();
+		const handle = run(counter(), vi.fn(), 1, 0, onError);
+		handle.setStopBeat(10);
+		fakeCurrentTime += 20;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toMatch(/did not send 9 late events/);
+	});
+
+	it('moves past a long gap over many ticks, so that one tick does not block the page', () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		let pulled = 0;
+		function* counting(): Generator<number> {
+			for (let i = 0; ; i++) {
+				pulled++;
+				yield i;
+			}
+		}
+		const callback = vi.fn();
+		const onError = vi.fn();
+		run(counting(), callback, 1, 0, onError);
+		pulled = 0;
+
+		// A one-hour suspend at 60 BPM: 3599 events are late.
+		fakeCurrentTime += 3600;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+		expect(pulled).toBeLessThanOrEqual(MAX_SKIPPED_EVENTS_PER_TICK);
+		expect(onError).not.toHaveBeenCalled();
+
+		// The next ticks continue at once, until the pattern is on time again.
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+		expect(callback.mock.calls.map((c) => c[0])).toEqual([0, 3600]);
+		expect(onError).toHaveBeenCalledTimes(1);
+		expect(onError.mock.calls[0][0]).toMatch(/did not send 3599 late events/);
+	});
+
+	it('sends all events after a main-thread stall that is longer than the lookahead', () => {
+		// Events every 0.1 s. One tick comes 0.3 s late, for example because of a long evaluation.
+		const callback = vi.fn();
+		const onError = vi.fn();
+		run(counter(), callback, 0.1, 0, onError);
+		const sentBefore = callback.mock.calls.length;
+		fakeCurrentTime += 0.3;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		const sent = callback.mock.calls.map((c) => c[0]);
+		expect(sent).toEqual([...Array(sent.length).keys()]);
+		expect(sent.length).toBeGreaterThan(sentBefore + 2);
+		expect(onError).not.toHaveBeenCalled();
 	});
 
 	it('sends an event that is late by less than LATE_TOLERANCE_SECONDS', () => {

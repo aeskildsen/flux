@@ -84,7 +84,11 @@
 			// Count beats on the engine clock, the clock that the engine compares
 			// time tags with.
 			const engineClock = getInstance()?.clock;
-			if (engineClock) clock.setTimeSource(engineClock);
+			if (engineClock) {
+				clock.setTimeSource(engineClock);
+			} else {
+				appendLog('The engine has no clock — Flux cannot play patterns.', 'error');
+			}
 
 			// Without compiled SynthDefs, no synth can play. Tell the user, because
 			// the page load returns empty metadata and shows no error.
@@ -396,6 +400,13 @@
 	function handleEvaluate(content: string) {
 		if (!serverState.booted) {
 			appendLog('Engine not booted — click "boot engine" first', 'error');
+			return;
+		}
+
+		// clock.reset() needs a running engine clock. The engine clock gives 0
+		// until the engine has rendered its first block.
+		if (!clock.running) {
+			appendLog('The engine clock does not run yet — evaluate again in a moment', 'error');
 			return;
 		}
 

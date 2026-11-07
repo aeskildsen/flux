@@ -24,9 +24,10 @@ Key SuperSonic concepts:
 
 ## Test Architecture
 
-Two vitest projects are configured in `vite.config.ts`:
+Three vitest projects are configured in `vite.config.ts`:
 
-- **client** — browser tests using `vitest-browser-svelte` + Playwright/Chromium. Files matching `src/**/*.svelte.{test,spec}.{js,ts}` (excluding `src/lib/server/**`). Use `render()` from `vitest-browser-svelte` and `page` from `vitest/browser`.
+- **client** — browser tests using `vitest-browser-svelte` + Playwright/Chromium. Files matching `src/**/*.svelte.{test,spec}.{js,ts}` (excluding `src/lib/server/**` and the integration specs). Use `render()` from `vitest-browser-svelte` and `page` from `vitest/browser`.
+- **client-integration** — browser specs matching `src/**/*.integration.svelte.{test,spec}.{js,ts}`. Each boots a SuperSonic engine, so the files run one by one.
 - **server** — node environment. Files matching `src/**/*.{test,spec}.{js,ts}` and `scripts/**/*.{test,spec}.{js,ts}`, excluding `.svelte.` tests.
 
 File naming convention:
