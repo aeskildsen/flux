@@ -11,6 +11,10 @@
  * 3. The callback (typically sc.synthAt) encodes a timed OSC bundle and hands
  *    it to SuperSonic's prescheduler — which dispatches at sample accuracy
  *    regardless of JS thread jitter or background-tab throttling.
+ * 4. An event whose time is more than LATE_TOLERANCE_SECONDS in the past is
+ *    not sent. The generator still moves past it, so the pattern keeps its
+ *    position. This occurs after a gap, for example a laptop suspend: the
+ *    engine clock then jumps forward by the length of the gap.
  *
  * The `interval` parameter (in beats) is a per-call fixed duration fallback,
  * used when the yielded value has no `.duration` field. This preserves full
@@ -26,6 +30,13 @@ export const TICK_INTERVAL_MS = 25;
 
 /** How far ahead of the engine clock's time to schedule OSC bundles (seconds). */
 export const LOOKAHEAD_SECONDS = 0.1;
+
+/**
+ * How late an event can be and still be sent (seconds). The engine plays a
+ * late bundle immediately, so after a gap all the missed events would sound
+ * together. The scheduler does not send an event that is later than this.
+ */
+export const LATE_TOLERANCE_SECONDS = 0.05;
 
 /**
  * Safety cap on consecutive zero-duration events emitted by a single generator.
@@ -93,6 +104,8 @@ export function run<T>(
 		}
 
 		let coincidentCount = 0;
+		let skipped = 0;
+		let maxLate = 0;
 
 		while (beatTime <= horizon) {
 			if (nextBeat >= stopBeat) {
@@ -126,14 +139,20 @@ export function run<T>(
 			}
 			// The beat time is an NTP time (seconds since 1900-01-01) on the engine clock, the
 			// clock that the engine compares time tags with. Thus it is the time tag of the event.
-			try {
-				callback(value, beatTime);
-			} catch (e) {
-				const msg = e instanceof Error ? e.message : String(e);
-				const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
-				console.error(errMsg, e);
-				onError?.(errMsg);
-				// Non-fatal: log the error and skip this event, but keep running.
+			if (beatTime < now - LATE_TOLERANCE_SECONDS) {
+				// Too late: do not send the event (see LATE_TOLERANCE_SECONDS).
+				skipped++;
+				maxLate = Math.max(maxLate, now - beatTime);
+			} else {
+				try {
+					callback(value, beatTime);
+				} catch (e) {
+					const msg = e instanceof Error ? e.message : String(e);
+					const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
+					console.error(errMsg, e);
+					onError?.(errMsg);
+					// Non-fatal: log the error and skip this event, but keep running.
+				}
 			}
 			nextBeat += dur;
 			try {
@@ -145,6 +164,12 @@ export function run<T>(
 				onError?.(msg);
 				return;
 			}
+		}
+
+		if (skipped > 0) {
+			console.warn(
+				`Scheduler: did not send ${skipped} late events (up to ${maxLate.toFixed(2)} s late)`
+			);
 		}
 
 		timerId = setTimeout(tick, TICK_INTERVAL_MS);

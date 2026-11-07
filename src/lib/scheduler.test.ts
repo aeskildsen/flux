@@ -47,7 +47,13 @@ const fakeSonic = {} as ReturnType<typeof getInstance>;
 // Import module under test (after mocks are set up)
 // ---------------------------------------------------------------------------
 
-import { run, sc, TICK_INTERVAL_MS, LOOKAHEAD_SECONDS } from './scheduler.js';
+import {
+	run,
+	sc,
+	TICK_INTERVAL_MS,
+	LOOKAHEAD_SECONDS,
+	LATE_TOLERANCE_SECONDS
+} from './scheduler.js';
 import { clock } from './clock.js';
 
 // ---------------------------------------------------------------------------
@@ -64,7 +70,7 @@ function* finiteGen<T>(values: T[]): Generator<T> {
  * `count` calls and `outOfWindow` for all subsequent calls.
  * This ensures the tick() while-loop terminates after exactly `count` events.
  */
-function boundedBeatMock(count: number, inWindow = fakeCurrentTime - 1) {
+function boundedBeatMock(count: number, inWindow = fakeCurrentTime) {
 	let calls = 0;
 	return vi.fn(() => (calls++ < count ? inWindow : fakeCurrentTime + LOOKAHEAD_SECONDS + 1));
 }
@@ -124,7 +130,7 @@ describe('run() — engine not ready', () => {
 		// The engine clock gives 0 before boot and until the engine has rendered its
 		// first block. A time tag made then is far in the past, and the bundle is LATE.
 		vi.spyOn(clock, 'now').mockReturnValue(0);
-		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime - 1);
+		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime);
 
 		const callback = vi.fn();
 		run(finiteGen([1, 2, 3]), callback);
@@ -159,7 +165,7 @@ describe('run() — engine not ready', () => {
 		// After the wait, currentBeat will be 5 — only beat 5 is in-window
 		const currentBeatSpy = vi.spyOn(clock, 'currentBeat', 'get').mockReturnValue(5);
 		vi.spyOn(clock, 'beatToNtp').mockImplementation((beat: number) =>
-			beat === 5 ? fakeCurrentTime - 1 : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+			beat === 5 ? fakeCurrentTime : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
 		);
 
 		const callback = vi.fn();
@@ -184,7 +190,7 @@ describe('run() — engine not ready', () => {
 describe('run() — event emission', () => {
 	it('emits all values from a finite generator (generator exhaustion stops loop)', () => {
 		// All beats always in-window: the loop terminates only because gen is finite
-		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime - 1);
+		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime);
 
 		const callback = vi.fn();
 		run(finiteGen([10, 20, 30]), callback, 1);
@@ -216,8 +222,8 @@ describe('run() — event emission', () => {
 		const callback = vi.fn();
 		run(finiteGen([1]), callback, 1);
 		const ntpTime = callback.mock.calls[0][1] as number;
-		// beatToNtp returns fakeCurrentTime - 1 for the first call
-		expect(ntpTime).toBe(fakeCurrentTime - 1);
+		// beatToNtp returns fakeCurrentTime for the first call
+		expect(ntpTime).toBe(fakeCurrentTime);
 	});
 
 	it('stops emitting after generator is done (finite gen)', () => {
@@ -305,7 +311,7 @@ describe('handle.setStopBeat()', () => {
 		expect(callback).not.toHaveBeenCalled();
 
 		// Now put beats in-window and set stopBeat=0 before the next tick
-		spy.mockReturnValue(fakeCurrentTime - 1);
+		spy.mockReturnValue(fakeCurrentTime);
 		handle.setStopBeat(0); // guard fires immediately at nextBeat=0
 
 		vi.advanceTimersByTime(TICK_INTERVAL_MS);
@@ -351,7 +357,7 @@ describe('run() — startBeat default (#9)', () => {
 
 		// beat 0 is in-window, beat 50 is not — the bug would emit at beat 0
 		vi.spyOn(clock, 'beatToNtp').mockImplementation((beat: number) =>
-			beat < 50 ? fakeCurrentTime - 1 : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+			beat < 50 ? fakeCurrentTime : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
 		);
 
 		const callback = vi.fn();
@@ -368,7 +374,7 @@ describe('run() — startBeat default (#9)', () => {
 
 		// beat 0 is in-window; beat 1 is not
 		vi.spyOn(clock, 'beatToNtp').mockImplementation((beat: number) =>
-			beat === 0 ? fakeCurrentTime - 1 : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
+			beat === 0 ? fakeCurrentTime : fakeCurrentTime + LOOKAHEAD_SECONDS + 1
 		);
 
 		const callback = vi.fn();
@@ -386,7 +392,7 @@ describe('run() — duration guards', () => {
 	it('dispatches coincident events (duration 0) without erroring', () => {
 		// Two events at the same beat — e.g. downbeats from two patterns.
 		// The scheduler fires both at the same ntpTime and keeps running.
-		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime - 1);
+		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime);
 
 		const callback = vi.fn();
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -398,7 +404,7 @@ describe('run() — duration guards', () => {
 	});
 
 	it('aborts when consecutive zero-duration events exceed MAX_COINCIDENT_EVENTS', () => {
-		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime - 1);
+		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime);
 
 		// Infinite generator of zero-duration events — classic runaway.
 		function* runaway() {
@@ -415,7 +421,7 @@ describe('run() — duration guards', () => {
 	});
 
 	it('stops the scheduler when an event has negative duration', () => {
-		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime - 1);
+		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime);
 
 		const callback = vi.fn();
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -430,7 +436,7 @@ describe('run() — duration guards', () => {
 	it('stops when event duration is NaN — does not hang silently', () => {
 		// NaN <= 0 is false, so without !isFinite() the guard would not fire.
 		// nextBeat += NaN makes nextBeat NaN permanently → eternal silent hang.
-		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime - 1);
+		vi.spyOn(clock, 'beatToNtp').mockReturnValue(fakeCurrentTime);
 
 		const callback = vi.fn();
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -467,6 +473,74 @@ describe('run() — event duration field', () => {
 		const callback = vi.fn();
 		run(finiteGen([42, 99]), callback, 1, 0);
 		expect(callback).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Late events after a gap (laptop suspend)
+// ---------------------------------------------------------------------------
+
+describe('run() — late events after a gap', () => {
+	// These tests use the real clock on a fake time source: 60 BPM, so one beat is one second.
+	function* counter(): Generator<number> {
+		for (let i = 0; ; i++) yield i;
+	}
+
+	beforeEach(() => {
+		clock.setTimeSource({ now: () => fakeCurrentTime });
+		clock.bpm = 60;
+		clock.start();
+	});
+
+	afterEach(() => {
+		clock.stop();
+		clock.bpm = 100;
+	});
+
+	it('does not send the events that a jump of the engine clock made late', () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const callback = vi.fn();
+		run(counter(), callback, 1, 0);
+		expect(callback.mock.calls.map((c) => c[0])).toEqual([0]);
+
+		// A 20 s suspend: the engine clock jumps forward by the gap.
+		fakeCurrentTime += 20;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		// Beats 1 to 19 are late and not sent. Beat 20 is on time.
+		expect(callback.mock.calls.map((c) => c[0])).toEqual([0, 20]);
+		expect(callback.mock.calls[1][1]).toBe(fakeCurrentTime);
+	});
+
+	it('keeps the position of the pattern: the generator moves past the late events', () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const callback = vi.fn();
+		run(counter(), callback, 1, 0);
+		fakeCurrentTime += 20;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+		fakeCurrentTime += 1;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		expect(callback.mock.calls.map((c) => c[0])).toEqual([0, 20, 21]);
+	});
+
+	it('writes one warning for each tick that did not send events', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		run(counter(), vi.fn(), 1, 0);
+		fakeCurrentTime += 20;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn.mock.calls[0][0]).toMatch(/did not send 19 late events/);
+	});
+
+	it('sends an event that is late by less than LATE_TOLERANCE_SECONDS', () => {
+		const callback = vi.fn();
+		run(counter(), callback, 1, 0);
+		fakeCurrentTime += 1 + LATE_TOLERANCE_SECONDS / 2;
+		vi.advanceTimersByTime(TICK_INTERVAL_MS);
+
+		expect(callback.mock.calls.map((c) => c[0])).toEqual([0, 1]);
 	});
 });
 
