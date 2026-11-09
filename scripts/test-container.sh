@@ -32,6 +32,13 @@ rootless() {
 		"${engine[@]}" info --format '{{.SecurityOptions}}' 2> /dev/null | grep -q rootless
 }
 
+# The image tag is not immutable: the publisher can push a new image with
+# the same tag. Get the current image, so that the run uses the same image
+# as CI. If the pull fails (for example, offline), use the local image.
+if ! "${engine[@]}" pull "$image"; then
+	echo "test-container: cannot pull $image; the local image can differ from CI" >&2
+fi
+
 run_args=(--rm --init)
 if [[ -n ${FLUX_CONTAINER_NETWORK:-} ]]; then
 	run_args+=(--network "$FLUX_CONTAINER_NETWORK")
