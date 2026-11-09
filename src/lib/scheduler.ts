@@ -1,16 +1,25 @@
 /**
- * Lookahead scheduler — Phase 4.
+ * Lookahead scheduler.
  *
  * Replaces the naive setTimeout loop with the Chris Wilson lookahead pattern
  * plus SuperSonic's NTP prescheduler for sample-accurate OSC dispatch:
  *
  * 1. A JS timer wakes every TICK_INTERVAL_MS (~25ms).
- * 2. On each tick, events within LOOKAHEAD_SECONDS of AudioContext.currentTime
+ * 2. On each tick, events within LOOKAHEAD_SECONDS of the engine clock's time
  *    are pulled from the generator and passed to the callback with a precise
- *    NTP timestamp.
+ *    NTP timestamp on that clock.
  * 3. The callback (typically sc.synthAt) encodes a timed OSC bundle and hands
- *    it to SuperSonic's prescheduler — which dispatches at sample accuracy
- *    regardless of JS thread jitter or background-tab throttling.
+ *    it to SuperSonic's prescheduler. The engine plays a bundle that arrives
+ *    before its time tag at sample accuracy. The lookahead gives a margin
+ *    against small delays of the JS timer.
+ * 4. When a tick comes late, an event can be late too. The engine plays a late
+ *    bundle immediately. An event that is late by LATE_TOLERANCE_SECONDS or
+ *    less is sent. An event that is more late is not sent: this occurs after
+ *    a gap, for example a laptop suspend, when the engine clock jumps forward
+ *    by the length of the gap. The generator still moves past the event, so
+ *    the pattern keeps its position. One tick moves past a maximum of
+ *    MAX_SKIPPED_EVENTS_PER_TICK late events, so that a long gap does not
+ *    block the page. The scheduler reports the late events through onError.
  *
  * The `interval` parameter (in beats) is a per-call fixed duration fallback,
  * used when the yielded value has no `.duration` field. This preserves full
@@ -24,8 +33,26 @@ import type { SynthParams, GroupName } from '#svelte-supersonic';
 /** How often the scheduler wakes to top up the OSC queue (milliseconds). */
 export const TICK_INTERVAL_MS = 25;
 
-/** How far ahead of AudioContext.currentTime to schedule OSC bundles (seconds). */
+/** How far ahead of the engine clock's time to schedule OSC bundles (seconds). */
 export const LOOKAHEAD_SECONDS = 0.1;
+
+/**
+ * How late an event can be and still be sent (seconds). The engine plays a
+ * late bundle immediately, so after a gap all the missed events would sound
+ * together. The scheduler does not send an event that is later than this.
+ *
+ * With the lookahead, a tick can come LOOKAHEAD_SECONDS + LATE_TOLERANCE_SECONDS
+ * (0.35 s) late before the scheduler drops events. This covers usual delays of
+ * the main thread, for example garbage collection or a long evaluation. After
+ * a longer delay, a maximum of 0.25 s of events sound together.
+ */
+export const LATE_TOLERANCE_SECONDS = 0.25;
+
+/**
+ * The maximum number of late events that one tick moves past. After a long
+ * gap, the next ticks continue at once until the pattern is on time again.
+ */
+export const MAX_SKIPPED_EVENTS_PER_TICK = 1000;
 
 /**
  * Safety cap on consecutive zero-duration events emitted by a single generator.
@@ -58,53 +85,79 @@ export function run<T>(
 	let timerId: ReturnType<typeof setTimeout>;
 	let waitedForEngine = false;
 
+	// The late events that were not sent and not reported yet. A catch-up after
+	// a long gap can use many ticks; the scheduler reports it one time.
+	let skipped = 0;
+	let maxLate = 0;
+
+	function reportSkipped() {
+		if (skipped === 0) return;
+		const msg = `Scheduler: did not send ${skipped} late events (up to ${maxLate.toFixed(2)} s late)`;
+		console.warn(msg);
+		onError?.(msg);
+		skipped = 0;
+		maxLate = 0;
+	}
+
 	function tick() {
 		if (!active) return;
+		let delay = TICK_INTERVAL_MS;
+		try {
+			delay = fill();
+		} finally {
+			// Report the late events when the catch-up is complete or the loop stops.
+			if (delay > 0 || !active) reportSkipped();
+		}
+		if (active) timerId = setTimeout(tick, delay);
+	}
 
-		const sonic = getInstance();
-		const ctx = clock.audioContext;
+	/**
+	 * Send the events in the lookahead window. Return the delay before the
+	 * next tick in milliseconds: 0 when the tick stopped during a catch-up.
+	 */
+	function fill(): number {
+		// The clock counts on the engine clock. It gives 0 until the engine has rendered its first block.
+		const now = clock.now();
 
-		const ntpStartTime = sonic?.clock?.getNTPStartTime() ?? 0;
-
-		if (!sonic || !ctx || !ntpStartTime) {
-			// Engine not ready yet (or NTP sync pending) — retry next tick
+		if (!now) {
+			// The engine clock does not run yet. Try again at the next tick.
 			waitedForEngine = true;
-			timerId = setTimeout(tick, TICK_INTERVAL_MS);
-			return;
+			return TICK_INTERVAL_MS;
 		}
 
 		if (waitedForEngine) {
-			// Time passed while waiting for NTP sync: snap nextBeat forward so we
-			// don't try to schedule beats whose AudioContext time is already in the past.
+			// Time passed while the scheduler waited for the engine. Move nextBeat
+			// forward to the current beat, so that no event is in the past.
 			waitedForEngine = false;
 			nextBeat = Math.max(nextBeat, clock.currentBeat);
 		}
 
-		const horizon = ctx.currentTime + LOOKAHEAD_SECONDS;
+		const horizon = now + LOOKAHEAD_SECONDS;
 
 		let beatTime: number;
 		try {
-			beatTime = clock.beatToAudioTime(nextBeat);
+			beatTime = clock.beatToNtp(nextBeat);
 		} catch {
 			// Clock was stopped while the scheduler was running — stop cleanly.
 			active = false;
 			const msg = `Scheduler: clock not started at beat ${nextBeat} — stopping`;
 			console.error(msg);
 			onError?.(msg);
-			return;
+			return TICK_INTERVAL_MS;
 		}
 
 		let coincidentCount = 0;
+		let skippedThisTick = 0;
 
 		while (beatTime <= horizon) {
 			if (nextBeat >= stopBeat) {
 				active = false;
-				return;
+				return TICK_INTERVAL_MS;
 			}
 			const { value, done } = gen.next();
 			if (done) {
 				active = false;
-				return;
+				return TICK_INTERVAL_MS;
 			}
 			const dur = durationOf(value, interval);
 			if (!isFinite(dur) || dur < 0) {
@@ -112,7 +165,7 @@ export function run<T>(
 				const msg = `Scheduler: negative or non-finite duration at beat ${nextBeat}`;
 				console.error(msg, value);
 				onError?.(msg);
-				return;
+				return TICK_INTERVAL_MS;
 			}
 			if (dur === 0) {
 				coincidentCount++;
@@ -121,39 +174,44 @@ export function run<T>(
 					const msg = `Scheduler: ${MAX_COINCIDENT_EVENTS}+ consecutive zero-duration events at beat ${nextBeat} — aborting to prevent runaway`;
 					console.error(msg);
 					onError?.(msg);
-					return;
+					return TICK_INTERVAL_MS;
 				}
 			} else {
 				coincidentCount = 0;
 			}
-			// clock.beatToAudioTime returns an absolute AudioContext.currentTime value anchored
-			// to when clock.start() was called (same timeline as ctx.currentTime).
-			// ntpStartTime is the NTP base timestamp (seconds since 1900-01-01) at the moment
-			// the AudioContext was created. Adding them converts a scheduled beat to the absolute
-			// NTP timestamp required by SuperSonic's OSC bundle prescheduler.
-			const ntpTime = ntpStartTime + clock.beatToAudioTime(nextBeat);
-			try {
-				callback(value, ntpTime);
-			} catch (e) {
-				const msg = e instanceof Error ? e.message : String(e);
-				const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
-				console.error(errMsg, e);
-				onError?.(errMsg);
-				// Non-fatal: log the error and skip this event, but keep running.
+			// The beat time is an NTP time (seconds since 1900-01-01) on the engine clock, the
+			// clock that the engine compares time tags with. Thus it is the time tag of the event.
+			if (beatTime < now - LATE_TOLERANCE_SECONDS) {
+				// Too late: do not send the event (see LATE_TOLERANCE_SECONDS).
+				skipped++;
+				skippedThisTick++;
+				maxLate = Math.max(maxLate, now - beatTime);
+			} else {
+				try {
+					callback(value, beatTime);
+				} catch (e) {
+					const msg = e instanceof Error ? e.message : String(e);
+					const errMsg = `Scheduler error at beat ${nextBeat}: ${msg}`;
+					console.error(errMsg, e);
+					onError?.(errMsg);
+					// Non-fatal: log the error and skip this event, but keep running.
+				}
 			}
 			nextBeat += dur;
 			try {
-				beatTime = clock.beatToAudioTime(nextBeat);
+				beatTime = clock.beatToNtp(nextBeat);
 			} catch {
 				active = false;
 				const msg = `Scheduler: clock not started at beat ${nextBeat} — stopping`;
 				console.error(msg);
 				onError?.(msg);
-				return;
+				return TICK_INTERVAL_MS;
 			}
+			// Give the page time to do other work during a long catch-up.
+			if (skippedThisTick >= MAX_SKIPPED_EVENTS_PER_TICK) return 0;
 		}
 
-		timerId = setTimeout(tick, TICK_INTERVAL_MS);
+		return TICK_INTERVAL_MS;
 	}
 
 	tick();

@@ -1,11 +1,5 @@
 import type { SuperSonicConfig } from '#svelte-supersonic';
 
-// SuperSonic version of the engine. Must equal the supersonic-scsynth and
-// supersonic-scsynth-core versions in package.json devDependencies (the
-// wrapper's integration tests use those npm packages) and the SuperSonic
-// version of the flux-engine dependency. A unit test checks this.
-export const ENGINE_VERSION = '0.91.0';
-
 // Where the browser loads the SuperSonic engine from. Only this module decides
 // the location. The engine is SuperSonic with the flux-engine UGens; Flux
 // serves it itself, from the static/flux-engine/ folder that

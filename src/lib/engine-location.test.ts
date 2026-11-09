@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import pkg from '../../package.json' with { type: 'json' };
-import { ENGINE_VERSION, engineLocation, engineLocationFor } from './engine-location.js';
-
-const devDependencies = pkg.devDependencies as Record<string, string>;
+import { engineLocation, engineLocationFor } from './engine-location.js';
 
 describe('engineLocation', () => {
 	it('loads the engine from the site itself, not from a CDN', () => {
@@ -13,13 +10,6 @@ describe('engineLocation', () => {
 		]) {
 			expect(url).toMatch(/^\/.*\/$/);
 		}
-	});
-
-	it('uses the engine version that package.json installs', () => {
-		const range = (name: string) => devDependencies[name]?.replace(/^\^/, '');
-		expect(range('supersonic-scsynth')).toBe(ENGINE_VERSION);
-		expect(range('supersonic-scsynth-core')).toBe(ENGINE_VERSION);
-		expect(devDependencies['flux-engine']).toContain(`/v${ENGINE_VERSION}-flux.`);
 	});
 });
 

@@ -81,10 +81,14 @@
 			await boot({ ...engineLocation, debug: true });
 			if (!sc) return;
 
-			// Point the clock at SuperSonic's AudioContext so beatToAudioTime and
-			// the engine's NTP start time are on the same timeline.
-			const sonicCtx = getInstance()?.audioContext;
-			if (sonicCtx) clock.setContext(sonicCtx);
+			// Count beats on the engine clock, the clock that the engine compares
+			// time tags with.
+			const engineClock = getInstance()?.clock;
+			if (engineClock) {
+				clock.setTimeSource(engineClock);
+			} else {
+				appendLog('The engine has no clock — Flux cannot play patterns.', 'error');
+			}
 
 			// Without compiled SynthDefs, no synth can play. Tell the user, because
 			// the page load returns empty metadata and shows no error.
@@ -373,7 +377,7 @@
 		handle?.stop();
 		handle = null;
 		// Stop the clock so clock.startTime is null in the stopped state.
-		// This is safe: the scheduler is no longer running so beatToAudioTime
+		// This is safe: the scheduler is no longer running so beatToNtp
 		// will not be called. The clock is reset on the next play action.
 		clock.stop();
 	}
@@ -396,6 +400,13 @@
 	function handleEvaluate(content: string) {
 		if (!serverState.booted) {
 			appendLog('Engine not booted — click "boot engine" first', 'error');
+			return;
+		}
+
+		// clock.reset() needs a running engine clock. The engine clock gives 0
+		// until the engine has rendered its first block.
+		if (!clock.running) {
+			appendLog('The engine clock does not run yet — evaluate again in a moment', 'error');
 			return;
 		}
 

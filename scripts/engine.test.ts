@@ -15,7 +15,7 @@ function makeEngine(root: string, { classes = true, client = true } = {}) {
 	mkdirSync(path.join(root, 'dist', 'samples'), { recursive: true });
 	mkdirSync(path.join(root, 'dist', 'synthdefs'), { recursive: true });
 	if (client) writeFileSync(path.join(root, 'dist', 'supersonic.js'), 'client');
-	writeFileSync(path.join(root, 'dist', 'wasm', 'scsynth-nrt.wasm'), 'wasm');
+	writeFileSync(path.join(root, 'dist', 'wasm', 'clockwork-scsynth.wasm'), 'wasm');
 	writeFileSync(path.join(root, 'dist', 'samples', 'bd_haus.flac'), 'sample');
 	writeFileSync(path.join(root, 'dist', 'synthdefs', 'sonic-pi-beep.scsyndef'), 'def');
 	for (const f of ['BUILDINFO', 'LICENSE', 'NOTICE.md']) writeFileSync(path.join(root, f), f);
@@ -67,7 +67,7 @@ describe('copyEngine', () => {
 		makeEngine(engine);
 		copyEngine(engine, target);
 		expect(readFileSync(path.join(target, 'dist', 'supersonic.js'), 'utf8')).toBe('client');
-		expect(existsSync(path.join(target, 'dist', 'wasm', 'scsynth-nrt.wasm'))).toBe(true);
+		expect(existsSync(path.join(target, 'dist', 'wasm', 'clockwork-scsynth.wasm'))).toBe(true);
 		expect(existsSync(path.join(target, 'LICENSE'))).toBe(true);
 		expect(existsSync(path.join(target, 'NOTICE.md'))).toBe(true);
 		expect(existsSync(path.join(target, 'dist', 'samples'))).toBe(false);

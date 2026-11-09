@@ -1,34 +1,27 @@
 /**
  * clock.ts unit tests.
  *
- * The clock module uses module-level singletons.  We inject a fake AudioContext
- * via vi.stubGlobal so every getCtx() call returns a controlled object with a
- * programmable currentTime.  Tests that need the clock running call clock.start()
- * after setting up the fake; they call clock.stop() in afterEach to reset
- * _startTime between tests.
+ * The clock module uses module-level singletons.  We give it a fake time source
+ * whose now() is NTP_BASE + a programmable time, as the engine clock gives NTP
+ * seconds.  Tests that need the clock running call clock.start() after setting
+ * the time; they call clock.stop() in afterEach to reset _startTime between tests.
  *
  * NOTE: _bpm resets to 100 before each test for predictability.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { clock } from './clock.js';
 
 // ---------------------------------------------------------------------------
-// Fake AudioContext
+// Fake time source
 // ---------------------------------------------------------------------------
 
+// An NTP time in 2023. The engine clock gives 0 until the engine has rendered its
+// first block, so a time of 0 means "not running".
+const NTP_BASE = 3_900_000_000;
 let fakeCurrentTime = 0;
 
-// Stub before importing the module so getCtx() picks up the fake.
-// Must be a constructible function (used with `new AudioContext()`).
-class FakeAudioContextCtor {
-	get currentTime() {
-		return fakeCurrentTime;
-	}
-}
-vi.stubGlobal('AudioContext', FakeAudioContextCtor);
-
-// Import after stubbing.
-const { clock } = await import('./clock.js');
+const fakeSource = { now: () => NTP_BASE + fakeCurrentTime };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,7 +37,7 @@ function setTime(t: number) {
 
 beforeEach(() => {
 	fakeCurrentTime = 0;
-	clock.setContext(new AudioContext());
+	clock.setTimeSource(fakeSource);
 	clock.stop();
 	clock.bpm = 100;
 });
@@ -83,10 +76,10 @@ describe('clock.start / clock.stop', () => {
 		expect(clock.startTime).toBeNull();
 	});
 
-	it('startTime equals AudioContext.currentTime at the moment of start()', () => {
+	it('startTime equals the time of the time source at the moment of start()', () => {
 		setTime(2.5);
 		clock.start();
-		expect(clock.startTime).toBeCloseTo(2.5);
+		expect(clock.startTime).toBeCloseTo(NTP_BASE + 2.5);
 	});
 
 	it('startTime is null after clock.stop()', () => {
@@ -100,7 +93,7 @@ describe('clock.start / clock.stop', () => {
 		clock.start();
 		setTime(3.0);
 		clock.start();
-		expect(clock.startTime).toBeCloseTo(3.0);
+		expect(clock.startTime).toBeCloseTo(NTP_BASE + 3.0);
 	});
 });
 
@@ -197,53 +190,53 @@ describe('clock.beatsToSeconds', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. beatToAudioTime
+// 5. beatToNtp
 // ---------------------------------------------------------------------------
 
-describe('clock.beatToAudioTime', () => {
+describe('clock.beatToNtp', () => {
 	it('throws if clock is not started', () => {
-		expect(() => clock.beatToAudioTime(0)).toThrow('Clock not started');
+		expect(() => clock.beatToNtp(0)).toThrow('Clock not started');
 	});
 
 	it('beat 0 returns startTime', () => {
 		setTime(2.0);
 		clock.start();
-		expect(clock.beatToAudioTime(0)).toBeCloseTo(2.0);
+		expect(clock.beatToNtp(0)).toBeCloseTo(NTP_BASE + 2.0);
 	});
 
 	it('beat 1 at 60 BPM = startTime + 1', () => {
 		clock.bpm = 60;
 		setTime(1.0);
 		clock.start();
-		expect(clock.beatToAudioTime(1)).toBeCloseTo(2.0);
+		expect(clock.beatToNtp(1)).toBeCloseTo(NTP_BASE + 2.0);
 	});
 
 	it('beat 2 at 120 BPM = startTime + 1', () => {
 		clock.bpm = 120;
 		setTime(0);
 		clock.start();
-		expect(clock.beatToAudioTime(2)).toBeCloseTo(1.0);
+		expect(clock.beatToNtp(2)).toBeCloseTo(NTP_BASE + 1.0);
 	});
 
 	it('negative beat gives time before startTime', () => {
 		clock.bpm = 60;
 		setTime(5.0);
 		clock.start();
-		expect(clock.beatToAudioTime(-1)).toBeCloseTo(4.0);
+		expect(clock.beatToNtp(-1)).toBeCloseTo(NTP_BASE + 4.0);
 	});
 });
 
 // ---------------------------------------------------------------------------
-// 6. clock.reset() — restarts the clock from beat 0 at the current AudioContext time
+// 6. clock.reset() — restarts the clock from beat 0 at the current time
 // ---------------------------------------------------------------------------
 
 describe('clock.reset()', () => {
-	it('sets startTime to current AudioContext.currentTime', () => {
+	it('sets startTime to the current time of the time source', () => {
 		setTime(5.0);
 		clock.start(); // started at t=5
 		setTime(10.0); // time has advanced
 		clock.reset(); // reset at t=10
-		expect(clock.startTime).toBeCloseTo(10.0);
+		expect(clock.startTime).toBeCloseTo(NTP_BASE + 10.0);
 	});
 
 	it('currentBeat is 0 immediately after reset', () => {
@@ -265,15 +258,13 @@ describe('clock.reset()', () => {
 		expect(clock.currentBeat).toBeCloseTo(1);
 	});
 
-	it('sets startTime correctly when called before any start() (context already set)', () => {
-		// The throw-if-no-context path is tested indirectly via the shared guard in start(),
-		// which is already covered in the start/stop describe block. The module-level singleton
-		// makes it impossible to unset the context from a test without accessing private state.
-		// This test verifies that reset() works from a never-started state (startTime is null).
-		// beforeEach always calls setContext(), so _ctx is non-null here.
+	it('sets startTime correctly when called before any start() (time source already set)', () => {
+		// The module-level singleton makes it impossible to unset the time source from a test
+		// without accessing private state. This test verifies that reset() works from a
+		// never-started state (startTime is null). beforeEach always calls setTimeSource().
 		setTime(3.0);
-		clock.reset(); // should not throw — context was set in beforeEach
-		expect(clock.startTime).toBeCloseTo(3.0);
+		clock.reset(); // should not throw — the time source was set in beforeEach
+		expect(clock.startTime).toBeCloseTo(NTP_BASE + 3.0);
 	});
 
 	it('is independent of prior start() calls — discards old startTime', () => {
@@ -281,7 +272,7 @@ describe('clock.reset()', () => {
 		clock.start();
 		setTime(100.0);
 		clock.reset(); // discard old startTime=1.0, set new startTime=100.0
-		expect(clock.startTime).toBeCloseTo(100.0);
+		expect(clock.startTime).toBeCloseTo(NTP_BASE + 100.0);
 		expect(clock.currentBeat).toBeCloseTo(0);
 	});
 
@@ -289,19 +280,40 @@ describe('clock.reset()', () => {
 		clock.stop(); // startTime = null
 		setTime(7.0);
 		clock.reset(); // should set startTime to 7.0 even from stopped state
-		expect(clock.startTime).toBeCloseTo(7.0);
+		expect(clock.startTime).toBeCloseTo(NTP_BASE + 7.0);
 		expect(clock.currentBeat).toBeCloseTo(0);
 	});
 });
 
 // ---------------------------------------------------------------------------
-// 7. audioContext accessor
+// 7. Time source
 // ---------------------------------------------------------------------------
 
-describe('clock.audioContext', () => {
-	it('returns the AudioContext instance after first access', () => {
-		// Any call that triggers getCtx() (e.g. start) initialises it.
+describe('clock time source', () => {
+	it('now() gives the time of the time source', () => {
+		setTime(4.25);
+		expect(clock.now()).toBeCloseTo(NTP_BASE + 4.25);
+	});
+
+	it('start() and reset() throw while the time source gives 0 (engine not running yet)', () => {
+		// A start time of 0 puts every beat in 1900: each bundle would be LATE.
+		clock.setTimeSource({ now: () => 0 });
+		expect(() => clock.start()).toThrow('does not run yet');
+		expect(() => clock.reset()).toThrow('does not run yet');
+		expect(clock.startTime).toBeNull();
+	});
+
+	it('running is true only while the time source gives a time after 0', () => {
+		expect(clock.running).toBe(true);
+		clock.setTimeSource({ now: () => 0 });
+		expect(clock.running).toBe(false);
+	});
+
+	it('currentBeat is 0 while the time source gives 0, also when a start time is set', () => {
+		setTime(10);
 		clock.start();
-		expect(clock.audioContext).not.toBeNull();
+		// For example, the engine stops its clock while a loop runs.
+		clock.setTimeSource({ now: () => 0 });
+		expect(clock.currentBeat).toBe(0);
 	});
 });
