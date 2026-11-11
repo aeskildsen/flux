@@ -1,8 +1,12 @@
 name: Deploy to GitHub Pages
 
+# A pull request to main runs the test and build jobs on the merge result,
+# whatever the name of its branch. The deploy job runs from main only.
 on:
   push:
     branches: [main, feature/*]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
