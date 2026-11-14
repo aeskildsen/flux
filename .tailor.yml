@@ -1,4 +1,4 @@
-# Initially fitted by tailor on 2026-11-11
+# Refitted by tailor on 2026-11-14
 license: AGPL-3.0
 
 languages:
@@ -132,6 +132,8 @@ ruleset:
 # cname: omit to preserve the domain, use "" to clear it, or set a domain.
 pages:
   enabled: false
+  generator: static
+  path: pages
   # branch: main
   # cname: www.example.com
   # Static only. Omit links to leave the page unchanged; {} clears its marked links.
