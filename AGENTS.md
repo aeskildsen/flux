@@ -20,6 +20,7 @@ Key SuperSonic concepts:
 - `pnpm test` is the fast loop. Run it often.
 - `pnpm test:container` runs the CI test job in the CI image. A pass there is what counts as green; run it before you hand off.
 - To run one test file: `pnpm vitest run <file>`.
+- Commit messages and pull request titles use Conventional Commits. `DEVELOPING.md` gives the types and examples.
 - `scripts/toolchain.test.ts` fails when the Playwright image tag in `.github/workflows/deploy.yml` or the Node version drifts.
 
 ## Test Architecture

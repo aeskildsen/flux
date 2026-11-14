@@ -31,3 +31,7 @@ static/compiled_synthdefs
 .claude/settings.local.json
 # The engine that scripts/engine.ts copies from the flux-engine package
 /static/flux-engine
+
+# Tailor always writes these Nix and Just fragments. Flux does not use them.
+/just/
+/nix/

@@ -118,6 +118,20 @@ pnpm preview
 
 The page shows which build it is: the Flux version, the commit, the engine version, a link to the source of that commit, and a link to the engine notice (`scripts/build-info.ts`). A commit with `-dirty` was built from a tree with changes. A version with `-dev` comes from the dev server.
 
+## Commits
+
+Commit messages use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```text
+<type>[optional scope]: <description>
+```
+
+Use these types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `style`, `build`, `ci` and `chore`. A scope is optional. Examples: `build: bump flux-engine`, `ci: run the tests on pull requests`, `docs(dsl): correct a truth table row`.
+
+For a breaking change, add `!` after the type or scope, or add a `BREAKING CHANGE:` footer.
+
+Pull requests merge as a squash, and the squash commit gets the pull request title. Thus the pull request title must also use this format.
+
 ## CI and deploy
 
 `.github/workflows/deploy.yml` runs on every push to `main` and to `feature/*` branches. It has three jobs:
