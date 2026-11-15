@@ -22,7 +22,7 @@ repository:
   has_issues: true
   allow_merge_commit: false
   allow_squash_merge: true
-  allow_rebase_merge: true
+  allow_rebase_merge: false
   squash_merge_commit_title: PR_TITLE
   squash_merge_commit_message: PR_BODY
   delete_branch_on_merge: true
@@ -93,16 +93,15 @@ ruleset:
     pull_request:
       enabled: true
       parameters:
-        required_approving_review_count: 1
+        required_approving_review_count: 0
         dismiss_stale_reviews_on_push: true
         require_code_owner_review: false
         require_last_push_approval: false
         required_review_thread_resolution: true
-        require_extra_approval_for_unattributed_changes: true
+        require_extra_approval_for_unattributed_changes: false
         # Any combination of merge, squash, rebase. At least one.
         allowed_merge_methods:
           - squash
-          - rebase
     required_status_checks:
       enabled: false
       parameters:
@@ -231,16 +230,16 @@ swatches:
     alteration: first-fit
 
   - path: justfile
-    alteration: never
+    alteration: first-fit
 
   - path: flake.nix
-    alteration: never
+    alteration: first-fit
 
   - path: .gitignore
     alteration: first-fit
 
   - path: .envrc
-    alteration: never
+    alteration: first-fit
 
   - path: cubic.yaml
     alteration: never

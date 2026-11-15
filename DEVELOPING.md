@@ -18,6 +18,12 @@ To install JSONlib once, run `sclang scripts/install_sclang_dependencies.scd`.
 
 > The compiled SynthDefs are not in git. If sclang is not installed, `pnpm dev` does not compile them. It shows a warning, and Flux starts without synths and makes no sound. The app log then shows an error after boot.
 
+### Nix dev shell (optional)
+
+With Nix, `flake.nix` gives a shell with Node, pnpm, `just`, `actionlint` and `gh`. With direnv and nix-direnv, run `direnv allow` once; the shell then loads when you go into the folder. Without direnv, run `nix develop`, or `nix develop -c <command>` for one command.
+
+The shell does not have sclang, Chromium or podman. Install sclang and podman (or Docker) on your machine. With the dev shell, run the browser tests in the container (see [Tests](#tests)). The container has the exact browser and system libraries that the tests need.
+
 ## Run the dev server
 
 ```sh
@@ -89,6 +95,13 @@ Vitest has three projects, which `vite.config.ts` configures:
 - **client-integration** runs `src/**/*.integration.svelte.{test,spec}.{js,ts}` in headless Chromium. Each of these specs boots a SuperSonic engine. Two engines that boot at the same time interfere, so this project runs its files one by one.
 
 To run only one project, add `--project server`, `--project client` or `--project client-integration`.
+
+With the Nix dev shell, or when Chromium is not installed, run the server tests on your machine and the browser tests in the container:
+
+```sh
+pnpm test:unit --project server  # server tests, watch mode
+pnpm test:container              # all tests, browser tests included
+```
 
 ### The CI container
 
