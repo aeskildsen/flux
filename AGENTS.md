@@ -17,7 +17,8 @@ Key SuperSonic concepts:
 
 `DEVELOPING.md` lists all commands, the prerequisites and the CI layout. Read it before you change scripts, tests or CI. The rules below are for agents only.
 
-- `pnpm test` is the fast loop. Run it often.
+- When `flake.nix` gives the toolchain (no `node` on your PATH), run each command through the dev shell: `nix develop -c pnpm <script>`. Do not rely on direnv; a non-interactive shell does not load it.
+- `pnpm test` is the fast loop. Run it often. With the dev shell, use `pnpm vitest run --project server` as the fast loop; the browser tests then run only in `pnpm test:container`.
 - `pnpm test:container` runs the CI test job in the CI image. A pass there is what counts as green; run it before you hand off.
 - To run one test file: `pnpm vitest run <file>`.
 - Commit messages and pull request titles use Conventional Commits. `DEVELOPING.md` gives the types and examples.
