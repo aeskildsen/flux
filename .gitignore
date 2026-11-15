@@ -32,6 +32,8 @@ static/compiled_synthdefs
 # The engine that scripts/engine.ts copies from the flux-engine package
 /static/flux-engine
 
-# Tailor always writes these Nix and Just fragments. Flux does not use them.
-/just/
+# Tailor writes these Nix fragments on each alter. The flake does not use them.
 /nix/
+
+# direnv cache of the Nix dev shell
+/.direnv/
