@@ -48,7 +48,7 @@
 		"eslint": "^10.14.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.24.0",
-		"flux-engine": "https://github.com/aeskildsen/flux-engine/releases/download/v0.95.1-flux.1/flux-engine-0.95.1-flux.1.tgz",
+		"flux-engine": "https://github.com/aeskildsen/flux-engine/releases/download/v0.97.0-flux.2/flux-engine-0.97.0-flux.2.tgz",
 		"globals": "^17.14.0",
 		"lint-staged": "^17.6.0",
 		"mdsvex": "^0.12.8",
