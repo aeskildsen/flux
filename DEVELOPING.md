@@ -62,6 +62,8 @@ FLUX_ENGINE_DIR=/somwhere-on-your-computer/flux-engine/build/package/latest pnpm
 
 After a new local engine build, start `pnpm dev` again; it copies the engine at start.
 
+To add a UGen to the engine and use it in a Flux SynthDef, read [How a UGen gets into Flux](https://github.com/aeskildsen/flux-engine/blob/main/docs/add-a-ugen.md) in flux-engine.
+
 ## Checks
 
 ```sh
