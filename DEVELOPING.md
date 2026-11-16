@@ -149,10 +149,10 @@ Pull requests merge as a squash, and the squash commit gets the pull request tit
 
 ## CI and deploy
 
-`.github/workflows/deploy.yml` runs on every push to `main` and to `feature/*` branches. It has three jobs:
+`.github/workflows/deploy.yml` runs on every push to `main` and on each pull request to `main` (on the merge result). A push to another branch starts no run: open a pull request to get CI. It has three jobs:
 
 1. **test** runs `scripts/ci-test.sh` in the Playwright container image.
 2. **build** runs on an `ubuntu-24.04` runner, not in a container. The runner release is pinned, because the SynthDefs are compiled with the sclang from its apt archive. This job compiles the SynthDefs and builds the app.
-3. **deploy** publishes the build to GitHub Pages. It runs only for `main`.
+3. **deploy** publishes the build to GitHub Pages. It runs only for `main`, so in a pull request it shows as skipped.
 
 Every push to `main` deploys. A `v0.x.y` git tag marks a milestone only; set the same version in `package.json` before you tag.
