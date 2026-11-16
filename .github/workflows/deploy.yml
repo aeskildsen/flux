@@ -1,10 +1,11 @@
 name: Deploy to GitHub Pages
 
 # A pull request to main runs the test and build jobs on the merge result,
-# whatever the name of its branch. The deploy job runs from main only.
+# whatever the name of its branch. A push to a branch other than main starts
+# no run. The deploy job runs from main only.
 on:
   push:
-    branches: [main, feature/*]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -14,8 +15,8 @@ permissions:
   pages: write
   id-token: write
 
-# One group for each branch: a new push cancels the older run on the same
-# branch only. A push to a feature branch does not cancel a deploy from main.
+# One group for each ref: a new push cancels the older run of the same pull
+# request or of main only. A pull request run does not cancel a deploy from main.
 concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
