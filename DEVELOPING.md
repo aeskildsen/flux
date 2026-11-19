@@ -64,6 +64,15 @@ After a new local engine build, start `pnpm dev` again; it copies the engine at 
 
 To add a UGen to the engine and use it in a Flux SynthDef, read [How a UGen gets into Flux](https://github.com/aeskildsen/flux-engine/blob/main/docs/add-a-ugen.md) in flux-engine.
 
+### The status of the stack
+
+Flux depends on a chain of repositories: [md2misc](https://github.com/aeskildsen/md2misc) → [isospin](https://github.com/aeskildsen/isospin) → [flux-engine](https://github.com/aeskildsen/flux-engine) (with [SuperSonic](https://github.com/samaaron/supersonic)) → Flux. `just status` shows where they stand:
+
+- From GitHub: the newest release of each repository, the commits on `main` since that release, and the pins (isospin's md2misc, flux-engine's SuperSonic and isospin, Flux's flux-engine). It marks a pin that is older than the newest release.
+- From your local checkouts: the branch, its upstream and the changes. The command looks for a checkout in `../<name>` and `../../<name>`. To give another folder, set `FLUX_STACK_<NAME>_DIR`, for example `FLUX_STACK_MD2MISC_DIR`. The command fetches `origin` first; `just status --no-fetch` does not.
+
+A run uses six GitHub API requests. Without a token, GitHub allows 60 an hour. `GH_TOKEN`, `GITHUB_TOKEN` or a `gh` login raises the limit.
+
 ## Checks
 
 ```sh
