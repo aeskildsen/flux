@@ -37,7 +37,7 @@ Key params: `amp`, `pan`, `freq`, `gate`.
 
 ### `woodbar` — struck wooden bar
 
-A physical model of a struck wooden bar (claves, a wooden stick, a xylophone or marimba bar), with the `PhysWoodbar` UGen of [isospin](https://github.com/aeskildsen/isospin). Each note is one strike; the bar rings out and the synth frees itself.
+A physical model of a struck wooden bar (claves, a wooden stick, a xylophone or marimba bar), with the `IsoWoodbar` UGen of [isospin](https://github.com/aeskildsen/isospin). Each note is one strike; the bar rings out and the synth frees itself.
 
 Key params: `amp`, `pan`, `freq`, `velocity` (strike velocity: louder and brighter), `decay` (decay time of the low modes in seconds), `tilt` (how much faster the high modes decay), `hardness` (mallet), `position` (strike point), `undercut` (tuning: 0 a uniform bar, 1 a marimba bar), `tube` (resonator tube).
 
