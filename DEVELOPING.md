@@ -49,7 +49,7 @@ See `docs/synthdefs.md` and `docs/SynthDef-spec.md` for how to write a SynthDef.
 
 ### The engine
 
-The engine is [flux-engine](https://github.com/aeskildsen/flux-engine): SuperSonic with more UGens, for example `PhysWoodbar`. It is the `flux-engine` dependency in `package.json`, a GitHub release tarball (the lockfile has its hash). Flux serves it itself, from the same origin, not from a CDN:
+The engine is [flux-engine](https://github.com/aeskildsen/flux-engine): SuperSonic with more UGens, for example `IsoWoodbar`. It is the `flux-engine` dependency in `package.json`, a GitHub release tarball (the lockfile has its hash). Flux serves it itself, from the same origin, not from a CDN:
 
 - `scripts/engine.ts` copies the engine into `static/flux-engine/` (not in git). `pnpm dev` and `pnpm build` run it first.
 - The SynthDef compile puts the package's SuperCollider classes on the sclang class path, so that SynthDefs can use the flux-engine UGens. sclang then uses a configuration with only its class library, the JSONlib quark and the package classes; installed extensions are not compiled.

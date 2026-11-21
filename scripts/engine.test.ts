@@ -21,7 +21,7 @@ function makeEngine(root: string, { classes = true, client = true } = {}) {
 	for (const f of ['BUILDINFO', 'LICENSE', 'NOTICE.md']) writeFileSync(path.join(root, f), f);
 	if (classes) {
 		mkdirSync(path.join(root, 'classes'));
-		writeFileSync(path.join(root, 'classes', 'PhysWoodbar.sc'), '');
+		writeFileSync(path.join(root, 'classes', 'IsoWoodbar.sc'), '');
 	}
 }
 

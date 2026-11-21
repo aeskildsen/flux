@@ -21,7 +21,7 @@ Boot the engine first (browser autoplay policy requires a user interaction), the
 
 - [SvelteKit](https://kit.svelte.dev) + Svelte 5 (runes)
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/) with a custom Flux language mode
-- [flux-engine](https://github.com/aeskildsen/flux-engine): [SuperSonic](https://github.com/samaaron/supersonic) with extra UGens (for example `PhysWoodbar`), served by Flux itself from the same origin, not from a CDN (AGPL-3.0-or-later)
+- [flux-engine](https://github.com/aeskildsen/flux-engine): [SuperSonic](https://github.com/samaaron/supersonic) with extra UGens (for example `IsoWoodbar`), served by Flux itself from the same origin, not from a CDN (AGPL-3.0-or-later)
   - Svelte bindings for SuperSonic in `src/lib/supersonic/`
 - Flux-authored synthdefs in `synthdefs/*.scd`, compiled to `static/compiled_synthdefs/`
 

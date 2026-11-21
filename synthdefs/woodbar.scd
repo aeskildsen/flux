@@ -1,14 +1,14 @@
-// A struck wooden bar, with the PhysWoodbar UGen of isospin
+// A struck wooden bar, with the IsoWoodbar UGen of isospin
 // (https://github.com/aeskildsen/isospin). Only the flux-engine engine has
 // this UGen; the stock SuperSonic engine does not.
 //
 // The class is found by name, because sclang stops at an unknown class name
-// in the code. Without the PhysWoodbar class on the class path (see
+// in the code. Without the IsoWoodbar class on the class path (see
 // FLUX_ENGINE_DIR in README.md), this file makes no SynthDef.
-var woodbar = \PhysWoodbar.asClass;
+var woodbar = \IsoWoodbar.asClass;
 
 if (woodbar.isNil) {
-	"woodbar.scd: no PhysWoodbar class on the class path; woodbar is not compiled".warn;
+	"woodbar.scd: no IsoWoodbar class on the class path; woodbar is not compiled".warn;
 	~synthdefs = [];
 } {
 	x = SynthDef(\woodbar, {
